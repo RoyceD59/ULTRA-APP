@@ -1,0 +1,46 @@
+---
+name: Parallel task-merge artifacts
+description: Failure modes to check after several task agents merge into main at once
+---
+
+**Rule — merged dependencies:** A task merge can update package manifests and the lockfile without updating local node_modules. Sync the frozen lockfile before changing source to address a newly missing declared module.
+
+**Why:** Separate Companion feature merges introduced declared web-vitals and expo-print dependencies that were absent locally, making unrelated task completion checks fail.
+
+**How to apply:** When a missing-module check follows a merge, verify both manifest and lockfile first. If the package is already declared and locked, run `pnpm install --frozen-lockfile` rather than adding an ambient declaration or changing the dependency version.
+
+**Rule:** After a batch of task merges, if `@workspace/db` (or another shared lib) suddenly "has no exported member X", suspect a merge artifact before suspecting the code: (1) duplicate `export * from "./same-file"` lines in `lib/db/src/schema/index.ts` — TypeScript treats the doubled names as ambiguous and silently drops them; (2) stale TS project-reference outputs — fix with `pnpm run typecheck:libs` (runs `tsc --build`) at the repo root.
+
+**Why:** Two task agents both appended the same schema export line; the dedupe + `tsc --build` restored the export. The dev server (tsx, no typecheck) keeps running fine, so only `tsc --noEmit` reveals it.
+
+**How to apply:** On any "no exported member" error right after merges: check the schema index for duplicated lines, then rebuild libs before touching feature code. Merges only land between agent turns (they wait on the workspace lock), so sequence work: low-conflict areas first, yield to release the lock, then build on top of merged state.
+
+**Rule 2 — spliced handler code:** A merge batch can splice fragments of one route handler into another in the same file (undefined variables, "Unexpected catch" syntax errors → server won't build). Recovery: `git log --oneline -- <file>` to find the last good commit, diff it against HEAD to separate corruption from legitimate changes, `git checkout <good> -- <file>`, then re-apply only the legitimate lines (usually tiny — one or two). Never hand-untangle the spliced file.
+
+**Why 2:** A merge spliced M-Pesa callback code into the Paystack webhook and replaced Stripe session-create with session-retrieve; the only legitimate change in that commit's version of the file was a single added parameter.
+
+**Rule 3 — nested .gitignore:** A nested `.gitignore` (e.g. `node_modules/` inside a subdir) overrides parent un-ignore rules, so intentionally tracked files under an ignored dir silently stay uncommitted — verify with `git check-ignore -v`. Also: a merged test can miss its dev-typing dep (e.g. `@types/*` for a runtime package), failing only `tsc --noEmit`.
+
+**Rule 5 — stale generated API clients:** A merged task can update `lib/api-spec/openapi.yaml` and hand-written routes but land without the regenerated orval output, so `@workspace/api-zod` / `@workspace/api-client-react` "has no exported member" errors appear for brand-new endpoint types. Fix: `pnpm run codegen` in `lib/api-spec` (runs orval + `typecheck:libs`), never hand-edit the generated files. Check the spec first — if the schema IS in openapi.yaml, it's stale codegen, not a dropped export.
+
+**Why:** Generated schemas eagerly evaluate constraint constants. A merge or
+regeneration can put a constant after its consumer and break API startup even
+when an earlier independently checked source worked.
+
+**How to apply:** Preserve declaration-order postprocessing in regeneration,
+and smoke-import the actual generated module after source synchronization.
+An earlier passing incremental consumer check is not runtime-import evidence.
+
+**Rule 4 — mid-session reverts and replayed stale diffs:** A concurrent task merge can land mid-session and overwrite fixes you already applied to a shared file, or replay a stale diff over another task's identical fix, re-introducing corruption a commit already reverted. Re-run the typecheck immediately before marking a task complete; after a rejected validation, re-diff the file against the last-known-good blob and restore from the sibling task's merged commit if it is the cleaner base.
+
+**Rule — guarded startup and import/export boundaries:** A structurally conflict-free merge can retain a preview guard while inserting production background work inside it, or drop required imports/reexports while leaving their call sites intact.
+
+**Why:** These regressions survived integration onto main even though the independently frozen release package still passed. Package checks did not establish current-source correctness.
+
+**How to apply:** Verify current-source typechecks after synchronization and execute a preview-startup regression that fails on any scheduler, worker or settlement timer. Keep frozen-package and merged-source results distinct.
+
+**Rule — extracted-handler test scopes:** When a test executes handlers extracted from current source, synchronize its injected scope with newly merged dependencies before accepting an earlier passing result.
+
+**Why:** A concurrent checkout change added a ref read after a test run had passed. The missing injected ref then threw inside a production catch, appearing as an ordinary payment refusal rather than an obvious harness error.
+
+**How to apply:** After source synchronization, rerun extracted-handler tests and ensure success scenarios reach their final state and downstream action assertions; caught harness errors must not count as expected provider failures.

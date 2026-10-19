@@ -9,6 +9,1095 @@ import * as zod from 'zod';
 import { instantWaterFirstNameSchema, instantWaterPhoneSchema } from '../instant-water-identity.js';
 
 
+export const ListProductEditorialRecordsResponse = zod.object({
+  "products": zod.array(zod.object({
+  "code": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "priceAuthority": zod.enum(['companion']).optional(),
+  "parentSku": zod.string(),
+  "purchasable": zod.boolean(),
+  "price": zod.number().nullable(),
+  "commerceId": zod.number().nullish(),
+  "availability": zod.string().nullish(),
+  "livePrice": zod.number().nullish(),
+  "diagnostics": zod.array(zod.string()).optional(),
+  "variants": zod.array(zod.object({
+  "childSku": zod.string(),
+  "label": zod.string(),
+  "variationId": zod.number().nullish(),
+  "price": zod.number().nullish(),
+  "stockStatus": zod.string().nullish(),
+  "diagnostic": zod.string().optional()
+}))
+})),
+  "topics": zod.array(zod.record(zod.string(), zod.unknown()))
+})
+
+
+export const GetProductEditorialRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const GetProductEditorialRecordResponse = zod.object({
+  "code": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "priceAuthority": zod.enum(['companion']).optional(),
+  "parentSku": zod.string(),
+  "purchasable": zod.boolean(),
+  "price": zod.number().nullable(),
+  "commerceId": zod.number().nullish(),
+  "availability": zod.string().nullish(),
+  "livePrice": zod.number().nullish(),
+  "diagnostics": zod.array(zod.string()).optional(),
+  "variants": zod.array(zod.object({
+  "childSku": zod.string(),
+  "label": zod.string(),
+  "variationId": zod.number().nullish(),
+  "price": zod.number().nullish(),
+  "stockStatus": zod.string().nullish(),
+  "diagnostic": zod.string().optional()
+}))
+})
+
+
+/**
+ * @summary Create an app-owned draft with unknown stock
+ */
+export const CreateCompanionProductRecordBody = zod.object({
+  "record": zod.record(zod.string(), zod.unknown())
+})
+
+
+
+
+export const CreateCompanionProductRecordResponse = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
+export const ListAdminProductEditorialRecordsResponse = zod.object({
+  "records": zod.array(zod.object({
+  "code": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "parent_sku": zod.string(),
+  "publishable": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Archive without deleting historical orders or filter records
+ */
+export const ArchiveCompanionProductRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const ArchiveCompanionProductRecordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const GetAdminProductEditorialRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+
+
+
+export const GetAdminProductEditorialRecordResponse = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
+export const SaveProductEditorialRecordParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+
+
+
+export const SaveProductEditorialRecordBody = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
+
+
+export const SaveProductEditorialRecordResponse = zod.object({
+  "revision": zod.number().min(1),
+  "record": zod.record(zod.string(), zod.unknown()).describe('Full v2.4 authored record; validated server-side using the supplied contract and immutable identity constraints')
+})
+
+
+/**
+ * @summary Read account-independent global impact from one database snapshot
+ */
+export const readGlobalImpactResponseTotalUsersMin = 0;
+
+export const readGlobalImpactResponseLitresFilteredMin = 0;
+
+export const readGlobalImpactResponsePlasticsAvoidedMin = 0;
+
+export const readGlobalImpactResponseCleanWaterDaysMin = 0;
+
+export const readGlobalImpactResponseSnapshotIdRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+
+export const ReadGlobalImpactResponse = zod.object({
+  "totalUsers": zod.number().min(readGlobalImpactResponseTotalUsersMin),
+  "litresFiltered": zod.number().min(readGlobalImpactResponseLitresFilteredMin),
+  "plasticsAvoided": zod.number().min(readGlobalImpactResponsePlasticsAvoidedMin),
+  "cleanWaterDays": zod.number().min(readGlobalImpactResponseCleanWaterDaysMin),
+  "snapshotId": zod.string().regex(readGlobalImpactResponseSnapshotIdRegExp),
+  "calculatedAt": zod.string(),
+  "lastUpdated": zod.string(),
+  "adjustmentRevision": zod.number().min(1),
+  "maxAgeSeconds": zod.literal(60),
+  "lifespanAvailable": zod.boolean(),
+  "autoStats": zod.object({
+  "totalUsers": zod.number(),
+  "litresFiltered": zod.number(),
+  "cleanWaterDays": zod.number()
+}),
+  "offlineStats": zod.object({
+  "clientCount": zod.number(),
+  "litresFiltered": zod.number()
+}),
+  "override": zod.object({
+  "litresOffset": zod.number(),
+  "usersOffset": zod.number(),
+  "lastUpdatedBy": zod.string(),
+  "lastUpdatedAt": zod.string(),
+  "revision": zod.number().optional()
+})
+})
+
+
+/**
+ * @summary Save shared adjustments with live impact edit authorization and optional revision precondition
+ */
+export const saveGlobalImpactAdjustmentBodyExpectedRevisionMin = 0;
+
+
+
+export const SaveGlobalImpactAdjustmentBody = zod.object({
+  "litresOffset": zod.number().optional(),
+  "usersOffset": zod.number().optional(),
+  "expectedRevision": zod.number().min(saveGlobalImpactAdjustmentBodyExpectedRevisionMin).optional()
+})
+
+export const SaveGlobalImpactAdjustmentResponse = zod.object({
+  "ok": zod.boolean(),
+  "override": zod.object({
+  "litresOffset": zod.number(),
+  "usersOffset": zod.number(),
+  "lastUpdatedBy": zod.string(),
+  "lastUpdatedAt": zod.string(),
+  "revision": zod.number().optional()
+})
+})
+
+
+/**
+ * @summary Create an account with required normalized phone and contact address
+ */
+export const registerUcContactAccountBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+export const registerUcContactAccountBodyPasswordMin = 6;
+
+
+
+export const registerUcContactAccountBodyAddressMax = 500;
+
+
+
+export const RegisterUcContactAccountBody = zod.object({
+  "email": zod.string().regex(registerUcContactAccountBodyEmailRegExp),
+  "password": zod.string().min(registerUcContactAccountBodyPasswordMin),
+  "firstName": zod.string().min(1),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().min(1),
+  "address": zod.string().min(1).max(registerUcContactAccountBodyAddressMax),
+  "referralCode": zod.string().optional()
+})
+
+export const RegisterUcContactAccountResponse = zod.unknown()
+
+
+/**
+ * @summary Edit contact details without creating or relinking an account
+ */
+
+
+export const completeUcContactProfileBodyAddressMax = 500;
+
+
+
+export const CompleteUcContactProfileBody = zod.object({
+  "firstName": zod.string().min(1).optional(),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().min(1).optional(),
+  "address": zod.string().min(1).max(completeUcContactProfileBodyAddressMax).optional()
+})
+
+export const CompleteUcContactProfileResponse = zod.unknown()
+
+
+/**
+ * @summary Read-only checkout evidence for at most 100 explicit local order IDs
+ */
+export const GetUcCheckoutDiagnosticsQueryParams = zod.object({
+  "ids": zod.coerce.string()
+})
+
+export const GetUcCheckoutDiagnosticsResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Owned purchase units with authoritative activation eligibility
+ */
+export const GetUcActivationPurchasesResponse = zod.object({
+  "sourceErrors": zod.object({
+  "store": zod.string().optional()
+}).optional().describe('Independent store read failure; app records remain visible without inferring mirror eligibility.'),
+  "purchases": zod.array(zod.object({
+  "source": zod.enum(['app', 'store']),
+  "orderId": zod.number(),
+  "dateCreated": zod.string(),
+  "phone": zod.string(),
+  "status": zod.string(),
+  "items": zod.array(zod.object({
+  "lineId": zod.number(),
+  "productId": zod.number(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "availableUnitIds": zod.array(zod.string()),
+  "unavailableReason": zod.string().nullable()
+}))
+}))
+})
+
+
+/**
+ * @summary Read only this account's durably linked offline sales
+ */
+export const ListCustomerOfflinePurchasesResponse = zod.object({
+  "purchases": zod.array(zod.object({
+  "source": zod.enum(['offline']),
+  "saleId": zod.number(),
+  "saleDate": zod.string(),
+  "label": zod.string(),
+  "items": zod.array(zod.object({
+  "lineId": zod.string(),
+  "productId": zod.number().nullable(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "unavailableReason": zod.string().nullable(),
+  "availableUnitIds": zod.array(zod.string()),
+  "registeredUnits": zod.array(zod.object({
+  "unitId": zod.string(),
+  "installationDate": zod.string(),
+  "active": zod.boolean()
+})).optional()
+}))
+}))
+})
+
+
+/**
+ * @summary Register one owned offline sale unit without a receipt or financial writes
+ */
+
+export const commitCustomerOfflineFilterBodyUnitIdMax = 100;
+
+export const commitCustomerOfflineFilterBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CommitCustomerOfflineFilterBody = zod.object({
+  "saleId": zod.number().min(1),
+  "unitId": zod.string().max(commitCustomerOfflineFilterBodyUnitIdMax),
+  "installationDate": zod.string().regex(commitCustomerOfflineFilterBodyInstallationDateRegExp)
+})
+
+export const CommitCustomerOfflineFilterResponse = zod.object({
+  "registration": zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "ratedCapacityLitres": zod.number(),
+  "activatedAt": zod.string(),
+  "sourceOrderId": zod.number().nullish(),
+  "offlineUnitId": zod.string(),
+  "lifespanDays": zod.number(),
+  "maintenanceCount": zod.number().optional()
+})
+})
+
+
+/**
+ * @summary Read-only account-bound QR verification
+ */
+export const validateCustomerRewardsQrBodyQrTokenRegExp = new RegExp('^[A-Za-z0-9_-]{40,64}$');
+
+
+export const ValidateCustomerRewardsQrBody = zod.object({
+  "qrToken": zod.string().regex(validateCustomerRewardsQrBodyQrTokenRegExp).nullable()
+})
+
+export const ValidateCustomerRewardsQrResponse = zod.object({
+  "userId": zod.number(),
+  "status": zod.enum(['active', 'revoked', 'missing']),
+  "version": zod.string().nullable(),
+  "valid": zod.boolean(),
+  "qrToken": zod.string().nullable()
+})
+
+
+/**
+ * @summary Explicit concurrency-safe QR issuance or recovery
+ */
+export const recoverCustomerRewardsQrBodyExpectedVersionRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const RecoverCustomerRewardsQrBody = zod.object({
+  "expectedVersion": zod.string().regex(recoverCustomerRewardsQrBodyExpectedVersionRegExp).nullable()
+})
+
+export const RecoverCustomerRewardsQrResponse = zod.object({
+  "userId": zod.number(),
+  "status": zod.enum(['active', 'revoked', 'missing']),
+  "version": zod.string().nullable(),
+  "valid": zod.boolean(),
+  "qrToken": zod.string().nullable()
+})
+
+
+/**
+ * Returns all persisted enquiries, newest first. ADMIN_SECRET must be
+ * configured on the server. Date bounds are inclusive UTC calendar days.
+ * @summary List customer enquiries (admin secret required)
+ */
+export const listUcEnquiriesQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listUcEnquiriesQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListUcEnquiriesQueryParams = zod.object({
+  "from": zod.coerce.string().regex(listUcEnquiriesQueryFromRegExp).optional().describe('First UTC date to include (YYYY-MM-DD).'),
+  "to": zod.coerce.string().regex(listUcEnquiriesQueryToRegExp).optional().describe('Last UTC date to include (YYYY-MM-DD).')
+})
+
+export const ListUcEnquiriesResponseItem = zod.object({
+  "id": zod.number(),
+  "productId": zod.string(),
+  "productName": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListUcEnquiriesResponse = zod.array(ListUcEnquiriesResponseItem)
+
+
+/**
+ * @summary Review bounded extracted text for customer knowledge (active team admin only)
+ */
+export const PreviewLibraryKnowledgeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const previewLibraryKnowledgeResponseTextMax = 16000;
+
+export const previewLibraryKnowledgeResponseRevisionMin = 0;
+
+
+
+export const PreviewLibraryKnowledgeResponse = zod.object({
+  "text": zod.string().max(previewLibraryKnowledgeResponseTextMax),
+  "hash": zod.string(),
+  "revision": zod.number().min(previewLibraryKnowledgeResponseRevisionMin),
+  "status": zod.enum(['private', 'approved', 'revoked']),
+  "title": zod.string(),
+  "approvedText": zod.string().nullable()
+})
+
+
+/**
+ * @summary Approve the reviewed text snapshot or revoke it (active team admin only)
+ */
+export const DecideLibraryKnowledgeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const decideLibraryKnowledgeBodyRevisionMin = 0;
+
+export const decideLibraryKnowledgeBodyTitleMax = 160;
+
+
+
+export const DecideLibraryKnowledgeBody = zod.object({
+  "action": zod.enum(['approve', 'revoke']),
+  "revision": zod.number().min(decideLibraryKnowledgeBodyRevisionMin),
+  "hash": zod.string().optional().describe('Preview hash required on approval'),
+  "title": zod.string().max(decideLibraryKnowledgeBodyTitleMax).optional().describe('Public source title required on approval'),
+  "publicReferenceConfirmed": zod.boolean().optional().describe('Must be true to approve; confirms no private or customer information')
+})
+
+export const DecideLibraryKnowledgeResponse = zod.object({
+  "id": zod.string(),
+  "knowledgeStatus": zod.enum(['private', 'approved', 'revoked']),
+  "knowledgeRevision": zod.number(),
+  "knowledgeTitle": zod.string().nullable(),
+  "knowledgeReviewedAt": zod.coerce.date().nullable(),
+  "knowledgeReviewedBy": zod.string().nullable()
+})
+
+
+export const cancelCompanionCheckoutBodyIdempotencyKeyMin = 8;
+export const cancelCompanionCheckoutBodyIdempotencyKeyMax = 200;
+
+
+
+export const CancelCompanionCheckoutBody = zod.object({
+  "idempotencyKey": zod.string().min(cancelCompanionCheckoutBodyIdempotencyKeyMin).max(cancelCompanionCheckoutBodyIdempotencyKeyMax)
+})
+
+export const CancelCompanionCheckoutResponse = zod.object({
+  "cancelled": zod.boolean()
+})
+
+
+export const getCompanionCheckoutRecoveryQueryIdempotencyKeyMin = 8;
+export const getCompanionCheckoutRecoveryQueryIdempotencyKeyMax = 200;
+
+
+
+export const GetCompanionCheckoutRecoveryQueryParams = zod.object({
+  "idempotencyKey": zod.coerce.string().min(getCompanionCheckoutRecoveryQueryIdempotencyKeyMin).max(getCompanionCheckoutRecoveryQueryIdempotencyKeyMax)
+})
+
+export const GetCompanionCheckoutRecoveryResponse = zod.object({
+  "resolution": zod.enum(['editable', 'completed', 'unresolved']),
+  "orderId": zod.number().nullable()
+})
+
+
+export const quoteCompanionCheckoutBodyCodeMax = 64;
+
+
+export const quoteCompanionCheckoutBodyLineItemsItemQuantityMax = 1000;
+
+
+
+export const quoteCompanionCheckoutBodyLineItemsMax = 100;
+
+
+
+export const QuoteCompanionCheckoutBody = zod.object({
+  "fulfillment": zod.enum(['collection', 'delivery']),
+  "code": zod.string().max(quoteCompanionCheckoutBodyCodeMax).optional(),
+  "applyReferralDiscount": zod.boolean().optional(),
+  "lineItems": zod.array(zod.object({
+  "productId": zod.number().min(1),
+  "quantity": zod.number().min(1).max(quoteCompanionCheckoutBodyLineItemsItemQuantityMax),
+  "variationId": zod.number().min(1).optional(),
+  "childSku": zod.string().min(1).optional()
+})).min(1).max(quoteCompanionCheckoutBodyLineItemsMax)
+})
+
+
+
+
+export const QuoteCompanionCheckoutResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "productId": zod.number(),
+  "variationId": zod.number().min(1).optional(),
+  "childSku": zod.string().optional(),
+  "variantLabel": zod.string().optional(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "subtotal": zod.number()
+})).optional(),
+  "promotion": zod.object({
+  "code": zod.string(),
+  "title": zod.string().optional(),
+  "label": zod.string().optional(),
+  "type": zod.string().optional()
+}),
+  "fulfillment": zod.enum(['collection', 'delivery']),
+  "subtotal": zod.number(),
+  "delivery": zod.number(),
+  "discountAmount": zod.number(),
+  "total": zod.number()
+})
+
+
+export const quotePhysicalTestPromotionBodyCodeMin = 3;
+export const quotePhysicalTestPromotionBodyCodeMax = 64;
+
+
+
+export const QuotePhysicalTestPromotionBody = zod.object({
+  "code": zod.string().min(quotePhysicalTestPromotionBodyCodeMin).max(quotePhysicalTestPromotionBodyCodeMax)
+})
+
+export const QuotePhysicalTestPromotionResponse = zod.object({
+  "promotion": zod.object({
+  "code": zod.string()
+})
+})
+
+
+export const listCustomerAssignmentsQueryPageMax = 1000000;
+
+export const listCustomerAssignmentsQueryLimitMax = 100;
+
+export const listCustomerAssignmentsQueryQMax = 200;
+
+
+
+export const ListCustomerAssignmentsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerAssignmentsQueryPageMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCustomerAssignmentsQueryLimitMax).optional(),
+  "status": zod.enum(['pending', 'linked', 'review']).optional(),
+  "q": zod.coerce.string().max(listCustomerAssignmentsQueryQMax).optional()
+})
+
+export const ListCustomerAssignmentsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+export const createCustomerAssignmentBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateCustomerAssignmentBody = zod.object({
+  "idempotencyKey": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "installationDate": zod.string().regex(createCustomerAssignmentBodyInstallationDateRegExp),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "targetAccountId": zod.number().optional()
+})
+
+export const CreateCustomerAssignmentResponse = zod.object({
+  "id": zod.number()
+})
+
+
+/**
+ * @summary Team-admin read of linked assignments owned by one customer
+ */
+
+
+
+export const ListCustomerAccountAssignmentsParams = zod.object({
+  "accountId": zod.coerce.number().min(1)
+})
+
+export const listCustomerAccountAssignmentsQueryPageMax = 1000000;
+
+export const listCustomerAccountAssignmentsQueryLimitMax = 100;
+
+
+
+export const ListCustomerAccountAssignmentsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerAccountAssignmentsQueryPageMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCustomerAccountAssignmentsQueryLimitMax).optional()
+})
+
+export const ListCustomerAccountAssignmentsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Read a page of retained audit history, newest first
+ */
+
+
+
+export const ListCustomerAssignmentAuditParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const listCustomerAssignmentAuditQueryPageMax = 1000000;
+
+export const listCustomerAssignmentAuditQueryLimitMax = 100;
+
+
+
+export const ListCustomerAssignmentAuditQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerAssignmentAuditQueryPageMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCustomerAssignmentAuditQueryLimitMax).optional()
+})
+
+export const ListCustomerAssignmentAuditResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "actor": zod.string(),
+  "action": zod.string(),
+  "createdAt": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown())
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+export const previewCustomerAssignmentBodyInstallationDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const PreviewCustomerAssignmentBody = zod.object({
+  "idempotencyKey": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "installationDate": zod.string().regex(previewCustomerAssignmentBodyInstallationDateRegExp),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "targetAccountId": zod.number().optional()
+})
+
+export const PreviewCustomerAssignmentResponse = zod.object({
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "cashCollectionState": zod.string()
+})
+
+
+export const FindAssignmentOrderLinesQueryParams = zod.object({
+  "q": zod.coerce.string()
+})
+
+export const FindAssignmentOrderLinesResponseItem = zod.object({
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "productId": zod.number(),
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "ownerReference": zod.string(),
+  "status": zod.string(),
+  "wooOrderId": zod.number().nullish(),
+  "cashCollectionState": zod.string().nullish(),
+  "assignmentId": zod.number().nullish()
+})
+export const FindAssignmentOrderLinesResponse = zod.array(FindAssignmentOrderLinesResponseItem)
+
+
+export const ConfirmCustomerAssignmentLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConfirmCustomerAssignmentLinkBody = zod.object({
+  "accountId": zod.number(),
+  "confirm": zod.boolean()
+})
+
+export const ConfirmCustomerAssignmentLinkResponse = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish()
+})
+
+
+export const RetryCustomerAssignmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryCustomerAssignmentResponse = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish()
+})
+
+
+export const GetMyCustomerAssignmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "lifespanDays": zod.number(),
+  "capacityLitres": zod.number(),
+  "installationDate": zod.string(),
+  "orderId": zod.number(),
+  "orderItemId": zod.number(),
+  "orderReference": zod.string(),
+  "cashCollectionState": zod.string(),
+  "status": zod.enum(['pending', 'linked', 'review']),
+  "reviewReason": zod.string().nullish(),
+  "targetAccountId": zod.number().nullish(),
+  "linkedAccountId": zod.number().nullish(),
+  "filterId": zod.number().nullish(),
+  "activatedAt": zod.string().nullish(),
+  "maintenanceCount": zod.number().nullish(),
+  "active": zod.boolean().nullish(),
+  "createdAt": zod.string().optional(),
+  "linkedAt": zod.string().nullish()
+})
+export const GetMyCustomerAssignmentsResponse = zod.array(GetMyCustomerAssignmentsResponseItem)
+
+
+export const getUcDailyHydrationPathLocalDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetUcDailyHydrationParams = zod.object({
+  "localDate": zod.coerce.string().regex(getUcDailyHydrationPathLocalDateRegExp)
+})
+
+export const GetUcDailyHydrationResponse = zod.object({
+  "localDate": zod.string(),
+  "litres": zod.number().nullable()
+})
+
+
+export const saveUcDailyHydrationPathLocalDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const SaveUcDailyHydrationParams = zod.object({
+  "localDate": zod.coerce.string().regex(saveUcDailyHydrationPathLocalDateRegExp)
+})
+
+export const saveUcDailyHydrationBodyLitresMin = 0;
+
+
+
+export const SaveUcDailyHydrationBody = zod.object({
+  "litres": zod.number().min(saveUcDailyHydrationBodyLitresMin)
+})
+
+export const SaveUcDailyHydrationResponse = zod.object({
+  "localDate": zod.string(),
+  "litres": zod.number().nullable()
+})
+
+
+/**
+ * @summary Own shared-tree allocation and aggregate progress
+ */
+export const getHydrateCustomerTreeResponseEligibleOrdersMin = 0;
+
+export const getHydrateCustomerTreeResponseEligiblePurchasesKesMin = 0;
+
+export const getHydrateCustomerTreeResponseAllocationKesMin = 0;
+
+export const getHydrateCustomerTreeResponseTreeShareKesMin = 0;
+
+export const getHydrateCustomerTreeResponseCleanWaterKesMin = 0;
+
+export const getHydrateCustomerTreeResponseReplacementPurchasesMin = 0;
+
+export const getHydrateCustomerTreeResponseTreesHelpedMin = 0;
+
+export const getHydrateCustomerTreeResponseConfigTreeCostKesExclusiveMin = 0;
+
+export const getHydrateCustomerTreeResponseTreeFundedPctMin = 0;
+export const getHydrateCustomerTreeResponseTreeFundedPctMax = 100;
+
+export const getHydrateCustomerTreeResponseTreeYourShareKesMin = 0;
+
+
+
+export const GetHydrateCustomerTreeResponse = zod.object({
+  "eligibleOrders": zod.number().min(getHydrateCustomerTreeResponseEligibleOrdersMin),
+  "eligiblePurchasesKes": zod.number().min(getHydrateCustomerTreeResponseEligiblePurchasesKesMin),
+  "allocationKes": zod.number().min(getHydrateCustomerTreeResponseAllocationKesMin),
+  "treeShareKes": zod.number().min(getHydrateCustomerTreeResponseTreeShareKesMin),
+  "cleanWaterKes": zod.number().min(getHydrateCustomerTreeResponseCleanWaterKesMin),
+  "replacementPurchases": zod.number().min(getHydrateCustomerTreeResponseReplacementPurchasesMin),
+  "treesHelped": zod.number().min(getHydrateCustomerTreeResponseTreesHelpedMin),
+  "config": zod.object({
+  "contributionRate": zod.number(),
+  "treeShare": zod.number(),
+  "treeCostKes": zod.number().gt(getHydrateCustomerTreeResponseConfigTreeCostKesExclusiveMin)
+}),
+  "tree": zod.object({
+  "stage": zod.enum(['seed', 'sapling', 'growing', 'funded']),
+  "fundedPct": zod.number().min(getHydrateCustomerTreeResponseTreeFundedPctMin).max(getHydrateCustomerTreeResponseTreeFundedPctMax),
+  "established": zod.boolean(),
+  "yourShareKes": zod.number().min(getHydrateCustomerTreeResponseTreeYourShareKesMin)
+}).nullable()
+})
+
+
+/**
+ * @summary Credential-free aggregate programme allocations, not verified field outcomes
+ */
+export const getHydrateForestTotalsResponseEligibleRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseAppRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseBaselineRevenueKesMin = 0;
+
+export const getHydrateForestTotalsResponseContributionKesMin = 0;
+
+export const getHydrateForestTotalsResponseTreeFundKesMin = 0;
+
+export const getHydrateForestTotalsResponseCleanWaterKesMin = 0;
+
+export const getHydrateForestTotalsResponseSharedTreesFundedMin = 0;
+
+export const getHydrateForestTotalsResponseGrowingTreePctMin = 0;
+export const getHydrateForestTotalsResponseGrowingTreePctMax = 100;
+
+export const getHydrateForestTotalsResponseEstimatedTreesFundedMin = 0;
+
+export const getHydrateForestTotalsResponseTreesPlantedMin = 0;
+
+export const getHydrateForestTotalsResponseTreesEstablishedMin = 0;
+
+export const getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin = 0;
+
+
+
+export const GetHydrateForestTotalsResponse = zod.object({
+  "generatedAt": zod.string(),
+  "eligibleRevenueKes": zod.number().min(getHydrateForestTotalsResponseEligibleRevenueKesMin),
+  "appRevenueKes": zod.number().min(getHydrateForestTotalsResponseAppRevenueKesMin),
+  "baselineRevenueKes": zod.number().min(getHydrateForestTotalsResponseBaselineRevenueKesMin),
+  "contributionKes": zod.number().min(getHydrateForestTotalsResponseContributionKesMin),
+  "treeFundKes": zod.number().min(getHydrateForestTotalsResponseTreeFundKesMin),
+  "cleanWaterKes": zod.number().min(getHydrateForestTotalsResponseCleanWaterKesMin),
+  "sharedTreesFunded": zod.number().min(getHydrateForestTotalsResponseSharedTreesFundedMin),
+  "growingTreePct": zod.number().min(getHydrateForestTotalsResponseGrowingTreePctMin).max(getHydrateForestTotalsResponseGrowingTreePctMax).nullable(),
+  "estimatedTreesFunded": zod.number().min(getHydrateForestTotalsResponseEstimatedTreesFundedMin),
+  "treesPlanted": zod.number().min(getHydrateForestTotalsResponseTreesPlantedMin).nullable(),
+  "treesEstablished": zod.number().min(getHydrateForestTotalsResponseTreesEstablishedMin).nullable(),
+  "reportDate": zod.string().nullable(),
+  "location": zod.string(),
+  "config": zod.object({
+  "contributionRate": zod.number(),
+  "treeShare": zod.number(),
+  "treeCostKes": zod.number().gt(getHydrateForestTotalsResponseConfigTreeCostKesExclusiveMin)
+})
+})
+
+
+/**
+ * @summary Administrator-only Companion review log with matching-dataset counts
+ */
+export const listCustomerReviewsQueryPageDefault = 1;
+export const listCustomerReviewsQueryPageMax = 100000;
+
+export const listCustomerReviewsQueryLimitDefault = 20;
+export const listCustomerReviewsQueryLimitMax = 50;
+
+export const listCustomerReviewsQueryProductIdMax = 2147483647;
+
+export const listCustomerReviewsQueryRatingMax = 5;
+
+export const listCustomerReviewsQuerySearchMax = 200;
+
+
+
+export const ListCustomerReviewsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).max(listCustomerReviewsQueryPageMax).default(listCustomerReviewsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listCustomerReviewsQueryLimitMax).default(listCustomerReviewsQueryLimitDefault),
+  "productId": zod.coerce.number().min(1).max(listCustomerReviewsQueryProductIdMax).optional(),
+  "rating": zod.coerce.number().min(1).max(listCustomerReviewsQueryRatingMax).optional(),
+  "ratingSentiment": zod.enum(['Positive', 'Neutral', 'Negative']).optional(),
+  "aiSentiment": zod.enum(['Positive', 'Neutral', 'Negative', 'Mixed']).optional(),
+  "status": zod.enum(['pending', 'processing', 'completed', 'failed', 'unavailable']).optional(),
+  "disagreement": zod.coerce.boolean().optional(),
+  "search": zod.coerce.string().max(listCustomerReviewsQuerySearchMax).optional()
+})
+
+export const listCustomerReviewsResponseReviewsItemRatingMax = 5;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisExplanationMax = 460;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax = 40;
+
+export const listCustomerReviewsResponseReviewsItemAnalysisThemesMax = 3;
+
+
+
+export const ListCustomerReviewsResponse = zod.object({
+  "reviews": zod.array(zod.object({
+  "id": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "authorName": zod.string(),
+  "rating": zod.number().min(1).max(listCustomerReviewsResponseReviewsItemRatingMax),
+  "title": zod.string(),
+  "body": zod.string(),
+  "media": zod.array(zod.object({
+  "url": zod.string(),
+  "type": zod.enum(['photo', 'video'])
+})),
+  "createdAt": zod.coerce.date(),
+  "editedAt": zod.coerce.date().nullable(),
+  "ratingSentiment": zod.enum(['Positive', 'Neutral', 'Negative']),
+  "disagreement": zod.boolean(),
+  "analysis": zod.object({
+  "status": zod.enum(['pending', 'processing', 'completed', 'failed', 'unavailable']),
+  "category": zod.enum(['Positive', 'Neutral', 'Negative', 'Mixed']).optional(),
+  "explanation": zod.string().max(listCustomerReviewsResponseReviewsItemAnalysisExplanationMax).optional(),
+  "themes": zod.array(zod.string().max(listCustomerReviewsResponseReviewsItemAnalysisThemesItemMax)).max(listCustomerReviewsResponseReviewsItemAnalysisThemesMax).optional(),
+  "analyzedAt": zod.coerce.date().optional(),
+  "error": zod.string().optional()
+})
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number(),
+  "counts": zod.object({
+  "rating": zod.object({
+  "Positive": zod.number(),
+  "Neutral": zod.number(),
+  "Negative": zod.number()
+}),
+  "ai": zod.object({
+  "Positive": zod.number(),
+  "Neutral": zod.number(),
+  "Negative": zod.number(),
+  "Mixed": zod.number()
+}),
+  "status": zod.object({
+  "pending": zod.number(),
+  "processing": zod.number(),
+  "completed": zod.number(),
+  "failed": zod.number(),
+  "unavailable": zod.number()
+}),
+  "disagreements": zod.number()
+}),
+  "products": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}))
+})
+
+
+/**
+ * @summary Queue a failed eligible review for automated text analysis
+ */
+export const retryCustomerReviewAnalysisPathIdMax = 2147483647;
+
+
+
+export const RetryCustomerReviewAnalysisParams = zod.object({
+  "id": zod.coerce.number().min(1).max(retryCustomerReviewAnalysisPathIdMax)
+})
+
+export const RetryCustomerReviewAnalysisResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
 /**
  * @summary Create a public instant water assessment
  */
@@ -43,6 +1132,12 @@ export const createPublicInstantWaterAssessmentBodyAnswersCountryMax = 80;
 
 export const createPublicInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
+export const createPublicInstantWaterAssessmentBodyAnswersSourcesMax = 3;
+
+export const createPublicInstantWaterAssessmentBodyAnswersConcernsMax = 3;
+
+export const createPublicInstantWaterAssessmentBodyAnswersSettingsMax = 3;
+
 
 
 export const CreatePublicInstantWaterAssessmentBody = zod.object({
@@ -61,11 +1156,14 @@ export const CreatePublicInstantWaterAssessmentBody = zod.object({
   "answers": zod.object({
   "country": zod.string().min(createPublicInstantWaterAssessmentBodyAnswersCountryMin).max(createPublicInstantWaterAssessmentBodyAnswersCountryMax),
   "area": zod.string().min(1).max(createPublicInstantWaterAssessmentBodyAnswersAreaMax),
-  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']),
-  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
   "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
   "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
-  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(createPublicInstantWaterAssessmentBodyAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(createPublicInstantWaterAssessmentBodyAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(createPublicInstantWaterAssessmentBodyAnswersSettingsMax).optional()
 })
 })
 
@@ -79,7 +1177,7 @@ export const CreatePublicInstantWaterAssessmentResponse = zod.object({
   "resultTokenExpiresAt": zod.coerce.date(),
   "result": zod.object({
   "reference": zod.string(),
-  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "rulesVersion": zod.enum(['instant-water-check-v1', 'instant-water-check-v2']),
   "bands": zod.object({
   "hardness": zod.enum(['Low', 'Moderate', 'High']),
   "taste": zod.enum(['Low', 'Moderate', 'High']),
@@ -90,7 +1188,10 @@ export const CreatePublicInstantWaterAssessmentResponse = zod.object({
   "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
   "recommendation": zod.object({
   "name": zod.string(),
-  "explanation": zod.string()
+  "explanation": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "action": zod.enum(['product', 'enquiry']).optional()
 }),
   "disclaimer": zod.string(),
   "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
@@ -111,6 +1212,12 @@ export const createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax = 80
 
 export const createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax = 160;
 
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersSourcesMax = 3;
+
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersConcernsMax = 3;
+
+export const createAuthenticatedInstantWaterAssessmentBodyAnswersSettingsMax = 3;
+
 export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMin = 2;
 export const createAuthenticatedInstantWaterAssessmentBodyFirstNameMax = 80;
 
@@ -128,11 +1235,14 @@ export const CreateAuthenticatedInstantWaterAssessmentBody = zod.object({
   "answers": zod.object({
   "country": zod.string().min(createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMin).max(createAuthenticatedInstantWaterAssessmentBodyAnswersCountryMax),
   "area": zod.string().min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersAreaMax),
-  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']),
-  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
   "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
   "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
-  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(createAuthenticatedInstantWaterAssessmentBodyAnswersSettingsMax).optional()
 }),
   "firstName": instantWaterFirstNameSchema,
   "phone": instantWaterPhoneSchema,
@@ -146,7 +1256,7 @@ export const CreateAuthenticatedInstantWaterAssessmentResponse = zod.object({
   "reference": zod.string().regex(createAuthenticatedInstantWaterAssessmentResponseReferenceRegExp),
   "result": zod.object({
   "reference": zod.string(),
-  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "rulesVersion": zod.enum(['instant-water-check-v1', 'instant-water-check-v2']),
   "bands": zod.object({
   "hardness": zod.enum(['Low', 'Moderate', 'High']),
   "taste": zod.enum(['Low', 'Moderate', 'High']),
@@ -157,7 +1267,10 @@ export const CreateAuthenticatedInstantWaterAssessmentResponse = zod.object({
   "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
   "recommendation": zod.object({
   "name": zod.string(),
-  "explanation": zod.string()
+  "explanation": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "action": zod.enum(['product', 'enquiry']).optional()
 }),
   "disclaimer": zod.string(),
   "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
@@ -181,7 +1294,7 @@ export const GetPublicInstantWaterAssessmentResultParams = zod.object({
 
 export const GetPublicInstantWaterAssessmentResultResponse = zod.object({
   "reference": zod.string(),
-  "rulesVersion": zod.enum(['instant-water-check-v1']),
+  "rulesVersion": zod.enum(['instant-water-check-v1', 'instant-water-check-v2']),
   "bands": zod.object({
   "hardness": zod.enum(['Low', 'Moderate', 'High']),
   "taste": zod.enum(['Low', 'Moderate', 'High']),
@@ -192,7 +1305,10 @@ export const GetPublicInstantWaterAssessmentResultResponse = zod.object({
   "areaFlag": zod.enum(['none', 'hard_groundwater', 'rift_valley_fluoride']).optional(),
   "recommendation": zod.object({
   "name": zod.string(),
-  "explanation": zod.string()
+  "explanation": zod.string(),
+  "productId": zod.number().optional(),
+  "productName": zod.string().optional(),
+  "action": zod.enum(['product', 'enquiry']).optional()
 }),
   "disclaimer": zod.string(),
   "provenance": zod.enum(['general_indicative', 'reviewed_regional_guidance']),
@@ -265,7 +1381,32 @@ export const ConsumeInstantWaterAssessmentHandoffBody = zod.object({
   "handoffToken": zod.string().min(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMin).max(consumeInstantWaterAssessmentHandoffBodyHandoffTokenMax)
 })
 
+export const consumeInstantWaterAssessmentHandoffResponseAnswersCountryMin = 2;
+export const consumeInstantWaterAssessmentHandoffResponseAnswersCountryMax = 80;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersAreaMax = 160;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersSourcesMax = 3;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersConcernsMax = 3;
+
+export const consumeInstantWaterAssessmentHandoffResponseAnswersSettingsMax = 3;
+
+
+
 export const ConsumeInstantWaterAssessmentHandoffResponse = zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(consumeInstantWaterAssessmentHandoffResponseAnswersCountryMin).max(consumeInstantWaterAssessmentHandoffResponseAnswersCountryMax),
+  "area": zod.string().min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(consumeInstantWaterAssessmentHandoffResponseAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -276,6 +1417,8 @@ export const ConsumeInstantWaterAssessmentHandoffResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -292,7 +1435,32 @@ export const AttachInstantWaterAssessmentBody = zod.object({
   "resultToken": zod.string().optional().describe('Public token may be combined with a signed-in account\'s already verified matching phone; it cannot authorize attachment alone.')
 })
 
+export const attachInstantWaterAssessmentResponseAnswersCountryMin = 2;
+export const attachInstantWaterAssessmentResponseAnswersCountryMax = 80;
+
+export const attachInstantWaterAssessmentResponseAnswersAreaMax = 160;
+
+export const attachInstantWaterAssessmentResponseAnswersSourcesMax = 3;
+
+export const attachInstantWaterAssessmentResponseAnswersConcernsMax = 3;
+
+export const attachInstantWaterAssessmentResponseAnswersSettingsMax = 3;
+
+
+
 export const AttachInstantWaterAssessmentResponse = zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(attachInstantWaterAssessmentResponseAnswersCountryMin).max(attachInstantWaterAssessmentResponseAnswersCountryMax),
+  "area": zod.string().min(1).max(attachInstantWaterAssessmentResponseAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(attachInstantWaterAssessmentResponseAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(attachInstantWaterAssessmentResponseAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(attachInstantWaterAssessmentResponseAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -303,6 +1471,8 @@ export const AttachInstantWaterAssessmentResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -313,6 +1483,9 @@ export const AttachInstantWaterAssessmentResponse = zod.object({
 export const RequestInstantWaterPhysicalTestParams = zod.object({
   "assessmentId": zod.coerce.string()
 })
+
+export const requestInstantWaterPhysicalTestBodyPromoCodeMin = 3;
+export const requestInstantWaterPhysicalTestBodyPromoCodeMax = 64;
 
 export const requestInstantWaterPhysicalTestBodyIdempotencyKeyMin = 8;
 export const requestInstantWaterPhysicalTestBodyIdempotencyKeyMax = 200;
@@ -329,6 +1502,7 @@ export const requestInstantWaterPhysicalTestBodyMediaReferencesMax = 7;
 
 
 export const RequestInstantWaterPhysicalTestBody = zod.object({
+  "promoCode": zod.string().min(requestInstantWaterPhysicalTestBodyPromoCodeMin).max(requestInstantWaterPhysicalTestBodyPromoCodeMax).optional(),
   "idempotencyKey": zod.string().min(requestInstantWaterPhysicalTestBodyIdempotencyKeyMin).max(requestInstantWaterPhysicalTestBodyIdempotencyKeyMax),
   "actionToken": zod.string().optional(),
   "serviceAddress": zod.string().min(requestInstantWaterPhysicalTestBodyServiceAddressMin).max(requestInstantWaterPhysicalTestBodyServiceAddressMax),
@@ -341,6 +1515,8 @@ export const RequestInstantWaterPhysicalTestBody = zod.object({
 })
 
 export const RequestInstantWaterPhysicalTestResponse = zod.object({
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "serviceState": zod.enum(['instant_result_ready', 'follow_up_requested', 'physical_test_requested', 'scheduled', 'completed', 'closed']),
@@ -351,8 +1527,33 @@ export const RequestInstantWaterPhysicalTestResponse = zod.object({
 /**
  * @summary List assessments owned by the authenticated customer
  */
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMin = 2;
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMax = 80;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersAreaMax = 160;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSourcesMax = 3;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersConcernsMax = 3;
+
+export const listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSettingsMax = 3;
+
+
+
 export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
   "assessments": zod.array(zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMin).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersCountryMax),
+  "area": zod.string().min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(listAuthenticatedInstantWaterAssessmentsResponseAssessmentsItemAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -363,6 +1564,8 @@ export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -371,8 +1574,33 @@ export const ListAuthenticatedInstantWaterAssessmentsResponse = zod.object({
 /**
  * @summary Get the latest owned assessment summary for Companion chat context
  */
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMin = 2;
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMax = 80;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersAreaMax = 160;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSourcesMax = 3;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersConcernsMax = 3;
+
+export const getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSettingsMax = 3;
+
+
+
 export const GetAuthenticatedLatestInstantWaterAssessmentResponse = zod.object({
   "assessment": zod.union([zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMin).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersCountryMax),
+  "area": zod.string().min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(getAuthenticatedLatestInstantWaterAssessmentResponseAssessmentOneAnswersSettingsMax).optional()
+}).optional(),
   "assessmentId": zod.string(),
   "reference": zod.string(),
   "bands": zod.object({
@@ -383,6 +1611,8 @@ export const GetAuthenticatedLatestInstantWaterAssessmentResponse = zod.object({
 }),
   "accountLinkState": zod.string(),
   "serviceState": zod.string(),
+  "freeWaterTest": zod.boolean().optional(),
+  "promoCode": zod.string().optional(),
   "createdAt": zod.coerce.date()
 }),zod.null()])
 })
@@ -440,6 +1670,19 @@ export const GetProjectHubInstantWaterAssessmentParams = zod.object({
   "assessmentId": zod.coerce.string()
 })
 
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin = 2;
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax = 80;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax = 160;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax = 3;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax = 3;
+
+export const getProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax = 3;
+
+
+
 export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
   "assessmentId": zod.string(),
   "reference": zod.string(),
@@ -460,10 +1703,24 @@ export const GetProjectHubInstantWaterAssessmentResponse = zod.object({
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date()
 }).and(zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax),
+  "area": zod.string().min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(getProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax).optional()
+}).optional(),
   "phone": zod.string().optional(),
   "consentVersion": zod.string().optional(),
   "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
   "serviceAddress": zod.string().optional(),
+  "promoCode": zod.string().optional(),
+  "freeWaterTest": zod.boolean().optional(),
   "preferredContactTime": zod.string().optional(),
   "mediaReferences": zod.array(zod.object({
   "reference": zod.string().describe('Opaque private evidence reference; never a public object URL.'),
@@ -490,6 +1747,19 @@ export const UpdateProjectHubInstantWaterAssessmentBody = zod.object({
   "internalNote": zod.string().max(updateProjectHubInstantWaterAssessmentBodyInternalNoteMax).optional()
 })
 
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin = 2;
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax = 80;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax = 160;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax = 3;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax = 3;
+
+export const updateProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax = 3;
+
+
+
 export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
   "assessmentId": zod.string(),
   "reference": zod.string(),
@@ -510,10 +1780,24 @@ export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date()
 }).and(zod.object({
+  "answers": zod.object({
+  "country": zod.string().min(updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMin).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersCountryMax),
+  "area": zod.string().min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersAreaMax),
+  "source": zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain']).optional(),
+  "concern": zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost']).optional(),
+  "symptom": zod.enum(['none', 'scale', 'taste', 'cloudy', 'skin', 'safety']).optional(),
+  "useContext": zod.enum(['drinking', 'cooking', 'bathing', 'mixed']).optional(),
+  "setting": zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell']).optional(),
+  "sources": zod.array(zod.enum(['municipal', 'borehole', 'shallow', 'vendor', 'bottled', 'rain'])).min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersSourcesMax).optional(),
+  "concerns": zod.array(zod.enum(['scale', 'taste', 'cloudy', 'skin', 'safety', 'cost'])).min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersConcernsMax).optional(),
+  "settings": zod.array(zod.enum(['home', 'rental', 'salon', 'office', 'hospitality', 'school', 'resell'])).min(1).max(updateProjectHubInstantWaterAssessmentResponseTwoAnswersSettingsMax).optional()
+}).optional(),
   "phone": zod.string().optional(),
   "consentVersion": zod.string().optional(),
   "sourceAttribution": zod.record(zod.string(), zod.unknown()).optional(),
   "serviceAddress": zod.string().optional(),
+  "promoCode": zod.string().optional(),
+  "freeWaterTest": zod.boolean().optional(),
   "preferredContactTime": zod.string().optional(),
   "mediaReferences": zod.array(zod.object({
   "reference": zod.string().describe('Opaque private evidence reference; never a public object URL.'),
@@ -521,6 +1805,83 @@ export const UpdateProjectHubInstantWaterAssessmentResponse = zod.object({
   "downloadUrl": zod.string().describe('Authorized private download route; not a public storage URL.')
 })).optional()
 }))
+
+
+/**
+ * @summary Mark an order shipped or ready to collect and queue SMS, push, and email
+ */
+
+
+
+export const UpdateUcOrderFulfillmentParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const updateUcOrderFulfillmentBodyIdempotencyKeyMax = 200;
+export const updateUcOrderFulfillmentBodyTrackingNumberMax = 100;
+export const updateUcOrderFulfillmentBodyTrackingUrlMax = 2048;
+export const updateUcOrderFulfillmentBodyEstimatedDeliveryRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateUcOrderFulfillmentBodyCollectionLocationMax = 300;
+export const updateUcOrderFulfillmentBodyNoteMax = 500;
+
+export const UpdateUcOrderFulfillmentBody = zod.object({
+  "status": zod.enum(['shipped', 'ready-to-collect']),
+  "idempotencyKey": zod.string().min(1).max(updateUcOrderFulfillmentBodyIdempotencyKeyMax).optional(),
+  "trackingNumber": zod.string().max(updateUcOrderFulfillmentBodyTrackingNumberMax).optional(),
+  "trackingUrl": zod.string().max(updateUcOrderFulfillmentBodyTrackingUrlMax).optional().describe('HTTP or HTTPS tracking link without embedded credentials'),
+  "estimatedDelivery": zod.string().regex(updateUcOrderFulfillmentBodyEstimatedDeliveryRegExp).optional().describe('Valid calendar date in YYYY-MM-DD format'),
+  "collectionLocation": zod.string().max(updateUcOrderFulfillmentBodyCollectionLocationMax).optional().describe('Required when status is ready-to-collect'),
+  "note": zod.string().max(updateUcOrderFulfillmentBodyNoteMax).optional().describe('Customer-visible fulfillment note')
+})
+
+export const UpdateUcOrderFulfillmentResponse = zod.object({
+  "ok": zod.boolean(),
+  "id": zod.number(),
+  "status": zod.string(),
+  "customerStage": zod.string().nullable(),
+  "repeated": zod.boolean(),
+  "notification": zod.object({
+  "status": zod.enum(['queued', 'skipped']),
+  "channels": zod.array(zod.enum(['sms', 'push', 'email']))
+})
+})
+
+
+/**
+ * @summary Update internal status, shipping details and confirmed order items
+ */
+
+
+
+export const UpdateUcAdminOrderParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const updateUcAdminOrderBodyShippingAddressMaxOne = 1000;
+
+export const updateUcAdminOrderBodyLineItemsItemProductIdMax = 2147483647;
+
+export const updateUcAdminOrderBodyLineItemsItemNameMax = 300;
+
+export const updateUcAdminOrderBodyLineItemsItemQuantityMax = 1000;
+
+export const updateUcAdminOrderBodyLineItemsItemTotalRegExp = new RegExp('^\\d{1,10}(\\.\\d{1,2})?$');
+export const updateUcAdminOrderBodyLineItemsMax = 100;
+
+
+
+export const UpdateUcAdminOrderBody = zod.object({
+  "status": zod.enum(['pending', 'processing', 'paid', 'declined', 'completed', 'cancelled', 'dispatched']).optional(),
+  "shippingAddress": zod.record(zod.string(), zod.string().max(updateUcAdminOrderBodyShippingAddressMaxOne)).optional(),
+  "lineItems": zod.array(zod.object({
+  "productId": zod.number().min(1).max(updateUcAdminOrderBodyLineItemsItemProductIdMax),
+  "name": zod.string().min(1).max(updateUcAdminOrderBodyLineItemsItemNameMax),
+  "quantity": zod.number().min(1).max(updateUcAdminOrderBodyLineItemsItemQuantityMax),
+  "total": zod.string().regex(updateUcAdminOrderBodyLineItemsItemTotalRegExp)
+})).min(1).max(updateUcAdminOrderBodyLineItemsMax).optional()
+})
+
+export const UpdateUcAdminOrderResponse = zod.unknown()
 
 
 /**
@@ -555,19 +1916,25 @@ export const UpdateUcWaterTestCustomerStageResponse = zod.unknown()
 
 
 /**
- * @summary List all UC products with live stock from WooCommerce
+ * @summary List app-owned parent and variant stock, including unknown and unmanaged states
  */
 export const ListUcInventoryResponse = zod.object({
   "products": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
-  "stockQuantity": zod.number(),
+  "stockQuantity": zod.number().nullable(),
   "stockStatus": zod.string(),
+  "revision": zod.number().optional(),
+  "manageStock": zod.boolean().optional(),
+  "reservedQuantity": zod.number().optional(),
+  "availableQuantity": zod.number().nullish(),
+  "recordCode": zod.string().optional(),
+  "parentId": zod.number().nullish(),
   "permalink": zod.string().nullish(),
   "syncedAt": zod.coerce.date()
 })),
-  "source": zod.enum(['woocommerce', 'mock'])
+  "source": zod.enum(['companion'])
 })
 
 
@@ -575,7 +1942,10 @@ export const ListUcInventoryResponse = zod.object({
  * Public catalogue list; optional category and name/SKU search filters.
  * @summary List customer-facing products
  */
+export const listUcProductsQueryPublicationSafeDefault = false;
+
 export const ListUcProductsQueryParams = zod.object({
+  "publicationSafe": zod.coerce.boolean().default(listUcProductsQueryPublicationSafeDefault).describe('Require configured WooCommerce published inventory; never substitute demo products.'),
   "category": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional()
 })
@@ -619,7 +1989,106 @@ export const GetUcProductParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
 
-export const GetUcProductResponse = zod.object({
+export const GetUcProductQueryParams = zod.object({
+  "publicationSafe": zod.coerce.boolean().optional().describe('Require a fresh published WooCommerce operational read; never return demo content.')
+})
+
+export const GetUcProductResponse = zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.string(),
+  "regularPrice": zod.string().nullable(),
+  "salePrice": zod.string().nullable(),
+  "description": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "tagline": zod.string().nullable(),
+  "categories": zod.array(zod.object({
+  "name": zod.string().optional()
+})),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "sku": zod.string().nullable(),
+  "stockStatus": zod.string().nullable(),
+  "stockQuantity": zod.number().nullable(),
+  "tags": zod.array(zod.record(zod.string(), zod.unknown())),
+  "lifespanDays": zod.number(),
+  "filterCapacityLitres": zod.number(),
+  "enquiryOnly": zod.boolean(),
+  "totalSales": zod.number(),
+  "videoUrl": zod.string().nullable()
+}),zod.object({
+  "id": zod.number(),
+  "sku": zod.string(),
+  "stockStatus": zod.string().optional(),
+  "price": zod.string().optional(),
+  "salePrice": zod.string().optional(),
+  "regularPrice": zod.string().optional(),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "uploadedPhotos": zod.array(zod.object({
+  "slot": zod.number(),
+  "src": zod.string(),
+  "alt": zod.string()
+}))
+})])
+
+
+/**
+ * @summary Public history completeness notice without customer data
+ */
+export const GetCompanionCommerceStatusResponse = zod.object({
+  "authority": zod.enum(['companion']),
+  "legacyHistory": zod.enum(['pending_review', 'reviewed'])
+})
+
+
+/**
+ * @summary Protected stock and historical import review counts
+ */
+export const GetCompanionCommerceMigrationReviewResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const ListManagedCompanionProductsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.string(),
+  "regularPrice": zod.string().nullable(),
+  "salePrice": zod.string().nullable(),
+  "description": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "tagline": zod.string().nullable(),
+  "categories": zod.array(zod.object({
+  "name": zod.string().optional()
+})),
+  "images": zod.array(zod.object({
+  "src": zod.string(),
+  "alt": zod.string()
+})),
+  "sku": zod.string().nullable(),
+  "stockStatus": zod.string().nullable(),
+  "stockQuantity": zod.number().nullable(),
+  "tags": zod.array(zod.record(zod.string(), zod.unknown())),
+  "lifespanDays": zod.number(),
+  "filterCapacityLitres": zod.number(),
+  "enquiryOnly": zod.boolean(),
+  "totalSales": zod.number(),
+  "videoUrl": zod.string().nullable()
+})
+export const ListManagedCompanionProductsResponse = zod.array(ListManagedCompanionProductsResponseItem)
+
+
+
+
+
+export const GetManagedCompanionProductParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetManagedCompanionProductResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.string(),
@@ -817,14 +2286,17 @@ export const updateUcInventoryItemBodyStockQuantityMin = 0;
 
 
 
+
 export const UpdateUcInventoryItemBody = zod.object({
-  "stockQuantity": zod.number().min(updateUcInventoryItemBodyStockQuantityMin)
+  "stockQuantity": zod.number().min(updateUcInventoryItemBodyStockQuantityMin).nullable(),
+  "stockStatus": zod.enum(['unknown', 'instock', 'outofstock', 'onbackorder']).optional(),
+  "revision": zod.number().min(1).optional()
 })
 
 export const UpdateUcInventoryItemResponse = zod.object({
   "ok": zod.boolean(),
   "productId": zod.number(),
-  "stockQuantity": zod.number(),
+  "stockQuantity": zod.number().nullable(),
   "source": zod.string()
 })
 
@@ -941,6 +2413,11 @@ export const GetUcCustomerResponse = zod.object({
 })
 }),
   "orders": zod.array(zod.object({
+  "checkoutState": zod.string().nullish(),
+  "synchronizationStatus": zod.string().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentConfirmedAt": zod.string().nullish(),
+  "reconciliationRequired": zod.boolean().optional(),
   "id": zod.number(),
   "status": zod.string(),
   "total": zod.string(),
@@ -948,6 +2425,10 @@ export const GetUcCustomerResponse = zod.object({
   "paymentMethod": zod.string(),
   "dateCreated": zod.coerce.date(),
   "lineItems": zod.array(zod.object({
+  "productId": zod.number().optional(),
+  "variationId": zod.number().nullish(),
+  "childSku": zod.string().nullish(),
+  "variantLabel": zod.string().nullish(),
   "name": zod.string(),
   "quantity": zod.number(),
   "total": zod.string()
@@ -1572,6 +3053,7 @@ export const ListUcOfflineClientsResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -1610,6 +3092,7 @@ export const CreateUcOfflineClientBody = zod.object({
   "phone": zod.string().optional().describe('International phone number'),
   "email": zod.string().optional().describe('Case-insensitive email address'),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -1632,6 +3115,7 @@ export const CreateUcOfflineClientResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -1670,6 +3154,7 @@ export const UpdateUcOfflineClientBody = zod.object({
   "phone": zod.string().optional().describe('International phone number'),
   "email": zod.string().optional().describe('Case-insensitive email address'),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -1691,6 +3176,7 @@ export const UpdateUcOfflineClientResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -1730,6 +3216,7 @@ export const RetryUcOfflineClientDeliveryResponse = zod.object({
   "phone": zod.string().nullish(),
   "email": zod.string().nullish(),
   "products": zod.array(zod.object({
+  "lineId": zod.string().optional().describe('Stable server-issued source line; retained on edits'),
   "productId": zod.number().optional(),
   "productName": zod.string(),
   "quantity": zod.number().min(1),
@@ -2238,13 +3725,14 @@ export const SendAnthropicMessageResponse = zod.unknown()
 
 
 /**
- * @summary Inbound webhook — Ultra Clear AI asks a question about projects
+ * @summary Active ProjectHub team member asks a question about projects
  */
+export const aiQueryBodyQuestionMax = 4000;
 
 
 
 export const AiQueryBody = zod.object({
-  "question": zod.string().min(1),
+  "question": zod.string().min(1).max(aiQueryBodyQuestionMax),
   "source": zod.string().optional().describe('Identifier of the calling agent (e.g. \"orchestrator\", \"analytics-agent\")')
 })
 
@@ -2522,14 +4010,16 @@ export const GetMonitoringSnapshotResponse = zod.object({
   "key": zod.string(),
   "label": zod.string(),
   "url": zod.string(),
-  "ok": zod.boolean(),
+  "ok": zod.boolean().nullable(),
   "httpStatus": zod.number().nullish(),
   "responseMs": zod.number().nullish(),
-  "checkedAt": zod.string(),
+  "checkedAt": zod.string().nullable(),
+  "freshness": zod.enum(['current', 'stale']).optional(),
+  "coverage": zod.string().optional(),
   "error": zod.string().nullish(),
   "history": zod.array(zod.object({
   "at": zod.string(),
-  "ok": zod.boolean(),
+  "ok": zod.boolean().nullable(),
   "responseMs": zod.number().nullish()
 }))
 })),
@@ -2545,10 +4035,80 @@ export const GetMonitoringSnapshotResponse = zod.object({
   "detail": zod.string()
 })),
   "problems": zod.object({
-  "recoveryOrders": zod.number(),
-  "notificationFailures7d": zod.number()
+  "recoveryOrders": zod.number().nullable(),
+  "notificationFailures7d": zod.number().nullable()
 })
 })
+
+
+/**
+ * @summary Best-effort privacy-safe JavaScript diagnostic (3 KB, server rate limited)
+ */
+export const collectRuntimeDiagnosticBodyReleaseRegExp = new RegExp('^(?:unknown|development|[0-9]{10,16}-[0-9]{1,10}|[a-f0-9]{40})$');
+export const collectRuntimeDiagnosticBodyCorrelationIdRegExp = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
+export const collectRuntimeDiagnosticBodyFramesMax = 5;
+export const collectRuntimeDiagnosticBodyFramesItemLineMin = 0;
+export const collectRuntimeDiagnosticBodyFramesItemLineMax = 10000000;
+export const collectRuntimeDiagnosticBodyFramesItemColumnMin = 0;
+export const collectRuntimeDiagnosticBodyFramesItemColumnMax = 10000000;
+
+export const CollectRuntimeDiagnosticBody = zod.object({
+  "schema": zod.literal(1),
+  "app": zod.enum(['companion', 'projecthub']),
+  "environment": zod.enum(['production', 'development', 'preview']),
+  "platform": zod.enum(['web', 'android', 'ios', 'other']),
+  "browser": zod.enum(['chrome', 'safari', 'firefox', 'edge', 'other', 'native']),
+  "release": zod.string().regex(collectRuntimeDiagnosticBodyReleaseRegExp),
+  "routeClass": zod.enum(['home', 'catalogue', 'product', 'cart', 'checkout', 'orders', 'account', 'auth', 'care', 'guides', 'impact', 'rewards', 'support', 'admin', 'monitoring', 'projects', 'tasks', 'other']),
+  "category": zod.enum(['render', 'unhandled_error', 'unhandled_rejection', 'api_read_failed', 'api_read_timeout']),
+  "correlationId": zod.string().regex(collectRuntimeDiagnosticBodyCorrelationIdRegExp).optional(),
+  "frames": zod.array(zod.object({
+  "asset": zod.enum(['application', 'vendor', 'bundle', 'unknown']),
+  "line": zod.number().min(collectRuntimeDiagnosticBodyFramesItemLineMin).max(collectRuntimeDiagnosticBodyFramesItemLineMax),
+  "column": zod.number().min(collectRuntimeDiagnosticBodyFramesItemColumnMin).max(collectRuntimeDiagnosticBodyFramesItemColumnMax)
+})).max(collectRuntimeDiagnosticBodyFramesMax)
+})
+
+export const CollectRuntimeDiagnosticResponse = zod.void()
+
+
+/**
+ * @summary Timeout-bounded essential database readiness; public status only
+ */
+export const GetRuntimeReadinessResponse = zod.unknown()
+
+
+/**
+ * @summary Live Monitoring permission required; recent groups and 15-minute API aggregates
+ */
+export const getRuntimeMonitoringQueryReleaseMax = 40;
+
+
+
+export const GetRuntimeMonitoringQueryParams = zod.object({
+  "app": zod.enum(['companion', 'projecthub']).optional(),
+  "environment": zod.enum(['production', 'development', 'preview']).optional(),
+  "release": zod.coerce.string().max(getRuntimeMonitoringQueryReleaseMax).optional()
+})
+
+export const GetRuntimeMonitoringResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Live Monitoring edit permission required; defaults off, no new destinations
+ */
+export const ConfigureRuntimeAlertsBody = zod.object({
+  "mode": zod.enum(['off', 'dry-run', 'live']),
+  "destination": zod.enum(['slack', 'email'])
+})
+
+export const ConfigureRuntimeAlertsResponse = zod.unknown()
+
+
+/**
+ * @summary Monitoring edit permission required; preview only, never dispatches
+ */
+export const DryRunRuntimeAlertResponse = zod.unknown()
 
 
 /**
@@ -2846,7 +4406,7 @@ export const IssueAgentClientTokenResponse = zod.object({
 
 
 /**
- * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer.
+ * The customer bearer token authenticates use of Alison, but no customer identity or filter context is stored with the transcript. Reusing the same conversationId and turnId returns the already-persisted answer. New replies use relevant curated Markdown and published guide/article snapshots, with concise default answers.
  * @summary Generate and persist one anonymous Alison turn
  */
 export const createUcAlisonTurnBodyConversationIdMin = 16;
@@ -2875,7 +4435,27 @@ export const CreateUcAlisonTurnBody = zod.object({
 
 export const CreateUcAlisonTurnResponse = zod.object({
   "reply": zod.string(),
+  "feedbackToken": zod.string(),
   "suggestions": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Rate a server-issued Alison answer once
+ */
+export const submitUcAlisonFeedbackBodyFeedbackTokenMax = 2048;
+
+
+
+export const SubmitUcAlisonFeedbackBody = zod.object({
+  "rating": zod.enum(['up', 'down']),
+  "question": zod.string(),
+  "answer": zod.string(),
+  "feedbackToken": zod.string().max(submitUcAlisonFeedbackBodyFeedbackTokenMax)
+})
+
+export const SubmitUcAlisonFeedbackResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 
@@ -4506,4 +6086,41 @@ export const GetCustomerLifecycleFeatureConfigResponse = zod.object({
   "legacyReviewSubmission": zod.boolean(),
   "canonicalGlobalImpact": zod.boolean(),
   "nearbyDistanceTiers": zod.boolean()
+})
+
+
+/**
+ * @summary Read persisted refill preview activation flags
+ */
+export const GetRefillFeaturesResponse = zod.object({
+  "careOverview": zod.boolean(),
+  "refillGovernance": zod.boolean()
+})
+
+
+/**
+ * @summary Update persisted refill preview activation flags
+ */
+export const UpdateRefillFeaturesBody = zod.object({
+  "careOverview": zod.boolean().optional(),
+  "refillGovernance": zod.boolean().optional()
+})
+
+export const UpdateRefillFeaturesResponse = zod.object({
+  "careOverview": zod.boolean(),
+  "refillGovernance": zod.boolean()
+})
+
+
+/**
+ * @summary Read safe refill feature capabilities
+ */
+export const GetRefillCapabilitiesResponse = zod.object({
+  "version": zod.literal(1),
+  "careOverview": zod.boolean(),
+  "promoRefill": zod.literal(false),
+  "paidRefill": zod.literal(false),
+  "moneyWallet": zod.literal(false),
+  "paidCare": zod.literal(false),
+  "automaticCollection": zod.literal(false)
 })

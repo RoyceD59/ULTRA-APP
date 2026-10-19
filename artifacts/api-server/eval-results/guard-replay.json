@@ -1,0 +1,816 @@
+{
+  "evaluatedAt": "2026-10-04T09:57:49.825Z",
+  "paidCalls": 0,
+  "results": [
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "changed-price-and-id",
+      "round": 1,
+      "rawReply": "The current price for [Sweet Home](product:9842) is KES 27,890.50 and it's in stock. I cannot confirm a specific delivery date — check the product page or [📞 Call 0717774049](tel:+254717774049) to ask about immediate delivery options.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have other rooms to filter?\",\"What water issues concern you most?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "catalogue-outage",
+      "round": 1,
+      "rawReply": "I cannot verify current prices, availability or stock right now — the live catalogue lookup failed. I'd recommend checking the product page directly or contacting the team at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for the latest Sweet Home pricing and delivery options.\n\n<!--SUG:[\"Do you need help choosing a filter instead?\",\"What water issues concern you most?\",\"Any installation questions?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "credentials-removed",
+      "round": 1,
+      "rawReply": "I cannot verify the current price, availability, or delivery timing for Sweet Home right now — the live catalogue system is unavailable. I'd recommend checking the product page directly or contacting the team at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for the latest stock and pricing.\n\n<!--SUG:[\"Does mains water taste or look odd?\",\"Which water issues matter most to you?\",\"Want a water quality check?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "unknown-currency",
+      "round": 1,
+      "rawReply": "The current price for [Sweet Home](product:9842) is KES 27,890.50 and it's in stock. I cannot confirm delivery timing — check the product page or contact the team for your exact delivery window. The price shown is the listed parent price; if there are variants, their exact prices must be checked on the product page.\n\n<!--SUG:[\"Does Sweet Home suit mains water?\",\"How often do cartridges need replacing?\",\"Where is Sweet Home installed?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "quote-only",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows Sweet Home [Sweet Home](product:9842) is in stock, but the current price is not supplied in my real-time data. I cannot verify the exact amount or delivery timing right now.\n\nPlease check the product page or [📞 Call 0717774049](tel:+254717774049) for the current price and delivery options.\n\n<!--SUG:[\"Do you need help choosing a filter?\",\"Any concerns with your mains water?\",\"Want to book a water test?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "out-of-stock",
+      "round": 1,
+      "rawReply": "Thanks for asking me to check current data. Sweet Home is currently out of stock. The live price shown is KES 27,890.50 as a listed amount, but I cannot confirm whether that applies to a specific variant—you'll need to check the product page for exact variant pricing. I cannot verify a delivery date; the store will confirm timing when you order.\n\n<!--SUG:[\"When will it be back in stock?\",\"What's an alternative to Sweet Home?\",\"How do I check stock myself?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "backorder",
+      "round": 1,
+      "rawReply": "You're right to ask me to check the current data. Sweet Home is currently on backorder, so it's not available for immediate delivery. The current listed price is KES 27890.50, and you can find it here: [Sweet Home](product:9842). That's a listed parent price, so if there are variants, you'd need to check the product page to see the exact price for your chosen option.\n\n<!--SUG:[\"When do you need it by?\",\"Any other water concerns?\",\"What's your budget range?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "unknown-stock",
+      "round": 1,
+      "rawReply": "The current Sweet Home price is KES 27,890.50. [Sweet Home](product:9842) is available — however, current stock levels and delivery timing cannot be verified from my latest data. I'd recommend checking the product page to confirm availability for your area before ordering.\n\n<!--SUG:[\"How many people use your water?\",\"What water problems concern you most?\",\"Need help choosing a filter?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "variable-parent-price",
+      "round": 1,
+      "rawReply": "The current price for [Sweet Home](product:9842) is KES 27,890.50 (listed parent price). It's in stock now. Since Sweet Home has variants, that listed amount is not the exact variant price — you'll need to check the product page to see the specific price for your chosen option. I cannot confirm a delivery date; check at checkout or contact the team for timing.\n\n<!--SUG:[\"How many people use your water?\",\"Do you know your water quality issues?\",\"What's your budget range?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "changed-price-and-id",
+      "round": 2,
+      "rawReply": "The current Sweet Home price is KES 27,890.50, and it's in stock. [Sweet Home](product:9842) is available to order now. That's the listed parent price — if there are variants, check the product page to confirm the exact price for your choice. I cannot verify delivery timing; check at checkout or contact the team for current delivery options.\n\n<!--SUG:[\"How many people use your water?\",\"Do you know what's in your mains water?\",\"When would you like to install it?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "catalogue-outage",
+      "round": 2,
+      "rawReply": "I cannot verify the current price, availability, or delivery timing — the live product data lookup failed just now. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) for an up-to-date quote and stock confirmation.\n\n<!--SUG:[\"When do you need it?\",\"Do you want cartridge details?\",\"Any water quality concerns?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "credentials-removed",
+      "round": 2,
+      "rawReply": "I cannot verify current prices, availability, or stock right now—the live catalogue system is unavailable. I'd recommend checking the product page directly or contacting the team at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for up-to-date pricing, delivery options, and stock status.\n\n<!--SUG:[\"How soon do you need it?\",\"Any questions about Sweet Home features?\",\"Need help choosing a filter?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "unknown-currency",
+      "round": 2,
+      "rawReply": "The current price is KES 27,890.50. [Sweet Home](product:9842) is in stock. I cannot verify current delivery timing or which specific variants are available — check the product page to confirm your choice and delivery options before ordering.\n\n<!--SUG:[\"How many people use your water?\",\"What water problems concern you most?\",\"Do you want installation help?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "quote-only",
+      "round": 2,
+      "rawReply": "You're right to ask me to check the current data. The live catalogue shows [Sweet Home](product:9842) is in stock, but the current price is not supplied in my latest data. I cannot verify the exact amount, currency or delivery timing right now. Please check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm the current price and delivery options.\n\n<!--SUG:[\"What water problems concern you most?\",\"Do you need help choosing a filter?\",\"Any questions about installation?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "out-of-stock",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. Unfortunately, it's currently out of stock, so immediate delivery isn't possible right now. That price is the listed parent price—if there are variants, you'd need to check the product page to see exact variant pricing. I'd recommend checking back soon or contacting the team for a restock date.\n\n<!--SUG:[\"When will it be back in stock?\",\"Are there similar alternatives available?\",\"How do I get notified of restocks?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "backorder",
+      "round": 2,
+      "rawReply": "The current Sweet Home price is KES 27,890.50, and it's on backorder — so it's not available for immediate delivery. [Sweet Home](product:9842) is the current product link. That's a listed parent price; if Sweet Home has variants, you'd need to check the product page to confirm the exact price for your choice. I'd recommend checking the product page or contacting the team for the current restock timeline.\n\n<!--SUG:[\"When do you need it?\",\"Any other water concerns?\",\"What's your budget?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "unknown-stock",
+      "round": 2,
+      "rawReply": "The current price for [Sweet Home](product:9842) is KES 27,890.50. Current stock availability cannot be verified from live data, so I cannot confirm whether it's in stock or available for immediate delivery. Check the product page to see current availability and confirm delivery timing before ordering.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have other water concerns?\",\"What's your budget range?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094398207.json",
+      "case": "variable-parent-price",
+      "round": 2,
+      "rawReply": "The current price for [Sweet Home](product:9842) is KES 27,890.50. It's listed at that parent price because it has variants — you'll need to check the product page to see exact pricing for the specific model you want. Stock is currently in, so you can order it; check the product page for the exact delivery timeframe available to you.\n\n<!--SUG:[\"How many people use your water?\",\"Do you know your water quality issues?\",\"Which rooms need filtering?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "changed-price-and-id",
+      "round": 1,
+      "rawReply": "The current price is KES 27,890.50 for Sweet Home. [Sweet Home](product:9842) is in stock now. That's a listed parent price — if Sweet Home has variants, you'll need to check the product page to confirm the exact price for your chosen option. I cannot verify current delivery timing, so please check at checkout or contact the team for your specific delivery window.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have any water quality concerns?\",\"When do you need it delivered?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "catalogue-outage",
+      "round": 1,
+      "rawReply": "I cannot verify current prices, availability, or stock right now—the live catalogue lookup failed. I'd recommend checking the product page directly or contacting the team for the latest pricing and delivery options. [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) and they can confirm what's available and when it can arrive.\n\n<!--SUG:[\"Do you have questions about Sweet Home features?\",\"What's your water quality concern?\",\"Need help choosing a different filter?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "credentials-removed",
+      "round": 1,
+      "rawReply": "I can't verify the current price, availability, or delivery timing right now — the live catalogue data isn't available. I'd recommend checking the product page directly or contacting the team at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for the latest stock and delivery details.\n\n<!--SUG:[\"Do you need help choosing a filter?\",\"Any water quality concerns?\",\"How many people in your home?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "unknown-currency",
+      "round": 1,
+      "rawReply": "The current currency cannot be verified, so I can't quote a price amount. [Sweet Home](product:9842) is in stock, but current stock quantity, delivery timing, and variant details are not supplied—check the product page before ordering or contact the team for a confirmed quote and delivery date.\n\n<!--SUG:[\"Check product page now\",\"Contact support for pricing\",\"Other water quality concerns\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "quote-only",
+      "round": 1,
+      "rawReply": "The current live data shows [Sweet Home](product:9842) is in stock. However, the current price cannot be verified — it's listed as null in the system right now. I'd recommend checking the product page directly to see the exact price, or you can [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for a quote. I cannot confirm immediate delivery timing; the product page will have the most up-to-date delivery details.\n\n<!--SUG:[\"How many litres does Sweet Home filter?\",\"What issues does it address?\",\"When do you need it by?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "out-of-stock",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. Sweet Home is currently out of stock. The current price is KES 27,890.50 as a listed parent price—if there are variants, the exact price may differ, so check the product page to confirm. I cannot verify delivery timing; the store team can advise when you're ready to order.\n\n<!--SUG:[\"When will it be back in stock?\",\"What's an alternative filter?\",\"How do I get notified?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "backorder",
+      "round": 1,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is on backorder, so it's not available for immediate delivery right now.\n\nThis is a listed parent price — if Sweet Home has variants, you'll need to check the product page to see the exact price for the specific option you want.\n\n<!--SUG:[\"When will it be back in stock?\",\"Do you have an alternative filter?\",\"How do I place a backorder?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "unknown-stock",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. The current price is KES 27,890.50 for Sweet Home. I can provide the [Sweet Home](product:9842) link, but I cannot verify current stock or delivery timing — please check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm availability and delivery options.\n\nThe price shown is a listed parent price; if Sweet Home has variants, the exact variant price may differ, so check the product page before ordering.\n\n<!--SUG:[\"When can you deliver?\",\"What does Sweet Home filter?\",\"Do you have cheaper options?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "variable-parent-price",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. Sweet Home is currently **KES 27,890.50** and [Sweet Home](product:9842) is **in stock**. The price shown is a listed parent price, so if there are variants, you'll need to check the product page to confirm the exact price for your choice. I cannot verify delivery timing, so please check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm when it can arrive.\n\n<!--SUG:[\"Do you have a specific variant in mind?\",\"Ready to order now?\",\"Need help choosing a filter?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "changed-price-and-id",
+      "round": 2,
+      "rawReply": "Sweet Home is currently priced at KES 27,890.50 and [Sweet Home](product:9842) is in stock. The price shown is the listed parent price — if there are variants, you'll need to check the product page to confirm the exact variant price. Current delivery timing isn't supplied to me, so I can't confirm immediate delivery; the product page or [📞 Call 0717774049](tel:+254717774049) will have that detail.\n\n<!--SUG:[\"Will this fit my kitchen tap?\",\"Do I need a plumber to install it?\",\"What does Sweet Home remove?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "catalogue-outage",
+      "round": 2,
+      "rawReply": "I can't verify the current price, availability, or delivery timing for Sweet Home right now — the live store data isn't available at this moment. I'd recommend checking the product page directly or contacting support at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for up-to-date details and to confirm immediate delivery options.\n\n<!--SUG:[\"Check product page now\",\"Contact support team\",\"Tell me your budget\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "credentials-removed",
+      "round": 2,
+      "rawReply": "I can't verify current prices, stock, or availability right now — the live catalogue data isn't configured. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for an up-to-date quote and delivery timeline.\n\n<!--SUG:[\"How soon do you need it?\",\"What's your water source?\",\"Tell me about your water concern\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "unknown-currency",
+      "round": 2,
+      "rawReply": "You're right to ask me to check the current data. The current currency cannot be verified, so I cannot quote a price. [Sweet Home](product:9842) is in stock, but I cannot confirm current pricing, exact variant pricing (if variants exist), or delivery timing. Please check the product page or contact the team for a current quote and delivery details.\n\n<!--SUG:[\"Check the product page\",\"Contact support for pricing\",\"When do you need it?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "quote-only",
+      "round": 2,
+      "rawReply": "The current live data shows [Sweet Home](product:9842) is in stock. However, the current price is not supplied in my live catalogue data, so I cannot quote you an amount — please check the product page or [📞 Call 0717774049](tel:+254717774049) for the current price. Regarding immediate delivery, I don't have delivery timing details; the team can confirm that when you check out or contact them.\n\nSince the product has variable pricing, any specific variant price must be checked on the product page itself.\n\n<!--SUG:[\"Check product page now\",\"Ask team about delivery times\",\"Need help with installation?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "out-of-stock",
+      "round": 2,
+      "rawReply": "You're right to check — the current data shows [Sweet Home](product:9842) is **out of stock**. I cannot verify the current price or confirm delivery timing; please check the product page or contact support for a quote and restock date.\n\n<!--SUG:[\"When will it be back in stock?\",\"What alternatives filter mains water?\",\"How do I get notified when it restocks?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "backorder",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50 and it's on backorder, so immediate delivery isn't available right now. The price shown is a listed parent price, so if there are variants, you'll need to check the product page to confirm the exact variant price. Head to [Sweet Home](product:9842) to see when it's expected back in stock.\n\n<!--SUG:[\"When will it be back?\",\"What's an alternative filter?\",\"How does backorder work?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "unknown-stock",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The current price is KES 27,890.50 for Sweet Home. I can see it's listed at that parent price, but I cannot verify current stock availability or confirm whether that is an exact variant price — those details must be checked on the product page. [Sweet Home](product:9842) is the current link; I'd recommend checking it directly before ordering to confirm delivery timing and any variant pricing.\n\n<!--SUG:[\"How many people use this water?\",\"Do you have a budget range?\",\"What water issues concern you most?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094485509.json",
+      "case": "variable-parent-price",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is in stock. Since this is a variable-price product, that KES 27,890.50 is the listed parent price—the exact variant price depends on which options you choose, so check the product page to confirm the final cost for your selection.\n\nI cannot confirm a specific delivery date; you'll see that at checkout.\n\n<!--SUG:[\"Which Sweet Home variant interests you?\",\"Any concerns about installation?\",\"Want to know what it removes?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "changed-price-and-id",
+      "round": 1,
+      "rawReply": "Sweet Home is currently KES 27,890.50 and in stock. [Sweet Home](product:9842) is available to order now. I cannot confirm immediate delivery timing — check the product page or [📞 Call 0717774049](tel:+254717774049) for delivery details. The listed price shown is the product price; if variants exist, their specific prices must be checked on the product page.\n\n<!--SUG:[\"How many people use your water?\",\"Any taste, odor, or cloudiness issues?\",\"Want installation or maintenance help?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "catalogue-outage",
+      "round": 1,
+      "rawReply": "I cannot verify the current price, availability, or stock right now—the live catalogue lookup failed. I'd recommend checking the product page directly or contacting the team for the most up-to-date details on Sweet Home's pricing and delivery options.\n\nYou're welcome to [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) and they'll confirm everything for you.\n\n<!--SUG:[\"Do you want help choosing a filter instead?\",\"What's your main water concern?\",\"Any chlorine or sediment issues?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "credentials-removed",
+      "round": 1,
+      "rawReply": "I can't verify current prices, availability or stock right now—the live catalogue system isn't available. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) for the latest pricing and delivery options.\n\n<!--SUG:[\"Do you want product recommendations instead?\",\"How soon do you need it?\",\"Any other water quality concerns?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "unknown-currency",
+      "round": 1,
+      "rawReply": "The current currency cannot be verified, so I can't quote a price amount. [Sweet Home](product:9842) is in stock, but I cannot confirm current availability status for immediate delivery or any future restock dates. If the product has variants, the price on the product page will show exact variant pricing. Please check the product page or contact the team for a current quote and delivery timeline.\n\n<!--SUG:[\"How many people use your water?\",\"What water issues concern you most?\",\"Do you need installation help?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "quote-only",
+      "round": 1,
+      "rawReply": "Based on the live catalogue checked just now, [Sweet Home](product:9842) is in stock. However, I cannot verify the current price — it's not supplied in my latest data. I'd recommend checking the product page or contacting the team for a current quote. Delivery timing cannot be confirmed; please check at checkout for your area.\n\nIf Sweet Home has variants, the price shown is the listed parent price, not a specific variant cost — you'll see exact pricing when you select your choice on the product page.\n\n<!--SUG:[\"Check product page for price\",\"Contact support for delivery info\",\"Different filter model?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "out-of-stock",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. Sweet Home is currently out of stock, so unfortunately it's not available for immediate delivery right now. The current listed price is KES 27,890.50, and you can find it here: [Sweet Home](product:9842). The product page will have the most up-to-date details on when it might be back in stock.\n\n<!--SUG:[\"When will it be back?\",\"Other filters for mains water?\",\"Check my order status\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "backorder",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. Sweet Home is currently on backorder, so it's not available for immediate delivery. The current listed price is KES 27,890.50, and here's the product link: [Sweet Home](product:9842). This is a listed price (not a variable one), so that's the exact price. I'd recommend checking the product page for the estimated restock date, or you're welcome to [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) to ask when it will be back in stock.\n\n<!--SUG:[\"When do you need it by?\",\"Any other water concerns?\",\"What's your current setup?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "unknown-stock",
+      "round": 1,
+      "rawReply": "The current Sweet Home price is KES 27,890.50. [Sweet Home](product:9842) is available to order. Current stock status cannot be verified from live data, so I can't confirm immediate delivery—check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm delivery timing. Sweet Home is listed as a single product, not a variant range, so KES 27,890.50 is its listed price.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have any water quality concerns?\",\"Ready to order Sweet Home?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "variable-parent-price",
+      "round": 1,
+      "rawReply": "The current Sweet Home price is KES 27,890.50. [Sweet Home](product:9842) is in stock. That price is a listed parent price, so variant pricing must be checked on the product page—the exact cost depends on which variant you choose. Immediate delivery timing isn't confirmed; check the product page or [📞 Call 0717774049](tel:+254717774049) for a delivery estimate.\n\n<!--SUG:[\"Which Sweet Home variant interests you?\",\"What's your water source again?\",\"Need help with installation?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "changed-price-and-id",
+      "round": 2,
+      "rawReply": "Sweet Home is currently KES 27,890.50 and [Sweet Home](product:9842) is in stock. I cannot confirm a delivery date—check the product page or contact the team for shipping timing. Since Sweet Home is listed as a single product (not a variable product with variants), that price is the exact product price.\n\n<!--SUG:[\"Ready to add it to cart?\",\"Any concerns about installation?\",\"Want water quality tips first?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "catalogue-outage",
+      "round": 2,
+      "rawReply": "I can't verify current pricing, availability or stock right now — the live catalogue lookup failed. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) and the team will confirm the latest price, stock and delivery options for you.\n\n<!--SUG:[\"Do you want help choosing a filter instead?\",\"Any water quality concerns to address?\",\"When do you need it delivered?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "credentials-removed",
+      "round": 2,
+      "rawReply": "I can't verify current prices, availability, or stock right now — the live catalogue data isn't available at the moment. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) to confirm Sweet Home's current price, stock status, and delivery options.\n\n<!--SUG:[\"Is there a water quality issue I can help with?\",\"Do you want to know about other filter options?\",\"When do you need the filter by?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "unknown-currency",
+      "round": 2,
+      "rawReply": "The current currency cannot be verified, so I can't quote a price amount. [Sweet Home](product:9842) is in stock, but I don't have current delivery timing—check the product page or [📞 Call 0717774049](tel:+254717774049) for exact delivery options. The product listing doesn't specify variants, so there's no variant pricing to confirm.\n\n<!--SUG:[\"How many people does it serve?\",\"What's your current water problem?\",\"Do you need installation help?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "quote-only",
+      "round": 2,
+      "rawReply": "Current pricing and availability cannot be verified right now — the live catalogue data I have access to shows no price amount for Sweet Home. I can see it's in stock, but I cannot confirm current delivery timing or variant details.\n\nPlease check the product page or [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for an exact quote and delivery options.\n\n<!--SUG:[\"Need help choosing a filter?\",\"Questions about installation?\",\"How often replace cartridges?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "out-of-stock",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The Sweet Home is now out of stock, and its current price is KES 27,890.50. [Sweet Home](product:9842). I cannot verify immediate delivery or confirm a restock date — I'd recommend checking the product page or contacting support to ask when it may be back in stock.\n\n<!--SUG:[\"When will it be back?\",\"Show me alternatives\",\"How do I pre-order?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "backorder",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. Sweet Home is currently on backorder, so it's not available for immediate delivery. The current price is KES 27,890.50 — that's a listed product price, not a variant price. [Sweet Home](product:9842) is the current product link.\n\nI'd recommend checking the product page for the exact restock date, or you're welcome to [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) if you'd like to ask the team when stock is expected.\n\n<!--SUG:[\"When do you need it?\",\"Tell me about your water problem\",\"Other water filter products?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "unknown-stock",
+      "round": 2,
+      "rawReply": "The current price is **KES 27,890.50**. Here's the link: [Sweet Home](product:9842). Current stock status cannot be verified right now, so I can't confirm immediate delivery—I'd recommend checking the product page or [📞 Call 0717774049](tel:+254717774049) to confirm availability and delivery timing. This is a listed price, not a variable one, so it applies to the product as shown.\n\n<!--SUG:[\"Check product page\",\"Call support for stock\",\"Ready to order?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791094606527.json",
+      "case": "variable-parent-price",
+      "round": 2,
+      "rawReply": "The current Sweet Home price is KES 27,890.50. [Sweet Home](product:9842) is in stock. However, this is listed as a variable-price product, so the exact variant price must be checked on the product page — the amount I've given is the parent price, not a confirmed variant cost. I cannot verify immediate delivery timing; check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have any water concerns now?\",\"Which rooms need filtering?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "changed-price-and-id",
+      "round": 1,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is in stock now. I cannot confirm a delivery timeframe — check the product page or [📞 Call 0717774049](tel:+254717774049) to ask about delivery options for your order.\n\nSweet Home is listed as a single product, not a variant range, so KES 27,890.50 is the product price.\n\n<!--SUG:[\"Ready to order Sweet Home?\",\"Need help choosing a filter?\",\"Want a free water assessment?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "catalogue-outage",
+      "round": 1,
+      "rawReply": "I cannot verify the current price, availability, or delivery timing for Sweet Home right now — the live catalogue lookup failed. I'd recommend checking the product page directly or contacting the team at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for an up-to-date quote and delivery details.\n\n<!--SUG:[\"Check product page myself\",\"Contact support for pricing\",\"Tell me about alternatives\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "credentials-removed",
+      "round": 1,
+      "rawReply": "I can't verify the current price, availability, or delivery timing for Sweet Home right now — the live catalogue data isn't available. Please check the product page or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) to confirm the current stock and delivery options.\n\n<!--SUG:[\"Do you need help choosing a filter?\",\"Are you experiencing water quality issues?\",\"Want tips on filter maintenance?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "unknown-currency",
+      "round": 1,
+      "rawReply": "The current currency cannot be verified, so I can't quote a price amount. [Sweet Home](product:9842) is in stock now, but current delivery timing isn't supplied—check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm delivery speed. The product page will also show exact variant pricing if variants exist.\n\n<!--SUG:[\"How many people use your water?\",\"Do you know your water quality issues?\",\"When do you need it delivered?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "quote-only",
+      "round": 1,
+      "rawReply": "According to current live data, [Sweet Home](product:9842) is in stock. However, the current price is not supplied in the live catalogue, so I cannot quote you an amount. Availability is confirmed now, but delivery timing and whether variants exist are not specified in the current data—check the product page or [📞 Call 0717774049](tel:+254717774049) for those details.\n\n<!--SUG:[\"Check the product page now\",\"Contact support for pricing\",\"Need help choosing a filter?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "out-of-stock",
+      "round": 1,
+      "rawReply": "The current Sweet Home is out of stock. The listed price is KES 27,890.50, and here's the product link: [Sweet Home](product:9842). I cannot confirm immediate delivery or future restock dates—check the product page or contact the team for availability updates.\n\n<!--SUG:[\"When will it be back in stock?\",\"Can I pre-order it now?\",\"What are similar alternatives?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "backorder",
+      "round": 1,
+      "rawReply": "Based on current live data, Sweet Home is [Sweet Home](product:9842) at KES 27,890.50 and is on backorder — so immediate delivery is not available right now. I cannot confirm a restock date or when it will next be in stock; check the product page or [📞 Call 0717774049](tel:+254717774049) for the latest timeline.\n\n<!--SUG:[\"When do you need it by?\",\"Are you interested in alternatives?\",\"How many people use your water?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "unknown-stock",
+      "round": 1,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is available. I cannot verify current stock quantity or delivery timing from what's supplied to me right now—please check the product page or contact the team to confirm immediate delivery options.\n\nSweet Home is listed as a single product, not a variable one, so that price is the product price itself.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have other water issues besides taste or safety?\",\"When would you need it?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "variable-parent-price",
+      "round": 1,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is in stock. Sweet Home has variable pricing, so KES 27,890.50 is the listed parent price — the exact variant you choose may differ, and you'll see the final price on the product page before checkout. I cannot confirm immediate delivery timing; check the product page or contact the team for current delivery options.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have chlorine taste issues?\",\"Any sediment or cloudiness?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "changed-price-and-id",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is in stock now. I cannot confirm immediate delivery timing — check the product page or [📞 Call 0717774049](tel:+254717774049) to ask about delivery options for your location.\n\n<!--SUG:[\"When do you need it?\",\"Any water quality concerns?\",\"Which room will it serve?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "catalogue-outage",
+      "round": 2,
+      "rawReply": "I can't verify current prices, availability, or stock right now — the live catalogue lookup failed. I'd recommend checking the product page directly or reaching out to the team for the latest details on Sweet Home's pricing, variants, and delivery options.\n\nYou're welcome to [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) and they'll confirm everything for you.\n\n<!--SUG:[\"Do you need help choosing a filter?\",\"Any water quality concerns?\",\"Looking for installation help?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "credentials-removed",
+      "round": 2,
+      "rawReply": "I can't verify current Sweet Home prices, availability or delivery timing right now — the live catalogue is unavailable. I'd recommend checking the product page directly or contacting the team at [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) for a current quote and delivery options.\n\n<!--SUG:[\"When do you need it?\",\"What's your water problem?\",\"Do you have a filter already?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "unknown-currency",
+      "round": 2,
+      "rawReply": "You're right to check — the current data shows [Sweet Home](product:9842) is in stock, but I cannot verify the current price or currency right now (the store currency data is unavailable). I also cannot confirm delivery timing or whether variants exist. Please check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm the exact price, any variant options, and delivery windows.\n\n<!--SUG:[\"Check product page now\",\"How many liters do you need?\",\"Tell me about water quality issues\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "quote-only",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is not supplied in my live data, so I can't verify it right now. [Sweet Home](product:9842) is in stock, but I cannot confirm delivery timing or whether immediate delivery is available — please check the product page or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) for current delivery options and exact pricing.\n\n<!--SUG:[\"How many people use your water?\",\"What issues have you noticed?\",\"Do you need help with installation?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "out-of-stock",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is out of stock right now, so immediate delivery is not possible. It's listed as a single product (not a variable one with variants), so that price is the listed product price.\n\nI'd recommend checking the product page to see if a restock date is expected, or you're welcome to [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) and the team can let you know when it will be back in stock.\n\n<!--SUG:[\"When do you need water filtration?\",\"Would another filter suit your needs?\",\"When would you like to order?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "backorder",
+      "round": 2,
+      "rawReply": "The current price for Sweet Home is KES 27,890.50. [Sweet Home](product:9842) is on backorder, so immediate delivery is not available right now. The listed price shown is for the product as a whole, not a specific variant — you'll need to check the product page to see exact pricing for any variants you're interested in.\n\n<!--SUG:[\"When do you need it?\",\"Which room will you use it in?\",\"What's your main water concern?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "unknown-stock",
+      "round": 2,
+      "rawReply": "The current price is KES 27,890.50 for Sweet Home. [Sweet Home](product:9842) is listed at that price; current stock availability cannot be verified. I cannot confirm immediate delivery timing—check the product page or contact the team for stock and delivery details.\n\nSweet Home is listed as a single product (not a variant range), so KES 27,890.50 is its listed price.\n\n<!--SUG:[\"Do you want setup help?\",\"Comparing with other filters?\",\"Water test before buying?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce-1791107366193.json",
+      "case": "variable-parent-price",
+      "round": 2,
+      "rawReply": "The current Sweet Home price is KES 27,890.50. [Sweet Home](product:9842) is in stock now. That's a listed parent price, so if the product has variants, you'll need to check the product page to confirm the exact variant price. I cannot verify a specific delivery date, so I'd recommend checking at checkout or contacting the team for timing.\n\n<!--SUG:[\"Do you need help choosing a cartridge?\",\"When would you like delivery?\",\"Any water quality concerns?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "changed-price-and-id",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows Sweet Home is currently **KES 27,890.50** and **in stock**. You can order it now via [Sweet Home](product:9842).\n\nI cannot confirm immediate delivery timing or variant-specific pricing from the live data — I'd recommend checking the product page before ordering, or [📞 Call 0717774049](tel:+254717774049) if you need delivery details.\n\n<!--SUG:[\"How many people use your water?\",\"Do you need installation help?\",\"Any water quality concerns?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "catalogue-outage",
+      "round": 1,
+      "rawReply": "I can't check current prices and availability right now — the live catalogue lookup failed just before we started chatting. I'd recommend checking the product page directly or contacting support to confirm today's stock and delivery options. [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) and the team will give you exact pricing and delivery timing.\n\n<!--SUG:[\"When do you need it?\",\"Which room needs filtering?\",\"Any water quality concerns?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "credentials-removed",
+      "round": 1,
+      "rawReply": "I can't check current prices, stock or delivery times right now—the live catalogue is temporarily unavailable. I'd recommend checking the [Sweet Home](product:7311) product page directly in the app or store to see today's price, availability and delivery options. If you have questions after that, I'm here to help.\n\n<!--SUG:[\"Do you want help choosing a filter?\",\"Questions about water quality?\",\"Need installation advice?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "unknown-currency",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows Sweet Home is currently **KES 27,890.50** and [Sweet Home](product:9842) is in stock. However, I cannot confirm delivery timing, variant details, or exact pricing for specific variants from what I can verify right now. I'd recommend checking the product page before ordering to see delivery options and any variants.\n\n<!--SUG:[\"Do you need help choosing a filter?\",\"How many people will it serve?\",\"What contaminants concern you?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "quote-only",
+      "round": 1,
+      "rawReply": "You're right to check — the live catalogue I can verify right now shows Sweet Home is in stock, but the current price and exact delivery window aren't supplied in my real-time data. I'd recommend checking the product page directly for today's price, variants, and confirmed delivery options: [Sweet Home](product:9842).\n\n<!--SUG:[\"Does Sweet Home fit my kitchen tap?\",\"Which cartridge should I buy?\",\"How often do I replace filters?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "out-of-stock",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows Sweet Home is currently **out of stock**. The listed price is KES 27,890.50, but I cannot confirm exact variant pricing or delivery timing without checking the product page directly.\n\nI'd recommend visiting the store or [📞 Call 0717774049](tel:+254717774049) to ask about restock dates and whether a backorder option is available.\n\n<!--SUG:[\"When will Sweet Home be back in stock?\",\"Do you have similar alternatives in stock?\",\"How does backorder delivery work?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "backorder",
+      "round": 1,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows [Sweet Home](product:9842) is currently on backorder at KES 27,890.50. That's the listed parent price; if there are variants, their exact prices may differ. I cannot confirm immediate delivery or specific variant pricing — please check the product page before ordering to see current availability and any variant options.\n\n<!--SUG:[\"Do you want a similar filter instead?\",\"How soon do you need it?\",\"What water issues are you facing?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "unknown-stock",
+      "round": 1,
+      "rawReply": "You're right to ask me to check the current data. The live catalogue shows Sweet Home is currently KES 27,890.50. [Sweet Home](product:7311) is available, but I cannot confirm exact stock quantities, delivery timing, or whether that price applies to a specific variant — those details aren't supplied in the current check. Please visit the product page to see full availability and any variant options before ordering.\n\n<!--SUG:[\"Do you need help choosing a filter?\",\"What's your water concern?\",\"How many people at home?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "variable-parent-price",
+      "round": 1,
+      "rawReply": "The current price is KES 27,890.50 for [Sweet Home](product:9842). It's in stock now, but I cannot confirm exact delivery timing or variant pricing from what I can verify — please check the product page to see delivery options and any variant details before ordering.\n\n<!--SUG:[\"How many people use your water?\",\"What water issues concern you most?\",\"Do you have filtration already?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "changed-price-and-id",
+      "round": 2,
+      "rawReply": "You're right to check — the live catalogue shows Sweet Home is currently KES 27,890.50 and in stock. [Sweet Home](product:9842) is available to order now. I cannot confirm variant pricing or exact delivery timing from what I can see; please check the product page to review options and confirm your delivery window before ordering.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have specific water concerns?\",\"Want installation help?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "catalogue-outage",
+      "round": 2,
+      "rawReply": "I can't check current prices and stock right now—the live catalogue lookup failed. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) / [💬 WhatsApp us](https://wa.me/254717774049) to confirm Sweet Home's current price, availability and delivery options.\n\n<!--SUG:[\"What's your main water concern?\",\"Do you have a filter already?\",\"When do you need it by?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "credentials-removed",
+      "round": 2,
+      "rawReply": "I can't check current prices and availability right now — the live catalogue system isn't responding. I'd recommend checking the product page directly or [📞 Call 0717774049](tel:+254717774049) to confirm the current price, stock status, and delivery options for Sweet Home.\n\n<!--SUG:[\"How many people use your water?\",\"Any taste or smell issues?\",\"Which room needs filtering?\"]-->",
+      "deliveredReply": "I cannot verify current prices, stock or product links because the store catalogue is unavailable. Please check the Shop or [Call support](tel:+254717774049) for current details.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "unknown-currency",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows [Sweet Home](product:9842) is in stock at KES 27,890.50. I cannot confirm variant-specific prices, exact delivery windows, or stock quantities beyond \"in stock\" — please check the product page before ordering to see all details and delivery options.\n\n<!--SUG:[\"How many people will use it?\",\"Do you need installation help?\",\"Any water quality concerns?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The current currency cannot be verified, so I cannot quote a price amount. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "quote-only",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows [Sweet Home](product:9842) is in stock, but the current price, exact delivery promise and variant details are not supplied in my live data right now. I'd recommend checking the product page directly to confirm the price, any variant options and delivery timing before you order.\n\n<!--SUG:[\"Does Sweet Home suit mains water?\",\"Need help choosing a filter?\",\"How do I install it?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. No current price is supplied; check the product page or [Call support](tel:+254717774049) for a quote. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "out-of-stock",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The latest store information shows [Sweet Home](product:9842) is currently out of stock at KES 27,890.50. I cannot confirm immediate delivery or variant pricing from what's available to me right now — I'd recommend checking the product page before ordering to see the most up-to-date details and any expected restock date.\n\n<!--SUG:[\"When will it be back in stock?\",\"Which filter suits my water source?\",\"How does Sweet Home work?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is out of stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "backorder",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows Sweet Home is currently on backorder at KES 27,890.50 — so immediate delivery is not available right now. I can't confirm exact variant pricing or a specific delivery date from what I can see. I'd recommend checking the product page [Sweet Home](product:9842) for the latest stock updates, or you're welcome to [📞 Call 0717774049](tel:+254717774049) or [💬 WhatsApp us](https://wa.me/254717774049) and the team can let you know when it'll be back in stock.\n\n<!--SUG:[\"When do you need it?\",\"Any other filters to consider?\",\"Questions about Sweet Home features?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is on backorder, not in immediate stock. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "unknown-stock",
+      "round": 2,
+      "rawReply": "The current Sweet Home price is KES 27,890.50. [Sweet Home](product:7311) is available to order. I cannot confirm immediate delivery timing, exact variant pricing, or current stock quantity from what I can verify right now — please check the product page or [📞 Call 0717774049](tel:+254717774049) to confirm delivery speed and any variant details before ordering.\n\n<!--SUG:[\"How many people use your water?\",\"Any specific water taste or smell issues?\",\"Which rooms need filtered water?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842): current stock availability cannot be verified. The current listed price is KES 27,890.50. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    },
+    {
+      "source": "alison-commerce.json",
+      "case": "variable-parent-price",
+      "round": 2,
+      "rawReply": "You're right to ask me to check current data. The live catalogue shows [Sweet Home](product:9842) is currently in stock at KES 27,890.50. However, I can't confirm exact delivery timing or whether that's the final price for a specific variant — those details vary by your location and choice. Check the product page before ordering to see delivery options for your area.\n\n<!--SUG:[\"How many people use your water?\",\"Do you have any water quality concerns?\",\"Where in Kenya are you located?\"]-->",
+      "deliveredReply": "[Sweet Home](product:9842) is listed as in stock. The listed parent price is KES 27,890.50; check the product page for the exact variant price. Delivery timing is not verified here; check the product page or support before ordering.\n<!--SUG:[\"How do I maintain my filter?\",\"Which filter suits my water source?\"]-->",
+      "guarded": true,
+      "failures": []
+    }
+  ]
+}

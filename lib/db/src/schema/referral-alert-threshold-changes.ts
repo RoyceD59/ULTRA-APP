@@ -3,6 +3,8 @@ import { teamUsersTable } from "./team-users";
 
 /**
  * Append-only audit trail for accepted referral alert threshold changes.
+ * UPDATE/DELETE are rejected by the database trigger installed by migration
+ * 0062 and API startup DDL (triggers cannot be expressed in Drizzle pgTable).
  * Actor display fields are snapshotted so historical entries remain readable
  * if the team member later changes their profile.
  */

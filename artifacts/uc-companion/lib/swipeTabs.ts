@@ -1,4 +1,5 @@
-export const SWIPE_TAB_ORDER = ['index', 'products', 'support', 'map', 'account'] as const;
+import { COMPANION_TABS, type CompanionTab } from './companionLayout';
+export const SWIPE_TAB_ORDER: readonly CompanionTab[] = COMPANION_TABS.map(tab => tab.name);
 export type SwipeTab = (typeof SWIPE_TAB_ORDER)[number];
 
 const NON_SWIPE_TABS = new Set<SwipeTab>(['map']);

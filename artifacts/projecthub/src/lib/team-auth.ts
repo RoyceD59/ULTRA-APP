@@ -9,6 +9,7 @@
  */
 
 import { apiUrl } from "./api-base";
+import { reportRuntimeReadFailure } from "@workspace/api-client-react/config";
 
 const TOKEN_KEY = "projecthub:token";
 const USER_KEY  = "projecthub:user";
@@ -102,7 +103,14 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 function tokenExp(token: string): number | null {
   const p = decodeJwtPayload(token);
-  return typeof p?.exp === "number" ? p.exp : null;
+  return typeof p?.exp === "number" && Number.isFinite(p.exp) ? p.exp : null;
+}
+
+/** Milliseconds until JWT expiry; unknown/missing expiry must not invent a countdown. */
+export function getTeamSessionRemainingMs(now = Date.now()): number | null {
+  const token = getTeamToken();
+  const exp = token ? tokenExp(token) : null;
+  return exp === null ? null : Math.max(0, exp * 1000 - now);
 }
 
 export function getTeamUser(): TeamUser | null {
@@ -193,11 +201,17 @@ export async function apiFetch<T = unknown>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(apiUrl(path), { ...opts, headers });
+  let res: Response;
+  try { res = await fetch(apiUrl(path), { ...opts, headers }); }
+  catch (error) {
+    if ((!opts.method || opts.method === "GET") && !opts.signal?.aborted) reportRuntimeReadFailure("api_read_failed");
+    throw error;
+  }
+  if ((!opts.method || opts.method === "GET") && res.status >= 500) reportRuntimeReadFailure("api_read_failed", res.headers.get("X-Correlation-ID") || undefined);
   if (!res.ok) {
     if (res.status === 401) handleUnauthorizedResponse();
     const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `Request failed (${res.status})`);
+    throw Object.assign(new Error(data.error ?? `Request failed (${res.status})`), { status: res.status });
   }
   return res.json() as Promise<T>;
 }
@@ -240,6 +254,34 @@ export async function resetPassword(token: string, newPassword: string): Promise
 }
 
 // ─── Authenticated flows ──────────────────────────────────────────────────────
+
+/** Re-authenticate the current account without a login navigation or a 401 logout. */
+export async function renewTeamSession(password: string): Promise<TeamUser> {
+  const user = getTeamUser();
+  const previousToken = getTeamToken();
+  if (!user || !previousToken) throw new Error("No team session is available to renew.");
+
+  // Do not use apiFetch: incorrect credentials must leave the current session intact.
+  const res = await fetch(apiUrl("/auth/login"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: user.email, password }),
+  });
+  const data = await res.json().catch(() => ({})) as {
+    error?: string; token?: string; user?: TeamUserPayload;
+  };
+  if (!res.ok) throw new Error(data.error ?? `Could not renew session (${res.status}).`);
+  if (!data.token || !data.user || data.user.id !== user.id ||
+      (tokenExp(data.token) ?? 0) * 1000 <= Date.now()) {
+    throw new Error("The server did not return a valid renewed session.");
+  }
+  // A sign-out or account switch in another tab must not be overwritten by this response.
+  if (getTeamToken() !== previousToken) {
+    throw new Error("Your session changed. Close this dialog and try again.");
+  }
+  setTeamToken(data.token);
+  return setStoredUser(data.user);
+}
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch("/auth/change-password", {

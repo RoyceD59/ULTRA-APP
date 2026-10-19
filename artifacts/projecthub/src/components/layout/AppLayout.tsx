@@ -5,7 +5,7 @@ import {
   KeyRound, Loader2, MessageSquareOff, Package, ShoppingBag, UserCog, Users, Webhook, Wrench,
   AlertTriangle, BellRing, Menu, WifiOff, X, FileText, PackageSearch, MessagesSquare, Newspaper
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { changePassword, clearTeamAuth, getTeamToken, getTeamUser, isTeamAdmin, canView } from "@/lib/team-auth";
 import type { PageSlug } from "@/lib/team-auth";
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { apiUrl } from "@/lib/api-base";
+import { SessionExpiryWarning } from "./SessionExpiryWarning";
 
 const NAVIGATION = [
   ["Dashboard", "/", "dashboard", LayoutDashboard],
@@ -48,6 +49,7 @@ const ADMIN_NAVIGATION = [
   ["Inventory", "/admin/inventory", Package],
   ["Integrations", "/admin/integrations", Link2],
   ["Rewards", "/admin/rewards", Gift],
+  ["Care & Refill Activation", "/admin/refill-readiness", Droplets],
   ["Referral Support", "/admin/referrals", BellRing],
   ["Promotions", "/admin/promotions", Tag],
   ["Locations", "/admin/locations", MapPin],
@@ -55,6 +57,7 @@ const ADMIN_NAVIGATION = [
   ["Unsynced Registrations", "/admin/unsynced-registrations", AlertTriangle],
   ["Agent Operations", "/admin/agent-operations", Bot],
   ["Companion Guides", "/admin/guides", FileText],
+  ["Customer Reviews", "/customer-reviews", MessagesSquare],
 ] as const;
 
 const SECURITY_BANNER_DISMISS_KEY = "ph_sec_mpesa_dismissed";
@@ -78,16 +81,29 @@ function writeSecurityBannerDismissal(dismissed: boolean) {
 
 function useCount(path: string, select: (body: any) => number) {
   const [count, setCount] = useState(0);
+  const selector = useRef(select);
+  selector.current = select;
+  const token = getTeamToken();
   useEffect(() => {
-    const token = getTeamToken();
-    if (!token) return;
+    if (!token) { setCount(0); return; }
     let active = true;
-    fetch(apiUrl(path), { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => res.ok ? res.json() : null)
-      .then((body) => { if (active && body) setCount(select(body)); })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, [path, select]);
+    let request = 0;
+    const refresh = () => {
+      const currentRequest = ++request;
+      void fetch(apiUrl(path), { headers: { Authorization: `Bearer ${token}` } })
+        .then((res) => res.ok ? res.json() : null)
+        .then((body) => { if (active && currentRequest === request && body) setCount(selector.current(body)); })
+        .catch(() => undefined);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("uc-orders-changed", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("uc-orders-changed", refresh);
+    };
+  }, [path, token]);
   return count;
 }
 
@@ -238,9 +254,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           setSecurityBannerDismissed(true);
         }} />}
         {!online && <div role="status" className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-xs font-semibold text-white"><WifiOff className="h-4 w-4" />Offline — viewing the app shell. Changes and new records refresh when connectivity returns.</div>}
-        <header className="app-safe-top min-h-16 border-b bg-background/80 flex items-center justify-between md:justify-end px-4 sm:px-6 md:px-8 shrink-0">
+        <header className="app-safe-top min-h-16 border-b bg-background/80 flex flex-wrap gap-3 items-center justify-between md:justify-end px-4 sm:px-6 md:px-8 py-2 shrink-0">
           <Button variant="ghost" size="icon" className="md:hidden min-h-11 min-w-11" onClick={() => setMobileNavigationOpen(true)} aria-label="Open navigation"><Menu className="w-5 h-5" /></Button>
           <span className="md:hidden font-semibold text-sm">ProjectHub</span>
+          <SessionExpiryWarning />
           {admin && <Badge variant="secondary">Admin</Badge>}
         </header>
         <main className="app-safe-bottom flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8"><div className="max-w-6xl mx-auto min-w-0">{children}</div></main>

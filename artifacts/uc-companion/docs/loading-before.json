@@ -1,0 +1,620 @@
+[
+  {
+    "slow": false,
+    "run": 0,
+    "homeUsableMs": 631,
+    "homeProductsMs": 669,
+    "shopMs": 102,
+    "blogMs": 75,
+    "warmHomeMs": 196,
+    "requests": 14,
+    "jsWork": {
+      "ScriptDuration": 0.511339,
+      "TaskDuration": 0.754965,
+      "JSHeapUsedSize": 20247184
+    },
+    "resources": [
+      {
+        "name": "entry-49d802d8dfc8d0bfc06ee3ea182f8bcd.js",
+        "duration": 67,
+        "bytes": 4897068
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 20,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 20,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 24,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 24,
+        "bytes": 344372
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 12,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 23,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 23,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 23,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 23,
+        "bytes": 473
+      },
+      {
+        "name": "products?",
+        "duration": 10,
+        "bytes": 485
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 5,
+        "bytes": 36011
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 8,
+        "bytes": 473
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 5,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": false,
+    "run": 1,
+    "homeUsableMs": 612,
+    "homeProductsMs": 651,
+    "shopMs": 100,
+    "blogMs": 71,
+    "warmHomeMs": 49,
+    "requests": 14,
+    "jsWork": {
+      "ScriptDuration": 0.437068,
+      "TaskDuration": 0.628708,
+      "JSHeapUsedSize": 21907332
+    },
+    "resources": [
+      {
+        "name": "entry-49d802d8dfc8d0bfc06ee3ea182f8bcd.js",
+        "duration": 73,
+        "bytes": 4897068
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 33,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 34,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 31,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 31,
+        "bytes": 344372
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 11,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 23,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 23,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 24,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 24,
+        "bytes": 473
+      },
+      {
+        "name": "products?",
+        "duration": 12,
+        "bytes": 485
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 6,
+        "bytes": 36011
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 6,
+        "bytes": 473
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": false,
+    "run": 2,
+    "homeUsableMs": 552,
+    "homeProductsMs": 588,
+    "shopMs": 112,
+    "blogMs": 75,
+    "warmHomeMs": 67,
+    "requests": 14,
+    "jsWork": {
+      "ScriptDuration": 0.437888,
+      "TaskDuration": 0.619363,
+      "JSHeapUsedSize": 20202284
+    },
+    "resources": [
+      {
+        "name": "entry-49d802d8dfc8d0bfc06ee3ea182f8bcd.js",
+        "duration": 57,
+        "bytes": 4897068
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 17,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 24,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 25,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 25,
+        "bytes": 344372
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 8,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 25,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 24,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 23,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 24,
+        "bytes": 473
+      },
+      {
+        "name": "products?",
+        "duration": 10,
+        "bytes": 485
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 7,
+        "bytes": 36011
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 7,
+        "bytes": 473
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 0,
+    "homeUsableMs": 2701,
+    "homeProductsMs": 4498,
+    "shopMs": 110,
+    "blogMs": 2368,
+    "warmHomeMs": 60,
+    "requests": 14,
+    "jsWork": {
+      "ScriptDuration": 0.597876,
+      "TaskDuration": 1.013664,
+      "JSHeapUsedSize": 21077432
+    },
+    "resources": [
+      {
+        "name": "entry-49d802d8dfc8d0bfc06ee3ea182f8bcd.js",
+        "duration": 61,
+        "bytes": 4897068
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 2027,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 2027,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 2027,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 2027,
+        "bytes": 344372
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2010,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 1828,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 1827,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 1826,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1825,
+        "bytes": 473
+      },
+      {
+        "name": "products?",
+        "duration": 1808,
+        "bytes": 485
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 6,
+        "bytes": 36011
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1810,
+        "bytes": 473
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 1,
+    "homeUsableMs": 2641,
+    "homeProductsMs": 4434,
+    "shopMs": 105,
+    "blogMs": 2355,
+    "warmHomeMs": 60,
+    "requests": 14,
+    "jsWork": {
+      "ScriptDuration": 0.508177,
+      "TaskDuration": 0.863915,
+      "JSHeapUsedSize": 21095236
+    },
+    "resources": [
+      {
+        "name": "entry-49d802d8dfc8d0bfc06ee3ea182f8bcd.js",
+        "duration": 49,
+        "bytes": 4897068
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 2023,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 2024,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 2024,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 2023,
+        "bytes": 344372
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2010,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 1820,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 1819,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 1819,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1819,
+        "bytes": 473
+      },
+      {
+        "name": "products?",
+        "duration": 1807,
+        "bytes": 485
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 5,
+        "bytes": 36011
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1806,
+        "bytes": 473
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 2,
+    "homeUsableMs": 2650,
+    "homeProductsMs": 4446,
+    "shopMs": 89,
+    "blogMs": 2344,
+    "warmHomeMs": 56,
+    "requests": 14,
+    "jsWork": {
+      "ScriptDuration": 0.518447,
+      "TaskDuration": 0.875715,
+      "JSHeapUsedSize": 21140948
+    },
+    "resources": [
+      {
+        "name": "entry-49d802d8dfc8d0bfc06ee3ea182f8bcd.js",
+        "duration": 53,
+        "bytes": 4897068
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 2016,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 2019,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 2024,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 2024,
+        "bytes": 344372
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2009,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 1822,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 1820,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 1819,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1818,
+        "bytes": 473
+      },
+      {
+        "name": "products?",
+        "duration": 1806,
+        "bytes": 485
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 7,
+        "bytes": 36011
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1805,
+        "bytes": 473
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  }
+]

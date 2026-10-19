@@ -49,6 +49,7 @@ let base: string;
 
 const PAY_REF = `wc_race_test_${Date.now()}`;
 const STALE_PAY_REF = `wc_stale_anchor_test_${Date.now()}`;
+const outagePayRefs: string[] = [];
 const WC_ORDER_ID = 990_001;
 const STALE_RETRY_WC_ORDER_ID = 990_002;
 const TEST_PUSH_TOKEN = "ExponentPushToken[wc-race-confirmation-test]";
@@ -89,6 +90,7 @@ async function createTestUser(): Promise<{ id: number; jwt: string }> {
       firstName: "Test",
       lastName: "Racer",
       phone: "+254711000042",
+      address: "Test building, Nairobi",
     })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;
@@ -153,7 +155,7 @@ after(async () => {
   const rows = await db
     .select({ id: ucOrdersTable.id })
     .from(ucOrdersTable)
-    .where(inArray(ucOrdersTable.paymentReference, [PAY_REF, STALE_PAY_REF]))
+    .where(inArray(ucOrdersTable.paymentReference, [PAY_REF, STALE_PAY_REF, ...outagePayRefs]))
     .catch(() => [] as { id: number }[]);
   const ids = rows.map((r) => r.id);
   if (ids.length > 0) {
@@ -219,6 +221,7 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
       const u = String(url);
 
       // Resend email dispatch — count and absorb.
+      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
       if (u.includes("resend.com") && u.includes("/emails")) {
         resendCalls.push(JSON.parse((init?.body as string) ?? "{}"));
         return new Response(JSON.stringify({ id: "re_wc_race_stub" }), { status: 200 });
@@ -380,6 +383,112 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
     }
   });
 
+  const lookupFailures = [
+    {
+      name: "network failure",
+      respond: (): Response => { throw new TypeError("WooCommerce connection failed"); },
+    },
+    {
+      name: "invalid credentials",
+      respond: () => new Response(JSON.stringify({ code: "woocommerce_rest_cannot_view" }), { status: 401 }),
+    },
+    {
+      name: "store server error",
+      respond: () => new Response("Service unavailable", { status: 503 }),
+    },
+    {
+      name: "malformed JSON",
+      respond: () => new Response("[invalid JSON", { status: 200 }),
+    },
+    {
+      name: "non-array JSON response",
+      respond: () => new Response(JSON.stringify({ error: "Unexpected store response" }), { status: 200 }),
+    },
+  ];
+
+  for (const failure of lookupFailures) {
+    it(`preserves an old pending-wc anchor during ${failure.name}`, { timeout: 30_000 }, async () => {
+      const { id: userId, jwt } = await createTestUser();
+      const paymentReference = `wc_stale_outage_${userId}`;
+      outagePayRefs.push(paymentReference);
+      const [staleAnchor] = await db.insert(ucOrdersTable).values({
+        userId: String(userId),
+        status: "pending-wc",
+        total: "3999",
+        currency: "KES",
+        paymentMethod: "paystack",
+        paymentReference,
+        shippingAddress: {},
+        // Well outside the 15-minute hand-off window: lookup failure must not
+        // be mistaken for confirmed absence just because the anchor is old.
+        dateCreated: new Date(Date.now() - 60 * 60 * 1000),
+      }).returning();
+      assert.ok(staleAnchor);
+      const originalItems = await db.insert(ucOrderItemsTable).values({
+        orderId: staleAnchor.id,
+        productId: 1,
+        name: "Hydra Flux",
+        quantity: 1,
+        total: "3499",
+      }).returning();
+
+      let wcLookupCount = 0;
+      let wcPostCount = 0;
+      const savedFetch = globalThis.fetch;
+      globalThis.fetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
+        const u = String(url);
+        if (u.includes("/products")) {
+          return new Response(JSON.stringify([{ id: 1, name: "Hydra Flux", price: "3499", stock_status: "instock", status: "publish" }]));
+        }
+        if (u.includes("/wp-json/wc/v3/orders")) {
+          if ((init?.method ?? "GET").toUpperCase() === "POST") {
+            wcPostCount++;
+            return new Response(JSON.stringify({ id: 990_003, status: "processing" }), { status: 201 });
+          }
+          wcLookupCount++;
+          return failure.respond();
+        }
+        return new Response(JSON.stringify({}), { status: 200 });
+      };
+      process.env["WC_CONSUMER_KEY"] = "ck_test_outage";
+      process.env["WC_CONSUMER_SECRET"] = "cs_test_outage";
+      process.env["WC_BASE_URL"] = "https://wc-outage.test.internal";
+
+      try {
+        const result = await postOrders({
+          lineItems: [{ productId: 1, quantity: 1 }],
+          paymentMethod: "paystack",
+          paymentReference,
+          shippingAddress: {
+            firstName: "Test",
+            lastName: "Racer",
+            address1: "1 Retry St",
+            city: "Nairobi",
+            country: "KE",
+            phone: "+254711000042",
+          },
+        }, jwt);
+
+        assert.ok(wcLookupCount > 0, "the retry must attempt WooCommerce reconciliation");
+        assert.equal(result.status, 503, JSON.stringify(result.body));
+        assert.equal(result.body["retryable"], true, "lookup uncertainty must remain retryable");
+        assert.equal(wcPostCount, 0, "a failed lookup must never allow a new WC order-creation POST");
+
+        const anchors = await db.select().from(ucOrdersTable)
+          .where(eq(ucOrdersTable.paymentReference, paymentReference));
+        assert.deepEqual(anchors, [staleAnchor], "the original anchor must remain completely unchanged");
+        const items = await db.select().from(ucOrderItemsTable)
+          .where(eq(ucOrderItemsTable.orderId, staleAnchor.id));
+        assert.deepEqual(items, originalItems, "the original anchor's line items must remain intact");
+      } finally {
+        delete process.env["WC_CONSUMER_KEY"];
+        delete process.env["WC_CONSUMER_SECRET"];
+        delete process.env["WC_BASE_URL"];
+        globalThis.fetch = savedFetch;
+      }
+    });
+  }
+
   it("releases an old pending-wc anchor absent from WC and creates a fresh order", { timeout: 30_000 }, async () => {
     const { id: userId, jwt } = await createTestUser();
     const [staleAnchor] = await db
@@ -407,6 +516,7 @@ describe("WooCommerce concurrent-order guard — same paymentReference race", ()
     const savedFetch = globalThis.fetch;
     globalThis.fetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
       const u = String(url);
+      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
       if (u.includes("/wp-json/wc/v3/orders")) {
         if ((init?.method ?? "GET").toUpperCase() === "POST") {
           wcPostCount++;

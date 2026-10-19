@@ -35,7 +35,10 @@ function validProfile(value: unknown): value is PersistedSessionProfile {
   return Number.isSafeInteger(Number(profile.id))
     && Number(profile.id) > 0
     && typeof profile.email === 'string'
-    && profile.email.trim().length > 0
+    // The API deliberately hides synthetic email addresses for phone-only
+    // customers. Require a real contact, not an email specifically.
+    && (profile.email.trim().length > 0
+      || (typeof profile.phone === 'string' && profile.phone.trim().length > 0))
     && typeof profile.firstName === 'string'
     && typeof profile.lastName === 'string'
     && (profile.mustChangePassword === undefined || typeof profile.mustChangePassword === 'boolean')

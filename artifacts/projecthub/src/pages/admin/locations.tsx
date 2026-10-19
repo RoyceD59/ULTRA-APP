@@ -18,6 +18,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RatingsModeration } from "./RatingsModeration";
 import { LocationAssessments } from "./LocationAssessments";
 
+// Field-review dates follow the business calendar, matching scheduled alerts,
+// regardless of the staff member's browser timezone.
+const FIELD_REVIEW_TIME_ZONE = "Africa/Nairobi";
+const fieldReviewDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: FIELD_REVIEW_TIME_ZONE,
+  year: "numeric", month: "2-digit", day: "2-digit",
+});
+
 type Form = {
   name: string; type: UcLocationInputType; address: string; hours: string;
   phone: string; vendorName: string; latitude: string; longitude: string;
@@ -100,7 +108,7 @@ export default function AdminLocationsPage() {
   const [editing, setEditing] = useState<UcLocation | "new" | null>(null);
   const locationsQuery = useListUcAdminLocations();
   const locations = locationsQuery.data?.locations ?? [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = fieldReviewDateFormatter.format(new Date());
   const action = useMutation({
     mutationFn: async ({ location, active }: { location: UcLocation; active: boolean }) => updateUcAdminLocation(location.id, { active }),
     onSuccess: (result) => {
@@ -129,6 +137,7 @@ export default function AdminLocationsPage() {
       </TabsList>
 
       <TabsContent value="locations" className="space-y-4 m-0">
+        <p className="text-xs text-muted-foreground">Field-review dates use Africa/Nairobi time.</p>
         {editing && <LocationForm location={editing === "new" ? undefined : editing} done={() => setEditing(null)} />}
         {locationsQuery.isLoading ? <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading locations…</p> : locationsQuery.isError ? <p role="alert" className="text-sm text-destructive">Locations could not be loaded.</p> : locations.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No locations yet.</div> : (
           <div className="grid gap-3 md:grid-cols-2">

@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-08",
+  "candidateSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "scopeSha256": "77d02aaad9d235d01a87c3eeb4ba50f72f1d26c13ba145ac86717c4d7c443c0d",
+  "selectionApproved": true,
+  "publicationApproved": false,
+  "decision": "Approve candidate selection",
+  "scope": "Five API source files and five exact merged security fixtures; no publication or client advancement"
+}

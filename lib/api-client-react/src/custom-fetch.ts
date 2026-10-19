@@ -1,3 +1,4 @@
+import { reportRuntimeReadFailure } from "./runtime-diagnostics";
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
@@ -7,6 +8,12 @@ export type ErrorType<T = unknown> = ApiError<T>;
 export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type ErrorResponseHandler = (response: {
+  status: number;
+  data: unknown;
+  url: string;
+  bearerToken: string | null;
+}) => Promise<void>;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -17,6 +24,15 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _errorResponseHandler: ErrorResponseHandler | null = null;
+
+/** Opt-in response handling; applications without a handler retain their behavior. */
+export function setErrorResponseHandler(handler: ErrorResponseHandler): () => void {
+  _errorResponseHandler = handler;
+  return () => {
+    if (_errorResponseHandler === handler) _errorResponseHandler = null;
+  };
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -360,16 +376,40 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response: Response;
+  try { response = await fetch(input, { ...init, method, headers }); }
+  catch (error) {
+    if ((method === "GET" || method === "HEAD") && !init.signal?.aborted) {
+      reportRuntimeReadFailure((error as { name?: string })?.name === "TimeoutError" ? "api_read_timeout" : "api_read_failed");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
+    if ((method === "GET" || method === "HEAD") && response.status >= 500) {
+      reportRuntimeReadFailure("api_read_failed", response.headers.get("X-Correlation-ID") || undefined);
+    }
     // Notify auth-aware components so expired/revoked sessions redirect to /login
     if (response.status === 401 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("projecthub:unauthorized"));
     }
     const errorData = await parseErrorBody(response, method);
+    const authorization = headers.get("Authorization");
+    await _errorResponseHandler?.({
+      status: response.status,
+      data: errorData,
+      url: requestInfo.url,
+      bearerToken: authorization?.startsWith("Bearer ") ? authorization.slice(7) : null,
+    });
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  try {
+    return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  } catch (error) {
+    if ((method === "GET" || method === "HEAD") && !init.signal?.aborted) {
+      reportRuntimeReadFailure("api_read_failed", response.headers.get("X-Correlation-ID") || undefined);
+    }
+    throw error;
+  }
 }

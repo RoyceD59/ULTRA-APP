@@ -3,6 +3,32 @@ import { describe, it } from "node:test";
 import { categoryNameMatches, normalizeStoreCategory, wcFetchAllPages } from "../routes/uc.js";
 
 describe("store category label resolution", () => {
+  it("fails explicitly at the complete-pagination safety bound or on a later page failure", async () => {
+    const originalFetch = globalThis.fetch;
+    const savedBase = process.env["WC_BASE_URL"];
+    try {
+      process.env["WC_BASE_URL"] = "https://bounded-pages.test";
+      let calls = 0;
+      globalThis.fetch = (async () => {
+        calls++;
+        return new Response(JSON.stringify(Array.from({ length: 100 }, (_, id) => ({ id }))));
+      }) as typeof fetch;
+      assert.equal(await wcFetchAllPages("/products"), null);
+      assert.equal(calls, 50, "never return the truncated 5,000-row list");
+      calls = 0;
+      globalThis.fetch = (async () => {
+        calls++;
+        return calls === 1
+          ? new Response(JSON.stringify(Array.from({ length: 100 }, (_, id) => ({ id }))))
+          : new Response("[]", { status: 503 });
+      }) as typeof fetch;
+      assert.equal(await wcFetchAllPages("/products"), null);
+      assert.equal(calls, 2, "do not cache or expose a partial first page");
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (savedBase === undefined) delete process.env["WC_BASE_URL"]; else process.env["WC_BASE_URL"] = savedBase;
+    }
+  });
   const visibleCategories = [
     "Bottles & Portable",
     "Home Filters",

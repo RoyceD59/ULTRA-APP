@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, cp } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -13,6 +13,9 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
+  const recordsDir = path.resolve(artifactDir, "../uc-companion/server");
+  await cp(path.join(recordsDir, "records"), path.join(distDir, "product-records/records"), { recursive: true });
+  await cp(path.join(recordsDir, "product-records.cjs"), path.join(distDir, "product-records/product-records.cjs"));
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
@@ -117,6 +120,15 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+  await cp(
+    path.resolve(artifactDir, "src/knowledge/alison"),
+    path.resolve(distDir, "knowledge/alison"),
+    { recursive: true },
+  );
+  await cp(path.resolve(artifactDir, "../../lib/db/migrations/0056_review_analysis.sql"),
+    path.resolve(distDir, "0056_review_analysis.sql"));
+  await cp(path.resolve(artifactDir, "../../lib/db/migrations/0061_uc_customer_statistics.sql"),
+    path.resolve(distDir, "0061_uc_customer_statistics.sql"));
 }
 
 buildAll().catch((err) => {

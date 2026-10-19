@@ -20,9 +20,14 @@ export const RATE_LIMIT_TITLE = 'Too Many Attempts';
 export const RATE_LIMIT_MESSAGE =
   'Too many attempts. Please wait a minute before trying again.';
 
-/** A login failure must not reveal whether an email or phone has an account. */
+/**
+ * A login failure must not reveal whether an email or phone has an account.
+ * The same guidance is shown to everyone: customers who used the old website
+ * login have no app password yet and must set one through a verified email or
+ * phone link, or create an app account.
+ */
 export const COMPANION_LOGIN_ERROR =
-  'Unable to sign in. Check your details and try again.';
+  'Unable to sign in. Check your details and try again. If you used your old website account, choose Forgot password to set an app password, or create an account.';
 
 /** Minimal structural shape of ApiError needed to detect a rate limit. */
 export interface RateLimitCheckable {

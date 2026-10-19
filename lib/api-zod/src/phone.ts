@@ -1,4 +1,5 @@
-import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
+import type { CountryCode } from "libphonenumber-js";
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString } from "./phone-runtime.js";
 
 export type SupportedCountryCode = CountryCode;
 

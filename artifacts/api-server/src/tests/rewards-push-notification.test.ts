@@ -317,8 +317,17 @@ describe("Rewards push notification — admin grant endpoint", () => {
       headers: { Authorization: adminAuthHeader() },
     });
     assert.equal(rewards.status, 200, `expected rewards QR token: ${JSON.stringify(rewards.body)}`);
-    const qrToken = (rewards.body as { qrToken?: string }).qrToken;
-    assert.ok(qrToken, "customer rewards response must issue a QR token");
+    const status = await apiFetch("/api/uc/customer/rewards/qr/validate", {
+      method: "POST", headers: { Authorization: adminAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ qrToken: null }),
+    });
+    const issued = await apiFetch("/api/uc/customer/rewards/qr/rotate", {
+      method: "POST", headers: { Authorization: adminAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion: (status.body as { version: string | null }).version }),
+    });
+    assert.equal(issued.status, 200);
+    const qrToken = (issued.body as { qrToken?: string }).qrToken;
+    assert.ok(qrToken, "explicit recovery must issue a QR token");
     const appQrPayload = `uc-rewards:v1:${qrToken}`;
 
     const r = await apiFetch("/api/uc/admin/rewards/grant", {

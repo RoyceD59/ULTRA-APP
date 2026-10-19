@@ -16,6 +16,10 @@ import {
   setReferralRuleLookupForTests,
 } from "../routes/referrals.js";
 import { finalizeRecoveryOrder } from "../routes/uc.js";
+// This is a deliberately offline service harness, not a live shop request.
+delete process.env.WC_BASE_URL;
+delete process.env.WC_CONSUMER_KEY;
+delete process.env.WC_CONSUMER_SECRET;
 
 /* These are service-level integration tests: every assertion uses the isolated
  * PostgreSQL database created by tests/run.ts, while the production transaction
@@ -65,11 +69,14 @@ describe("durable referral lifecycle", { concurrency: false }, () => {
     if (orderIds.length) await pool.query("DELETE FROM uc_orders WHERE id=ANY($1::int[])", [orderIds]);
     if (ids.length) await pool.query("DELETE FROM uc_users WHERE id=ANY($1::int[])", [ids]);
     if (teamUserIds.length) {
+      // Audited actors must remain referenced until the temporary DB is dropped.
       await pool.query(
-        "DELETE FROM referral_alert_threshold_changes WHERE actor_team_user_id=ANY($1::text[])",
+        `DELETE FROM team_users WHERE id=ANY($1::text[])
+         AND NOT EXISTS (
+           SELECT 1 FROM referral_alert_threshold_changes WHERE actor_team_user_id=team_users.id
+         )`,
         [teamUserIds],
       );
-      await db.delete(teamUsersTable).where(inArray(teamUsersTable.id, teamUserIds));
     }
   });
 
@@ -421,7 +428,7 @@ describe("durable referral lifecycle", { concurrency: false }, () => {
     await finalizeRecoveryOrder({
       orderId: recoveryId, accountId: i.id,
       lineItems: [{ productId: 22, quantity: 1 }],
-      shippingAddress: { address1: "1 Test Road", city: "Nairobi" },
+      shippingAddress: { address1: "1 Test Road", city: "Nairobi", fulfillment: "delivery" },
     });
     const finalized = await pool.query("SELECT user_id,webhook_recovery FROM uc_orders WHERE id=$1", [recoveryId]);
     const lines = await pool.query("SELECT product_id,quantity,total FROM uc_order_items WHERE order_id=$1", [recoveryId]);

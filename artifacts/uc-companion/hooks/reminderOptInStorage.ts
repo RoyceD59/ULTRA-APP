@@ -41,13 +41,11 @@ export async function wasReminderOptInSeen(
   }
 }
 
-/** Mark the prompt as shown so it is never re-displayed for this registration. */
+/** Mark the prompt as shown. Reject on failure so callers can offer recovery. */
 export async function markReminderOptInSeen(
   productId: number,
   activatedAt: string,
   userId: number,
 ): Promise<void> {
-  try {
-    await AsyncStorage.setItem(reminderOptInSeenKey(productId, activatedAt, userId), '1');
-  } catch { /* non-critical */ }
+  await AsyncStorage.setItem(reminderOptInSeenKey(productId, activatedAt, userId), '1');
 }

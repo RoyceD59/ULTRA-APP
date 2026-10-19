@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import type { UcLocation } from "@workspace/api-client-react";
@@ -67,7 +67,10 @@ function renderPage() {
 
 describe("admin location field-review warnings", () => {
   beforeEach(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    // Fake only Date so query scheduling and Testing Library waits remain real.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-04T09:00:00Z"));
+    const today = "2026-10-04";
     api.locations = [
       location(1, { name: "Missing review date" }),
       location(2, { name: "Review due today", nextReviewOn: today }),
@@ -84,6 +87,49 @@ describe("admin location field-review warnings", () => {
       api.locations = api.locations.map((item) => item.id === id ? updated : item);
       return { location: updated };
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ["before Nairobi midnight", "2026-10-03T20:59:59.999Z", "2026-10-04", false],
+    ["at Nairobi midnight", "2026-10-03T21:00:00.000Z", "2026-10-04", true],
+    ["after Nairobi midnight", "2026-10-03T21:00:00.001Z", "2026-10-04", true],
+    ["before UTC midnight", "2026-10-03T23:59:59.999Z", "2026-10-04", true],
+    ["after UTC midnight", "2026-10-04T00:00:00.000Z", "2026-10-04", true],
+    ["before month rollover", "2026-10-31T20:59:59.999Z", "2026-11-01", false],
+    ["at month rollover", "2026-10-31T21:00:00.000Z", "2026-11-01", true],
+    ["before year rollover", "2026-12-31T20:59:59.999Z", "2027-01-01", false],
+    ["at year rollover", "2026-12-31T21:00:00.000Z", "2027-01-01", true],
+  ])("uses the business calendar %s", async (_label, instant, reviewDate, warned) => {
+    vi.setSystemTime(new Date(instant));
+    api.locations = [
+      location(1, { nextReviewOn: reviewDate }),
+      location(2, { nextReviewOn: "2026-01-01" }),
+      location(3, { nextReviewOn: "2099-12-31" }),
+      location(4),
+      location(5, { nextReviewOn: reviewDate, verified: false }),
+      location(6, { nextReviewOn: reviewDate, active: false }),
+    ];
+    renderPage();
+
+    const card = await screen.findByTestId("card-location-1");
+    expect(screen.getByText("Field-review dates use Africa/Nairobi time.")).toBeInTheDocument();
+    const warning = within(card).queryByText(`Field review was due ${reviewDate}.`);
+    if (warned) expect(warning).toBeInTheDocument();
+    else expect(warning).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("card-location-2")).getByText(
+      "Field review was due 2026-01-01.",
+    )).toBeInTheDocument();
+    expect(within(screen.getByTestId("card-location-3")).queryByText(/Field review was due/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("card-location-4")).getByText(
+      "Published location has no next field-review date.",
+    )).toBeInTheDocument();
+    for (const id of [5, 6]) {
+      expect(within(screen.getByTestId(`card-location-${id}`)).queryByText(/Field review was due/)).not.toBeInTheDocument();
+    }
   });
 
   it("warns only for published locations with a missing or due review date", async () => {

@@ -13,6 +13,13 @@ export const teamLibraryDocsTable = pgTable("team_library_docs", {
   fileType:   text("file_type").notNull(),      // MIME type
   objectPath: text("object_path").notNull(),    // normalized GCS path e.g. /objects/<uuid>
   uploadedBy: text("uploaded_by").notNull(),    // member email
+  knowledgeStatus: text("knowledge_status", { enum: ["private", "approved", "revoked"] }).notNull().default("private"),
+  knowledgeRevision: integer("knowledge_revision").notNull().default(0),
+  knowledgeTitle: text("knowledge_title"),
+  knowledgeText: text("knowledge_text"),
+  knowledgeHash: text("knowledge_hash"),
+  knowledgeReviewedBy: text("knowledge_reviewed_by"),
+  knowledgeReviewedAt: timestamp("knowledge_reviewed_at", { withTimezone: true }),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

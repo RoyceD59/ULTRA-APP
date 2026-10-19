@@ -14,9 +14,22 @@ import {
 import { sanitiseCsvCell } from "./uc-water-chat.js";
 import { issueToken, verifyToken } from "../lib/jwt.js";
 import { isAdminRequest } from "../lib/adminAuth.js";
+import { effectiveEditorial } from "../lib/product-editorial.js";
+import { readCompanionCollection, readCompanionProduct, companionCatalogue,
+  updateCompanionInventory } from "../lib/companion-catalogue.js";
+import { getCustomerStatistics } from "../lib/customer-statistics.js";
 import { validateCodShipping } from "../lib/order-validation.js";
+import { paymentMocksAllowed, paymentProviderConfigured } from "../lib/payment-configuration.js";
+import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
+import { activationEligibility, validInstallationDate, purchaseUnitIds } from "../lib/activation-eligibility.js";
+import { activationPurchaseOptions } from "../lib/activation-purchases.js";
+import { orderEvidence } from "../lib/order-evidence.js";
+import { registerOrderUnit } from "../lib/register-order-unit.js";
+import { checkoutDiagnostics } from "../lib/checkout-diagnostics.js";
 import { normalizeInternationalPhone, countryCodeFromValue } from "@workspace/api-zod/phone";
+import { receiptOrderPaymentStatus } from "@workspace/api-zod/order-receipt";
 import { remoteImageProxyPath } from "./product-images.js";
+import { CatalogueCache } from "../lib/catalogue-cache.js";
 import { authLimiter, lookupLimiter, locationQualityLimiter } from "../lib/rate-limiters.js";
 import { getWhatsAppStatus, sendWhatsAppMessage } from "../lib/whatsapp.js";
 import {
@@ -52,6 +65,7 @@ import {
   type ReviewMediaItem, type UcProductMedia,
 } from "@workspace/db";
 import { eq, desc, inArray, notInArray, and, asc, ne, gt, or, sql, isNull } from "drizzle-orm";
+import { productVideoSlots } from "../lib/product-video-slots.js";
 import bcryptjs from "bcryptjs";
 import { logger } from "../lib/logger";
 import { ACCOUNT_DATA_DIR, recordAccountRegistration } from "../lib/account-records";
@@ -63,7 +77,7 @@ import {
   ObjectNotFoundError,
   ObjectStorageService,
 } from "../lib/objectStorage";
-import { detectReviewMediaMime, mediaMimeFamily } from "../lib/review-media-signature.js";
+import { verifyReviewMediaContent, mediaMimeFamily } from "../lib/review-media-signature.js";
 import { creditQualifyingProductPoints } from "../lib/reminder-dispatch.js";
 import { sendPushToUser, getPushTokenRow, callExpoPushApi, removePushToken } from "../lib/push.js";
 import {
@@ -73,12 +87,19 @@ import {
 } from "../lib/wishlist-demand.js";
 import { quotePromotion, consumePromotionOnClient, type PromotionQuote } from "../lib/reward-promotions.js";
 import { appPurchaseOwnedBy, storePurchaseOwnedBy } from "../lib/purchase-ownership.js";
+import { listOfflinePurchases, registerOfflinePurchase, OfflinePurchaseError } from "../lib/offline-purchases.js";
 import { transitionOrderStatus, ORDER_CUSTOMER_STAGES } from "../lib/order-status-pipeline.js";
 import {
   reconcileCanonicalPurchaseDualWrite,
   CanonicalPurchaseDualWriteError,
 } from "../lib/canonical-purchase-dual-write.js";
 import { isCustomerLifecycleFlagEnabled } from "../lib/customer-lifecycle-flags.js";
+import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
+import { checkoutQuote, claimReferralBenefit, type Fulfillment } from "../lib/checkout-pricing.js";
+import { prepareCheckoutOrder, confirmCheckoutOrder, checkoutOrderResponse } from "../lib/checkout-orders.js";
+import { enqueueReferralSettlement } from "./referrals.js";
+import enquiriesAdminRouter from "./uc-enquiries-admin.js";
+import ordersAdminRouter from "./uc-orders-admin.js";
 
 class CheckoutKeyOwnershipConflict extends Error {
   readonly code = "CHECKOUT_KEY_OWNERSHIP_CONFLICT";
@@ -89,6 +110,11 @@ class CheckoutKeyOwnershipConflict extends Error {
 }
 
 const router = Router();
+router.all("/uc/webhooks/woocommerce", (_req, res) => {
+  res.status(410).json({ error: "WooCommerce synchronization has been retired. Companion records are app-owned." });
+});
+router.use(enquiriesAdminRouter);
+router.use(ordersAdminRouter);
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 // Real Ultra Clear 2026 product catalogue — 5 segments, 27 products.
@@ -455,17 +481,59 @@ export const MOCK_PRODUCTS: Record<string, unknown>[] = [
 /** Single authoritative fallback-catalog pricing implementation for checkout
  * quotes and order creation. Unknown products are rejected rather than priced
  * at zero. */
-export function serverPricedLines(lineItems: { productId: number; quantity: number }[], allowEmpty = false) {
+export async function serverPricedLines(lineItems: { productId: number; quantity: number; variationId?: number; childSku?: string }[], allowEmpty = false) {
   if (!Array.isArray(lineItems) || (!lineItems.length && !allowEmpty)) return null;
-  const lines = lineItems.map((item) => {
+  if (lineItems.length > 100 || lineItems.some(item => !item || typeof item !== "object" ||
+      !Number.isInteger(item.productId) || item.productId <= 0 ||
+      !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 1000 ||
+      (item.variationId !== undefined && (!Number.isSafeInteger(item.variationId) || item.variationId <= 0)) ||
+      (item.childSku !== undefined && (typeof item.childSku !== "string" || !item.childSku.trim())) ||
+      (!!item.variationId !== !!item.childSku))) return null;
+  const catalogue = hasCompanionCatalogue()
+    ? await wcFetchArray("/products", { include: [...new Set(lineItems.map(i => i.productId))].join(","), per_page: "100" })
+    : MOCK_PRODUCTS;
+  // A live product must never be priced using an unrelated demo ID.
+  if (!catalogue) return null;
+  const { collection } = await effectiveEditorial();
+  const lines = await Promise.all(lineItems.map(async (item) => {
     const productId = Number(item.productId), quantity = Number(item.quantity);
-    const product = MOCK_PRODUCTS.find((candidate) => candidate["id"] === productId);
+    const product = catalogue.find((candidate) => candidate["id"] === productId);
     if (!product || !Number.isInteger(quantity) || quantity <= 0) return null;
-    const price = Number(product["price"]);
-    if (!Number.isFinite(price) || price < 0) return null;
-    return { productId, name: String(product["name"]), quantity, subtotal: price * quantity };
-  });
-  return lines.some((line) => !line) ? null : lines as { productId: number; name: string; quantity: number; subtotal: number }[];
+    if (product["status"] !== "publish") return null;
+    const record = collection.products.find((p: any) => p.parentSku === product["sku"]);
+    if (record && !record.purchasable) return null;
+    let selected = product;
+    let variantLabel: string | undefined;
+    if (item.variationId) {
+      if (!record) return null;
+      const variant = record.variants.find((v: any) => v.childSku === item.childSku);
+      if (!variant) return null;
+      const live = await wcFetchOne(`/products/${productId}/variations/${item.variationId}`);
+      if (!live || Number(live.id) !== item.variationId || live.sku !== item.childSku ||
+          (live.parent_id !== undefined && Number(live.parent_id) !== productId) || live.status !== "publish") return null;
+      // Verify SKU uniqueness among the parent's complete set, not ID alone.
+      const children = await wcFetchAllPages(`/products/${productId}/variations`, { per_page: "100" });
+      if (!children || children.filter(c => c.sku === item.childSku).length !== 1) return null;
+      selected = live;
+      variantLabel = variant.label;
+    } else if (record?.variants.length || product["type"] === "variable") return null;
+    // Owner-approved editorial prices (initially Excel CATALOGUE RETAIL)
+    // supersede Woo prices. Woo still verifies identity, publication and stock.
+    const price = record ? record.price : Number(selected["price"]);
+    if (typeof price !== "number" || !Number.isFinite(price) || price <= 0 || product["enquiryOnly"] ||
+        selected["purchasable"] === false ||
+        (selected["manage_stock"] === true && typeof selected["stock_quantity"] === "number" &&
+          selected["stock_quantity"] < quantity && selected["backorders_allowed"] !== true) ||
+        !["instock", "onbackorder"].includes(String(selected["stock_status"]))) return null;
+    return { productId, name: `${String(product["name"])}${variantLabel ? ` — ${variantLabel} (${item.childSku})` : ''}`,
+      sku: String(selected["sku"] || product["sku"] || ""), size: String(record?.specs?.Capacity || ""),
+      quantity, subtotal: price * quantity,
+      ...(item.variationId ? { variationId: item.variationId, childSku: item.childSku, variantLabel } : {}) };
+  }));
+  return lines.some((line) => !line) ? null : lines as {
+    productId: number; name: string; sku: string; size: string; quantity: number; subtotal: number;
+    variationId?: number; childSku?: string; variantLabel?: string;
+  }[];
 }
 
 /** Attach a verified provider recovery payment to its authenticated account
@@ -484,7 +552,7 @@ export async function finalizeRecoveryOrder(params: {
       { code: "RECOVERY_DISCOUNT_REJECTED" },
     );
   }
-  const lines = serverPricedLines(params.lineItems);
+  const lines = await serverPricedLines(params.lineItems);
   if (!lines || lines.reduce((sum, line) => sum + line.subtotal, 0) <= 0) {
     throw Object.assign(
       new Error("Recovery requires known products with positive quantities"),
@@ -492,7 +560,7 @@ export async function finalizeRecoveryOrder(params: {
     );
   }
   const expectedTotal =
-    lines.reduce((sum, line) => sum + line.subtotal, 0) + 500;
+    lines.reduce((sum, line) => sum + line.subtotal, 0) + (params.shippingAddress?.fulfillment === "delivery" ? 500 : 0);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -596,16 +664,23 @@ const waterTestStoreFallback: Record<string, unknown>[] = [];
 
 // ─── WooCommerce helpers ──────────────────────────────────────────────────────
 export function hasWCCredentials(): boolean {
-  return !!(process.env["WC_CONSUMER_KEY"] && process.env["WC_CONSUMER_SECRET"]);
+  // Retained temporarily for old recovery branches/test seams. Credentials
+  // must never turn a retired external authority back on.
+  return false;
+}
+
+export function hasCompanionCatalogue(): boolean {
+  return true;
 }
 
 function wcUrl(path: string, extra: Record<string, string> = {}): string {
-  const base = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-  const url = new URL(`${base}/wp-json/wc/v3${path}`);
-  url.searchParams.set("consumer_key", process.env["WC_CONSUMER_KEY"]!);
-  url.searchParams.set("consumer_secret", process.env["WC_CONSUMER_SECRET"]!);
-  Object.entries(extra).forEach(([k, v]) => url.searchParams.set(k, v));
-  return url.toString();
+  void path; void extra;
+  throw new Error("WooCommerce transport is retired; reconcile legacy attempts through the reviewed import.");
+}
+
+export async function wcCreateCheckoutOrder(payload: unknown): Promise<Record<string, unknown> | null> {
+  void payload;
+  return null;
 }
 
 /**
@@ -619,15 +694,16 @@ function parseWcJson(text: string): unknown {
   return JSON.parse(text.slice(start));
 }
 
-async function wcFetchArray(
+export async function wcFetchArray(
   path: string,
-  extra: Record<string, string> = {}
+  extra: Record<string, string> = {},
+  signal?: AbortSignal,
+  maxResponseBytes?: number,
 ): Promise<Record<string, unknown>[] | null> {
   try {
-    const res = await fetch(wcUrl(path, extra));
-    const text = await res.text();
-    const data: unknown = parseWcJson(text);
-    return Array.isArray(data) ? (data as Record<string, unknown>[]) : null;
+    const data = await readCompanionCollection(path, extra, signal);
+    if (maxResponseBytes !== undefined && Buffer.byteLength(JSON.stringify(data)) > maxResponseBytes) return null;
+    return data;
   } catch {
     return null;
   }
@@ -644,6 +720,7 @@ const MAX_WC_PAGES = 50;
 export async function wcFetchAllPages(
   path: string,
   extra: Record<string, string> = {},
+  signal: AbortSignal = AbortSignal.timeout(12_000),
 ): Promise<Record<string, unknown>[] | null> {
   const all: Record<string, unknown>[] = [];
   for (let page = 1; page <= MAX_WC_PAGES; page++) {
@@ -651,7 +728,7 @@ export async function wcFetchAllPages(
       ...extra,
       per_page: String(WC_PAGE_SIZE),
       page: String(page),
-    });
+    }, signal);
     if (!batch) return null;
     all.push(...batch);
     if (batch.length < WC_PAGE_SIZE) return all;
@@ -661,17 +738,13 @@ export async function wcFetchAllPages(
   return null;
 }
 
-async function wcFetchOne(
+export async function wcFetchOne(
   path: string,
   extra: Record<string, string> = {}
 ): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(wcUrl(path, extra));
-    const text = await res.text();
-    const data: unknown = parseWcJson(text);
-    return data && typeof data === "object" && !Array.isArray(data)
-      ? (data as Record<string, unknown>)
-      : null;
+    void extra;
+    return await readCompanionProduct(path);
   } catch {
     return null;
   }
@@ -718,7 +791,9 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
       : [],
     sku: p["sku"],
     stockStatus: p["stock_status"] ?? p["stockStatus"],
-    stockQuantity: p["stock_quantity"] ?? p["stockQuantity"],
+    stockQuantity: p["stock_quantity"] === null ? null : p["stock_quantity"] ?? p["stockQuantity"],
+    manageStock: p["manage_stock"] ?? false,
+    revision: p["revision"],
     tags: Array.isArray(p["tags"]) ? p["tags"] : [],
     lifespanDays,
     filterCapacityLitres,
@@ -730,6 +805,9 @@ export function normalizeProduct(p: Record<string, unknown>): Record<string, unk
 }
 
 function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
+  const meta = Array.isArray(o.meta_data) ? o.meta_data as { key: string; value: unknown }[] : [];
+  const metaValue = (key: string) => meta.find(m => m.key === key)?.value;
+  const shippingLines = Array.isArray(o.shipping_lines) ? o.shipping_lines as { total?: string; method_id?: string }[] : [];
   const li = Array.isArray(o["line_items"])
     ? (o["line_items"] as Record<string, unknown>[]).map((i) => ({
         productId: i["product_id"],
@@ -743,7 +821,7 @@ function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
     orderNumber: o["number"] ?? o["id"],
     status: o["status"],
     fulfillmentStatus: o["status"],
-    paymentStatus: o["date_paid"] || o["status"] === "completed" || o["status"] === "processing"
+    paymentStatus: o["date_paid"]
       ? "paid"
       : o["status"] === "cancelled" || o["status"] === "failed" || o["status"] === "refunded"
         ? o["status"]
@@ -752,7 +830,11 @@ function normalizeOrder(o: Record<string, unknown>): Record<string, unknown> {
     total: o["total"],
     currency: o["currency"],
     paymentMethod: o["payment_method"],
-    shippingAddress: o["shipping"],
+    shippingAddress: { ...(o["shipping"] as Record<string, unknown> ?? {}),
+      ...(metaValue("uc_fulfillment") ? { fulfillment: metaValue("uc_fulfillment") } : {}),
+      ...(shippingLines.length ? { shippingAmount: String(shippingLines.reduce((sum, line) => sum + Number(line.total ?? 0), 0)) } : {}) },
+    discountAmount: Number(metaValue("uc_discount_amount") ?? o.discount_total ?? 0),
+    promoCode: metaValue("uc_promo_code") ?? "",
     delivery: {
       method: Array.isArray(o["shipping_lines"])
         ? (o["shipping_lines"] as Record<string, unknown>[]).map(line => line["method_title"]).filter(Boolean).join(", ")
@@ -801,33 +883,55 @@ function applyProductMedia(
   const photos = media
     .filter((m) => m.type === "photo")
     .map((m) => ({ src: m.url, alt: m.alt || (product["name"] as string) }));
-  const video = media.find((m) => m.type === "video");
-  return { ...product, images: [...baseImages, ...photos], videoUrl: video?.url ?? null };
+  const videos = productVideoSlots(media).flatMap((item, index) => item ? [{ slot: index + 1, url: item.url }] : []);
+  return { ...product, images: [...baseImages, ...photos], videoUrl: videos[0]?.url ?? null, videos };
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
+const catalogueCache = new CatalogueCache<{
+  payload: Record<string, unknown>[];
+  publishedSource: boolean;
+}>();
+
+export function invalidateCatalogueCache(): void {
+  catalogueCache.invalidate();
+}
+
 router.get("/uc/products", async (req: Request, res: Response): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
+  const publicationSafe = req.query["publicationSafe"] === "true";
+  if (publicationSafe) {
+    res.setHeader("Cache-Control", "no-store");
+    if (!hasCompanionCatalogue()) {
+      res.status(503).json({ error: "Published product catalogue provider is not configured" });
+      return;
+    }
+  }
   try {
     let payload: Record<string, unknown>[] | null = null;
-    if (hasWCCredentials()) {
-      const extra: Record<string, string> = { per_page: "50" };
+    let publishedSource = false;
+    if (hasCompanionCatalogue()) {
       const requestedCategory = typeof req.query["category"] === "string"
-        ? req.query["category"]
+        ? req.query["category"].trim()
         : "";
-      let categoryId: number | null = null;
-      if (requestedCategory) {
-        categoryId = await resolveWcCategoryId(requestedCategory);
+      const search = typeof req.query["search"] === "string" ? req.query["search"].trim() : "";
+      const start = performance.now();
+      const result = await catalogueCache.read(JSON.stringify([requestedCategory, search]), async () => {
+        // One provider budget covers category discovery and ALL product pages,
+        // leaving room inside the client's 15s timeout for response/media work.
+        const signal = AbortSignal.timeout(12_000);
+        const extra: Record<string, string> = { status: "publish" };
+        const categoryId = requestedCategory ? await resolveWcCategoryId(requestedCategory, signal) : null;
         if (categoryId) extra["category"] = String(categoryId);
-      }
-      if (req.query["search"]) extra["search"] = req.query["search"] as string;
-      const products = await wcFetchAllPages("/products", extra);
-      if (products) {
-        payload = products.map(normalizeProduct);
+        if (search) extra["search"] = search;
+        const products = await wcFetchAllPages("/products", extra, signal);
+        if (!products) throw new Error("WooCommerce catalogue unavailable or incomplete");
+        let normalized = products.map(normalizeProduct);
         // If the category lookup was unavailable, fetch-all + normalized
         // filtering is safer than sending a label to WooCommerce and showing
         // an accidental blank grid.
         if (requestedCategory && !categoryId) {
-          payload = payload.filter(product => {
+          normalized = normalized.filter(product => {
             const categories = Array.isArray(product["categories"])
               ? product["categories"] as { name?: unknown }[]
               : [];
@@ -835,10 +939,12 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
               categoryNameMatches(requestedCategory, String(category?.name ?? "")));
           });
         }
-      } else {
-        res.status(502).json({ error: "The product catalogue is temporarily unavailable" });
-        return;
-      }
+        return { payload: normalized, publishedSource: products.every(product => product["status"] === "publish") };
+      });
+      payload = result.value.payload;
+      publishedSource = result.value.publishedSource;
+      res.setHeader("Server-Timing", `catalogue;dur=${(performance.now() - start).toFixed(1)};desc="${result.source}"`);
+      res.setHeader("X-UC-Catalogue-Cache", result.source);
     }
     if (!payload) {
       let data = MOCK_PRODUCTS;
@@ -860,10 +966,17 @@ router.get("/uc/products", async (req: Request, res: Response): Promise<void> =>
       payload = data;
     }
     warnForMissingProductLifespans(payload);
+    if (publicationSafe && !publishedSource) {
+      res.status(503).json({ error: "Published product catalogue could not be verified" });
+      return;
+    }
     const mediaMap = await fetchProductMediaMap(payload.map((p) => Number(p["id"])));
+    if (publicationSafe) res.setHeader("X-UC-Catalogue-Provenance", "companion-published");
+    res.setHeader("X-UC-Product-Source", publishedSource ? "companion-published" : "unverified");
     res.json(payload.map((p) => applyProductMedia(p, mediaMap.get(Number(p["id"])))));
-  } catch {
-    res.status(500).json({ error: "Failed to fetch products" });
+  } catch (error) {
+    req.log?.warn({ err: error }, "Product catalogue refresh failed");
+    res.status(502).json({ error: "The product catalogue is temporarily unavailable" });
   }
 });
 
@@ -907,7 +1020,7 @@ export function categoryNameMatches(requested: string, actual: string): boolean 
     aliases.some(alias => got.includes(alias) || alias.includes(got));
 }
 
-async function getWcCategoryMap(): Promise<Map<string, number> | null> {
+async function getWcCategoryMap(signal?: AbortSignal): Promise<Map<string, number> | null> {
   if (_categoryCache && Date.now() - _categoryCache.at < CATEGORY_CACHE_TTL_MS) {
     return _categoryCache.byName;
   }
@@ -916,7 +1029,7 @@ async function getWcCategoryMap(): Promise<Map<string, number> | null> {
     try {
       const categories = await wcFetchAllPages("/products/categories", {
         hide_empty: "false",
-      });
+      }, signal);
       if (!categories) return _categoryCache?.byName ?? null;
       const byName = new Map<string, number>();
       for (const category of categories) {
@@ -933,8 +1046,8 @@ async function getWcCategoryMap(): Promise<Map<string, number> | null> {
   return _categoryRefresh;
 }
 
-export async function resolveWcCategoryId(category: string): Promise<number | null> {
-  const map = await getWcCategoryMap();
+export async function resolveWcCategoryId(category: string, signal?: AbortSignal): Promise<number | null> {
+  const map = await getWcCategoryMap(signal);
   if (!map) return null;
   const requested = normalizeStoreCategory(category);
   const direct = map.get(requested);
@@ -1071,7 +1184,7 @@ export async function getProductLifespanMap(): Promise<Map<number, number> | nul
   _lifespanRefresh = (async () => {
     try {
       let normalized: Record<string, unknown>[] | null = null;
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const products = await fetchAllPublishedProducts();
         if (products) normalized = products.map(normalizeProduct);
       } else {
@@ -1096,7 +1209,7 @@ export async function getProductLifespanMap(): Promise<Map<number, number> | nul
 
 export async function getProductCapacityMap(): Promise<Map<number, number> | null> {
   let normalized: Record<string, unknown>[] | null = null;
-  if (hasWCCredentials()) {
+  if (hasCompanionCatalogue()) {
     const products = await fetchAllPublishedProducts();
     if (products) normalized = products.map(normalizeProduct);
   } else {
@@ -1131,13 +1244,13 @@ router.get(
       return;
     }
     try {
-      let source = "mock";
+      let source = "companion";
       let normalized: Record<string, unknown>[] | null = null;
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const products = await fetchAllPublishedProducts();
         if (products) {
           normalized = products.map(normalizeProduct);
-          source = "woocommerce";
+          source = "companion";
         } else {
           // Store unreachable — say so loudly instead of silently auditing
           // the mock catalogue and reporting a false all-clear.
@@ -1267,7 +1380,7 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
     }
 
     // WooCommerce cross-sell enrichment (best-effort; silently skipped when absent).
-    if (hasWCCredentials() && skus.length > 0) {
+    if (hasCompanionCatalogue() && skus.length > 0) {
       for (const sku of skus) {
         // Look up the WC product by SKU to get its cross_sell_ids.
         const wcProducts = await wcFetchArray("/products", { sku, per_page: "1" });
@@ -1287,7 +1400,7 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
     if (collected.size > 0) {
       const ids = [...collected.keys()];
 
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const include = ids.join(",");
         const wcProducts = await wcFetchArray("/products", { include, per_page: "50" });
         if (wcProducts && wcProducts.length > 0) {
@@ -1304,28 +1417,13 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
         }
       }
 
-      // Fall back to MOCK_PRODUCTS for any IDs not resolved from WooCommerce.
-      const resolvedIds = new Set(results.map((p) => Number(p["id"])));
-      for (const id of ids) {
-        if (!resolvedIds.has(id)) {
-          const mock = MOCK_PRODUCTS.find((p) => p["id"] === id);
-          if (mock) {
-            results.push({
-              ...mock,
-              compatibilityReason: resolveCompatibilityReason(
-                mock,
-                collected.get(id) ?? "Compatible Accessory"
-              ),
-            });
-          }
-        }
-      }
+      // Unresolved legacy IDs are not products in the app-owned catalogue.
     }
 
     // Best-seller fallback — return first 4 products when nothing was matched.
     if (results.length === 0) {
       let fallback: Record<string, unknown>[] = [];
-      if (hasWCCredentials()) {
+      if (hasCompanionCatalogue()) {
         const wc = await wcFetchArray("/products", { orderby: "popularity", per_page: "4" });
         if (wc && wc.length > 0) {
           fallback = wc.map(normalizeProduct);
@@ -1368,21 +1466,52 @@ router.get("/uc/products/compatibility", async (req: Request, res: Response): Pr
 
 router.get("/uc/products/:id", async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(String(req.params["id"]));
+  const publicationSafe = req.query["publicationSafe"] === "true";
+  if (publicationSafe) {
+    res.setHeader("Cache-Control", "no-store");
+    if (!hasCompanionCatalogue()) {
+      res.status(503).json({ error: "Live product provider is not configured" });
+      return;
+    }
+  }
   try {
     let payload: Record<string, unknown> | null = null;
-    if (hasWCCredentials()) {
+    let publishedSource = false;
+    if (hasCompanionCatalogue()) {
       const product = await wcFetchOne(`/products/${id}`);
-      if (product) payload = normalizeProduct(product);
+      if (product) {
+        if (product["status"] !== "publish") {
+          res.status(404).json({ error: "Published product not found" }); return;
+        }
+        payload = normalizeProduct(product);
+        publishedSource = product["status"] === "publish";
+      }
     }
     if (!payload) {
-      const product = MOCK_PRODUCTS.find((p) => p["id"] === id);
-      if (!product) {
-        res.status(404).json({ error: "Not found" });
+      if (publicationSafe) {
+        res.status(503).json({ error: "Live product could not be verified" });
         return;
       }
-      payload = product;
+      res.status(404).json({ error: "Product not found in the app catalogue. Refresh your basket or use its permanent product address." });
+      return;
+    }
+    if (publicationSafe && !publishedSource) {
+      res.status(404).json({ error: "Published product not found" });
+      return;
     }
     const mediaMap = await fetchProductMediaMap([id]);
+    res.setHeader("X-UC-Product-Source", publishedSource ? "companion-published" : "unverified");
+    if (publicationSafe) {
+      const photos = (mediaMap.get(id) || []).filter(m => m.type === "photo");
+      res.setHeader("X-UC-Catalogue-Provenance", "companion-published");
+      res.json({
+        id: payload["id"], sku: payload["sku"], stockStatus: payload["stockStatus"],
+        price: payload["price"], salePrice: payload["salePrice"], regularPrice: payload["regularPrice"],
+        images: payload["images"],
+        uploadedPhotos: photos.map(m => ({ slot: m.position + 1, src: m.url, alt: m.alt })),
+      });
+      return;
+    }
     res.json(applyProductMedia(payload, mediaMap.get(id)));
   } catch {
     res.status(500).json({ error: "Failed to fetch product" });
@@ -1520,32 +1649,38 @@ router.post("/uc/products/:id/reviews", async (req: Request, res: Response): Pro
   } catch { /* keep JWT-derived name */ }
 
   try {
-    const existing = await db.query.ucReviewsTable.findFirst({
-      where: and(eq(ucReviewsTable.productId, productId), eq(ucReviewsTable.userId, userId)),
+    const result = await db.transaction(async (tx) => {
+      // Serialize saves with account deletion and other saves by this identity.
+      // Re-check after the lock: the earlier guard alone has a deletion race.
+      if (reviewNumericId > 0 && reviewNumericId < 1_000_000_000) {
+        const [user] = await tx.select().from(ucUsersTable)
+          .where(eq(ucUsersTable.id, reviewNumericId)).for("update");
+        if (user?.deletedAt) throw new Error("REVIEW_ACCOUNT_DELETED");
+      } else {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`review:${userId}`}))`);
+      }
+      const [existing] = await tx.select().from(ucReviewsTable)
+        .where(and(eq(ucReviewsTable.productId, productId), eq(ucReviewsTable.userId, userId))).limit(1).for("update");
+      const fields = { productId, userId, authorName, rating: stars,
+        title: typeof title === "string" ? title.trim() : "", body: text, media: items };
+      const [row] = existing
+        ? await tx.update(ucReviewsTable).set(fields).where(eq(ucReviewsTable.id, existing.id)).returning()
+        : await tx.insert(ucReviewsTable).values(fields).returning();
+      return { row, updated: !!existing };
     });
-    if (existing) {
-      const [updated] = await db
-        .update(ucReviewsTable)
-        .set({ rating: stars, title: typeof title === "string" ? title.trim() : "", body: text, media: items, authorName })
-        .where(eq(ucReviewsTable.id, existing.id))
-        .returning();
-      res.json({ ...updated, updated: true });
+    // Explicit customer response allowlist. Internal AI status, assessment,
+    // revisions, leases and fingerprints never leak to public clients.
+    const r = result.row!;
+    res.status(result.updated ? 200 : 201).json({
+      id: r.id, productId: r.productId, userId: r.userId, authorName: r.authorName,
+      rating: r.rating, title: r.title, body: r.body, media: r.media,
+      createdAt: r.createdAt, ...(result.updated ? { updated: true } : {}),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "REVIEW_ACCOUNT_DELETED") {
+      res.status(401).json({ error: "This account has been deleted" });
       return;
     }
-    const [row] = await db
-      .insert(ucReviewsTable)
-      .values({
-        productId,
-        userId,
-        authorName,
-        rating: stars,
-        title: typeof title === "string" ? title.trim() : "",
-        body: text,
-        media: items,
-      })
-      .returning();
-    res.status(201).json(row);
-  } catch (err) {
     logger.error({ err, productId, userId }, "Failed to save review");
     res.status(500).json({ error: "Failed to save review" });
   }
@@ -1579,8 +1714,12 @@ async function verifyUploadedMediaItems(items: ReviewMediaItem[]): Promise<strin
     try {
       const file = await objectStorage.getObjectEntityFile(objectPath);
       const [metadata] = await file.getMetadata();
-      let contentType = String(metadata.contentType ?? "").toLowerCase();
+      const contentType = String(metadata.contentType ?? "").split(";")[0].trim().toLowerCase();
       const size = Number(metadata.size ?? 0);
+      const cap = item.type === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+      if (!Number.isFinite(size) || size <= 0 || size > cap) {
+        return `Attachment exceeds the ${Math.round(cap / 1024 / 1024)} MB limit`;
+      }
       if (!contentType || contentType === "application/octet-stream") {
         const uploadResult = await pool.query(
           `SELECT declared_type, declared_size
@@ -1598,25 +1737,13 @@ async function verifyUploadedMediaItems(items: ReviewMediaItem[]): Promise<strin
         if (mediaMimeFamily(declaredType) !== item.type || declaredSize !== size) {
           return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
         }
-        const header = await new Promise<Buffer>((resolve, reject) => {
-          const chunks: Buffer[] = [];
-          const stream = file.createReadStream({ start: 0, end: 63 });
-          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-          stream.on("end", () => resolve(Buffer.concat(chunks)));
-          stream.on("error", reject);
-        });
-        const detectedType = detectReviewMediaMime(header);
-        if (!detectedType || mediaMimeFamily(detectedType) !== item.type) {
-          return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
-        }
-        contentType = detectedType;
-        await file.setMetadata({ contentType: detectedType });
       }
-      if (item.type === "photo" && !contentType.startsWith("image/")) return "Attachment is not an image";
-      if (item.type === "video" && !contentType.startsWith("video/")) return "Attachment is not a video";
-      const cap = item.type === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
-      if (size <= 0 || size > cap) {
-        return `Attachment exceeds the ${Math.round(cap / 1024 / 1024)} MB limit`;
+      const detectedType = await verifyReviewMediaContent(file, contentType, item.type);
+      if (!detectedType) {
+        return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
+      }
+      if (!contentType || contentType === "application/octet-stream") {
+        await file.setMetadata({ contentType: detectedType });
       }
     } catch (err) {
       if (err instanceof ObjectNotFoundError) return "Attachment upload not found — please re-attach it";
@@ -1657,7 +1784,8 @@ router.get("/uc/admin/products/:id/media", async (req: Request, res: Response): 
       .from(ucProductMediaTable)
       .where(eq(ucProductMediaTable.productId, productId))
       .orderBy(asc(ucProductMediaTable.position), asc(ucProductMediaTable.id));
-    res.json(rows);
+    const slots = productVideoSlots(rows);
+    res.json(rows.map(row => ({ ...row, ...(row.type === "video" && slots.includes(row) ? { videoSlot: slots.indexOf(row) + 1 } : {}) })));
   } catch (err) {
     logger.error({ err, productId }, "Failed to load product media");
     res.status(500).json({ error: "Failed to load product media" });
@@ -1689,17 +1817,31 @@ router.post("/uc/admin/products/:id/media", async (req: Request, res: Response):
     return;
   }
   try {
-    const [row] = await db
-      .insert(ucProductMediaTable)
+    const result = await db.transaction(async tx => {
+      let targetPosition = Number.isInteger(Number(position)) ? Number(position) : 0;
+      if (mediaType === "video") {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`product-videos:${productId}`}))`);
+        const existing = await tx.select().from(ucProductMediaTable)
+          .where(and(eq(ucProductMediaTable.productId, productId), eq(ucProductMediaTable.type, "video")))
+          .orderBy(asc(ucProductMediaTable.position), asc(ucProductMediaTable.id));
+        const slots = productVideoSlots(existing);
+        if (position !== undefined && position !== 1 && position !== 2) return { ok: false as const, error: "Video slot must be 1 or 2", status: 400 };
+        targetPosition = position === undefined ? slots.indexOf(null) + 1 : Number(position);
+        if (targetPosition < 1 || slots[targetPosition - 1]) return { ok: false as const, error: "Video slot is occupied. Remove that clip before replacing it.", status: 409 };
+      }
+      const [row] = await tx.insert(ucProductMediaTable)
       .values({
         productId,
         type: mediaType,
         url: normalized,
         alt: typeof alt === "string" ? alt : "",
-        position: Number.isInteger(Number(position)) ? Number(position) : 0,
+        position: targetPosition,
       })
       .returning();
-    res.status(201).json(row);
+      return { ok: true as const, row };
+    });
+    if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+    res.status(201).json({ ...result.row, ...(mediaType === "video" ? { videoSlot: result.row.position } : {}) });
   } catch (err) {
     logger.error({ err, productId }, "Failed to add product media");
     res.status(500).json({ error: "Failed to add product media" });
@@ -1783,7 +1925,7 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
       return;
     }
     const dbUser = dbUsers[0];
-    if (dbUser && dbUser.authProvider !== "woocommerce") {
+    if (dbUser && dbUser.authProvider === "password") {
       const match = await bcryptjs.compare(password, dbUser.passwordHash);
       if (!match) {
         res.status(401).json({ error: "Invalid credentials" });
@@ -1813,152 +1955,21 @@ router.post("/uc/auth/login", authLimiter, async (req: Request, res: Response): 
         phoneVerified: dbUser.phoneVerified,
       };
       res.json({ token: issueToken(user), user });
+      void reconcileAssignmentsForAccount(dbUser.id);
       return;
     }
-  } catch {
-    // Keep WooCommerce login available when the Companion database is
-    // temporarily unavailable; provisioning below remains fail-closed.
-  }
-
-  try {
-    const wcBase = process.env["WC_BASE_URL"] || "https://www.ucfilters.com";
-    if (!normalizedEmail) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-    const jwtRes = await fetch(`${wcBase}/wp-json/jwt-auth/v1/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: normalizedEmail, password }),
-    });
-    const jwtData: unknown = await jwtRes.json();
-    if (
-      !jwtRes.ok
-      || !jwtData
-      || typeof jwtData !== "object"
-      || !("token" in jwtData)
-      || typeof (jwtData as Record<string, unknown>)["token"] !== "string"
-      || !((jwtData as Record<string, unknown>)["token"] as string).trim()
-    ) {
-      // Preserve the development-only demo-session path when Woo explicitly
-      // rejects credentials or is unavailable. Production still fails closed
-      // after the catch below.
-      throw new Error("WooCommerce credentials were not verified");
-    }
-    if (
-      typeof (jwtData as Record<string, unknown>)["user_email"] !== "string"
-      || !((jwtData as Record<string, unknown>)["user_email"] as string).trim()
-    ) {
-      // A successful token response must bind the asserted account to a
-      // provider-owned email; never downgrade an incomplete success to demo.
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-    const providerEmail = normalizeEmail((jwtData as Record<string, unknown>)["user_email"] as string);
-    if (!providerEmail || providerEmail !== normalizedEmail) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-    if (
-      jwtData &&
-      typeof jwtData === "object" &&
-      "token" in jwtData &&
-      typeof (jwtData as Record<string, unknown>)["token"] === "string"
-    ) {
-      const d = jwtData as Record<string, unknown>;
-      const displayName = (d["user_display_name"] as string | undefined) ?? "";
-      const wcEmail = providerEmail;
-      const firstName = displayName.split(" ")[0] || "Customer";
-      const lastName = displayName.split(" ").slice(1).join(" ");
-
-      const wooClient = await pool.connect();
-      let provisioned: any = null;
-      try {
-        await wooClient.query("BEGIN");
-        const classification = await resolveCustomerIdentity({ email: wcEmail }, wooClient);
-        if (classification.kind === "one_active_candidate") {
-          const existing = await wooClient.query<any>(
-            "SELECT * FROM uc_users WHERE id=$1", [classification.customerId],
-          );
-          // Woo credentials were verified above. Existing Companion/password
-          // accounts still require their Companion password and are never
-          // claimed or modified by this fallback.
-          if (existing.rows[0]?.auth_provider === "woocommerce") {
-            const row = existing.rows[0];
-            provisioned = {
-              id: row.id, email: row.email, phone: row.phone,
-              firstName: row.first_name, lastName: row.last_name,
-              address: row.address, credentialVersion: row.credential_version,
-              emailVerified: row.email_verified, phoneVerified: row.phone_verified,
-            };
-          }
-        } else if (classification.kind === "create_allowed") {
-          const passwordHash = await bcryptjs.hash(randomUUID(), 10);
-          const inserted = await wooClient.query<any>(
-            `INSERT INTO uc_users(email,password_hash,first_name,last_name,auth_provider,email_verified)
-             VALUES($1,$2,$3,$4,'woocommerce',true) RETURNING *`,
-            [wcEmail, passwordHash, firstName, lastName],
-          );
-          const row = inserted.rows[0];
-          if (row) {
-            provisioned = {
-              id: row.id, email: row.email, phone: row.phone,
-              firstName: row.first_name, lastName: row.last_name,
-              address: row.address, credentialVersion: row.credential_version,
-              emailVerified: row.email_verified, phoneVerified: row.phone_verified,
-            };
-          }
-        }
-        await wooClient.query("COMMIT");
-      } catch (error) {
-        await wooClient.query("ROLLBACK").catch(() => undefined);
-        throw error;
-      } finally {
-        wooClient.release();
-      }
-
-      if (!provisioned) {
-        res.status(409).json({
-          error: "A Companion account already uses this email. Sign in with its Companion password.",
-        });
-        return;
-      }
-
-      const user = {
-        id: provisioned.id,
-        email: provisioned.email,
-        phone: provisioned.phone,
-        firstName: provisioned.firstName,
-        lastName: provisioned.lastName,
-        address: provisioned.address ?? "",
-        credentialVersion: provisioned.credentialVersion,
-        emailVerified: provisioned.emailVerified,
-        phoneVerified: provisioned.phoneVerified,
-      };
-      res.json({ token: issueToken({ ...user, src: "woo" }), user });
-      return;
-    }
-  } catch { /* fall through to development-only demo session */ }
-
-  // No database or WooCommerce account. Development only: allow an ephemeral
-  // demo session so the app can be tried before external credentials exist.
-  if (process.env["NODE_ENV"] !== "production" && password.length >= 6) {
-    const name = loginIdentifier.split("@")[0] ?? "customer";
-    const mockUser = {
-      id:        Date.now(),
-      email: loginIdentifier,
-      phone:     "",
-      firstName: name.charAt(0).toUpperCase() + name.slice(1),
-      lastName:  "Customer",
-    };
-    res.json({ token: issueToken(mockUser), user: mockUser });
+  } catch (err) {
+    logger.error({ err, event: "companion_login_unavailable" }, "Companion login unavailable");
+    res.status(503).json({ error: "Sign-in is temporarily unavailable. Please try again." });
     return;
   }
-  res.status(401).json({ error: "Invalid credentials" });
+  res.status(401).json({ error: "Use your Companion password, or choose Forgot password to set one securely." });
+  return;
 });
 
 router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response): Promise<void> => {
-  const { email, phone, password, firstName, lastName, referralCode } = req.body as {
+  const { email, phone, password, firstName, lastName, referralCode, address } = req.body as {
+    address?: string;
     email?: string;
     phone?: string;
     password?: string;
@@ -1966,7 +1977,12 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     lastName?: string;
     referralCode?: string;
   };
-  if (!email || !phone || !password || !firstName) {
+  const contact = validateCustomerContact({ phone, address });
+  if (!contact.ok) {
+    res.status(400).json({ error: Object.values(contact.fields).join(" "), fields: contact.fields });
+    return;
+  }
+  if (typeof email !== "string" || !email.trim() || typeof password !== "string" || !password || typeof firstName !== "string" || !firstName.trim()) {
     res.status(400).json({ error: "First name, email, phone number and password are required" });
     return;
   }
@@ -1975,7 +1991,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
     return;
   }
   const normalizedEmail = normalizeEmail(email);
-  const cleanPhone = normalizePhone(phone);
+  const cleanPhone = contact.phone;
   if (!cleanPhone) {
     res.status(400).json({ error: phoneValidationMessage() });
     return;
@@ -2012,9 +2028,9 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       } else {
           const passwordHash = await bcryptjs.hash(password, 10);
           const inserted = await registrationClient.query(
-            `INSERT INTO uc_users(email,password_hash,phone,email_verified,phone_verified,first_name,last_name)
-             VALUES($1,$2,$3,false,false,$4,$5) RETURNING *`,
-            [normalizedEmail, passwordHash, cleanPhone, firstName.trim(), lastName?.trim() ?? ""],
+            `INSERT INTO uc_users(email,password_hash,phone,email_verified,phone_verified,first_name,last_name,address)
+             VALUES($1,$2,$3,false,false,$4,$5,$6) RETURNING *`,
+            [normalizedEmail, passwordHash, cleanPhone, firstName.trim(), typeof lastName === "string" ? lastName.trim() : "", contact.address],
           );
           const row = inserted.rows[0];
           let referral: { status: string } | undefined;
@@ -2060,6 +2076,7 @@ router.post("/uc/auth/register", authLimiter, async (req: Request, res: Response
       emailVerified: dbUser!.emailVerified,
       phoneVerified: dbUser!.phoneVerified,
     };
+    void reconcileAssignmentsForAccount(dbUser!.id);
     // Durable folder record of the new account (sanitized — never password material).
     recordAccountRegistration({
       id: dbUser!.id, firstName: dbUser!.firstName, lastName: dbUser!.lastName,
@@ -2251,6 +2268,7 @@ async function consumeContactVerification(rawToken: string): Promise<boolean> {
     );
     await client.query("COMMIT");
     logger.info({ event: "contact_verification_completed", channel: credential.channel, result: "completed" }, "Contact verified");
+    await reconcileAssignmentsForAccount(Number(credential.user_id));
     return true;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -2550,7 +2568,7 @@ async function issueCompanionReset(
   }
   const rawToken = randomUUID();
   const tokenHash = hashResetToken(rawToken);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   // A newly-issued reset supersedes every previous outstanding link.
   await db.transaction(async (tx) => {
     await tx.update(passwordResetTokensTable)
@@ -2568,8 +2586,8 @@ async function issueCompanionReset(
       from: "Ultra Clear App <noreply@contacts.ucfilters.com>",
       to: user.email,
       subject: "Reset your Ultra-Clear password",
-      text: `Use this one-time link to choose a new password (valid for 24 hours):\n${companionResetUrl}\n\nWeb alternative:\n${webResetUrl}`,
-      html: `<p>Use this one-time link to choose a new password (valid for 24 hours).</p><p><a href="${companionResetUrl}">Reset in the Ultra-Clear app</a></p><p><a href="${webResetUrl}">Reset on the web</a></p>`,
+      text: `Use this one-time link to choose a new password (valid for 1 hour):\n${companionResetUrl}\n\nWeb alternative:\n${webResetUrl}`,
+      html: `<p>Use this one-time link to choose a new password (valid for 1 hour).</p><p><a href="${companionResetUrl}">Reset in the Ultra-Clear app</a></p><p><a href="${webResetUrl}">Reset on the web</a></p>`,
       meta: { template: "uc-password-reset" },
       logBody: "Password reset email dispatched (reset URL redacted)",
     });
@@ -2577,7 +2595,7 @@ async function issueCompanionReset(
     const phone = normalizePhone(user.phone);
     if (phone) {
       try {
-        await sendWhatsAppMessage(phone, `Ultra-Clear password reset (valid for 24 hours): ${companionResetUrl}`);
+        await sendWhatsAppMessage(phone, `Ultra-Clear password reset (valid for 1 hour): ${companionResetUrl}`);
         sent = true;
       } catch {
         sent = false;
@@ -2596,7 +2614,7 @@ async function issueCompanionReset(
 }
 
 /** POST /uc/auth/forgot-password — always 200 to prevent account enumeration */
-router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+router.post(["/uc/auth/reset-request", "/uc/auth/forgot-password"], authLimiter, async (req: Request, res: Response): Promise<void> => {
   const { email, phone, identifier, channel } = req.body ?? {};
   const supplied = typeof identifier === "string" ? identifier : typeof email === "string" ? email : phone;
   if (!supplied || typeof supplied !== "string") {
@@ -2616,7 +2634,7 @@ router.post("/uc/auth/forgot-password", authLimiter, async (req: Request, res: R
     });
     // The response and event deliberately do not distinguish missing accounts,
     // unavailable channels, or delivery configuration.
-    const selectedChannel = user && user.authProvider === "password"
+    const selectedChannel = user && ["password", "woocommerce"].includes(user.authProvider)
       ? preferredRecoveryChannel(user, channel)
       : null;
     if (user && selectedChannel) await issueCompanionReset(user, selectedChannel, { type: "self" });
@@ -2664,7 +2682,7 @@ router.post("/uc/admin/users/:id/reset-password", async (req: Request, res: Resp
     res.status(202).json({ ok: true });
     return;
   }
-  const channel = target.authProvider === "password"
+  const channel = ["password", "woocommerce"].includes(target.authProvider)
     ? preferredRecoveryChannel(target, requestedChannel)
     : null;
   if (!channel) {
@@ -2889,7 +2907,7 @@ router.get("/uc/auth/reset-password", async (req: Request, res: Response): Promi
  * The conditional UPDATE returns 0 rows if the token was already consumed or has
  * expired, making the entire operation idempotent and race-free.
  */
-router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Response): Promise<void> => {
+router.post(["/uc/auth/reset-confirm", "/uc/auth/reset-password"], authLimiter, async (req: Request, res: Response): Promise<void> => {
   const { token, newPassword } = req.body ?? {};
   if (!token || typeof token !== "string" || !newPassword) {
     res.status(400).json({ error: "token and newPassword are required." });
@@ -2973,10 +2991,11 @@ router.post("/uc/auth/reset-password", authLimiter, async (req: Request, res: Re
     const updated = await client.query(
       `UPDATE uc_users
           SET password_hash = $1,
+              auth_provider = 'password',
               credential_version = credential_version + 1,
               must_change_password = false,
               temporary_password_expires_at = NULL
-        WHERE id = $2 AND auth_provider = 'password' AND deleted_at IS NULL`,
+        WHERE id = $2 AND auth_provider IN ('password','woocommerce') AND deleted_at IS NULL`,
       [passwordHash, userId],
     );
     if ((updated.rowCount ?? 0) !== 1) {
@@ -3124,6 +3143,7 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
           res.status(401).json({ error: "This account has been deleted" });
           return;
         }
+        await reconcileAssignmentsForAccount(dbUser.id);
         res.json({
           id: dbUser.id,
           email: publicCompanionEmail(dbUser.email),
@@ -3158,7 +3178,7 @@ router.get("/uc/customer/profile", async (req: Request, res: Response): Promise<
 
 router.patch("/uc/customer/profile", async (req: Request, res: Response): Promise<void> => {
   const claims = verifyToken(req.headers["authorization"]);
-  if (!claims) {
+  if (!claims || claims.type === "team-session") {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
@@ -3170,18 +3190,18 @@ router.patch("/uc/customer/profile", async (req: Request, res: Response): Promis
     address?:   string;
   };
 
-  if (firstName !== undefined && !firstName.trim()) {
+  if (firstName !== undefined && (typeof firstName !== "string" || !firstName.trim())) {
     res.status(400).json({ error: "First name cannot be empty" });
     return;
   }
-  if (phone !== undefined && phone !== "") {
+  if (phone !== undefined) {
     if (!normalizePhone(phone)) {
       res.status(400).json({ error: phoneValidationMessage() });
       return;
     }
   }
-  if (address !== undefined && address.length > 500) {
-    res.status(400).json({ error: "Address must be 500 characters or fewer" });
+  if (address !== undefined && (typeof address !== "string" || !address.trim() || address.trim().length > 500)) {
+    res.status(400).json({ error: "Enter a contact address of 500 characters or fewer", fields: { address: "Enter a contact address of 500 characters or fewer" } });
     return;
   }
 
@@ -3420,6 +3440,15 @@ router.get("/uc/customer/data-export", async (req: Request, res: Response): Prom
         body:       r.body,
         media:      r.media ?? [],
         createdAt:  r.createdAt,
+        editedAt:   r.editedAt,
+        automatedTextAssessment: {
+          status: r.analysis.status,
+          category: r.analysis.category ?? null,
+          explanation: r.analysis.explanation ?? null,
+          themes: r.analysis.themes ?? [],
+          analyzedAt: r.analysis.analyzedAt ?? null,
+          version: r.analysis.version,
+        },
       })),
       notificationPreferences: notifPrefRows.map(p => ({
         optOutOrderUpdates: p.optOutOrders,
@@ -3625,19 +3654,38 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
     //    isAdmin is cleared so any still-valid bearer tokens lose DB-level privilege.
     //    deletedAt is set so all DB-anchored customer routes reject further requests
     //    with this token (token revocation without a token blacklist).
-    await db
-      .update(ucUsersTable)
-      .set({
-        email:        `deleted-${numericId}@deleted.invalid`,
-        passwordHash: await bcryptjs.hash(Math.random().toString(36), 10),
-        firstName:    DELETED,
-        lastName:     "",
-        phone:        "",
-        address:      "",
-        isAdmin:      false,
-        deletedAt:    new Date(),
-      })
-      .where(eq(ucUsersTable.id, numericId));
+    const erasedPassword = await bcryptjs.hash(Math.random().toString(36), 10);
+    await db.transaction(async (tx) => {
+      // Serialize with assignment creation/claims before anonymising contact
+      // fields. Otherwise the erased identity could look like a new guest.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`uc-email:${normalizeEmail(existing.email)}`}))`);
+      const deletedPhone = normalizePhone(existing.phone);
+      if (deletedPhone) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`uc-phone:${deletedPhone}`}))`);
+      await tx.execute(sql`
+        WITH marked AS (
+          UPDATE uc_customer_assignments SET status='review',review_reason='deleted_account_ambiguity'
+          WHERE status<>'linked' AND (target_account_id=${numericId}
+            OR email=${normalizeEmail(existing.email)} OR phone=${deletedPhone ?? ""})
+            AND review_reason IS DISTINCT FROM 'deleted_account_ambiguity'
+          RETURNING id
+        )
+        INSERT INTO uc_customer_assignment_audit(assignment_id,actor,action,details)
+        SELECT id,'account-deletion','link_deferred',${JSON.stringify({ reason:"deleted_account_ambiguity", accountId:numericId })}::jsonb
+        FROM marked
+      `);
+      await tx.update(ucUsersTable).set({
+        email: `deleted-${numericId}@deleted.invalid`, passwordHash: erasedPassword,
+        firstName: DELETED, lastName: "", phone: "", address: "",
+        isAdmin: false, deletedAt: new Date(),
+      }).where(eq(ucUsersTable.id, numericId));
+      await tx.execute(sql`DELETE FROM uc_daily_hydration WHERE user_id = ${numericId}`);
+      // Erasure and review invalidation commit atomically. A later failure in
+      // another deletion step cannot leave retained AI-derived personal text
+      // behind an already-deleted identity. The trigger clears all job data.
+      await tx.update(ucReviewsTable)
+        .set({ authorName: DELETED, title: "", body: DELETED, media: [] })
+        .where(eq(ucReviewsTable.userId, userId));
+    });
 
     // 5. Redact personal fields on linked orders (shipping address carries name/phone)
     await db
@@ -3663,12 +3711,8 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
       .set({ name: DELETED, phone: "", address: "", concerns: "", photos: [], videos: [] })
       .where(eq(ucWaterTestsTable.userId, userId));
 
-    // 9. Redact public review content (authorName + free text + media refs).
-    //    Reviews are publicly visible, so redaction is mandatory.
-    await db
-      .update(ucReviewsTable)
-      .set({ authorName: DELETED, title: "", body: DELETED, media: [] })
-      .where(eq(ucReviewsTable.userId, userId));
+    // 9. Public review content and derived analysis were redacted atomically
+    //    with the account in step 4; do not invalidate their revision twice.
 
     // 10. Redact notification-log rows whose recipient/body carry PII.
     //     Redact recipient (email/phone) and messageBody for every log entry
@@ -3809,14 +3853,19 @@ router.delete("/uc/customer", async (req: Request, res: Response): Promise<void>
 });
 
 // ─── Payment verification helpers (server-side; called before order creation) ─
-async function verifyPaymentOnServer(
+export async function verifyPaymentOnServer(
   method: string,
   reference: string
-): Promise<{ ok: boolean; reason?: string; retryable?: boolean }> {
+): Promise<{ ok: boolean; reason?: string; retryable?: boolean; amount?: number; currency?: string; failureFinal?: boolean }> {
   // COD requires no pre-payment
-  if (method === "cod") return { ok: true };
+  if (method === "cod" || method === "free") return { ok: true };
 
   if (!reference) return { ok: false, reason: "No payment reference provided" };
+
+  if (["mpesa", "stripe", "paystack"].includes(method) && !paymentProviderConfigured(method)) {
+    if (paymentMocksAllowed()) return { ok: true };
+    return { ok: false, reason: `${method} payment verification is unavailable`, retryable: true };
+  }
 
   // ── M-Pesa ──
   if (method === "mpesa") {
@@ -3824,17 +3873,14 @@ async function verifyPaymentOnServer(
     const passkey = process.env["MPESA_PASSKEY"];
     const key = process.env["MPESA_CONSUMER_KEY"];
     const secret = process.env["MPESA_CONSUMER_SECRET"];
-    if (!key || !secret || !shortcode || !passkey) {
-      // Mock mode: accept any reference
-      return { ok: true };
-    }
     try {
       const creds = Buffer.from(`${key}:${secret}`).toString("base64");
       const env = process.env["MPESA_ENV"] === "production" ? "api" : "sandbox";
       const tokenRes = await fetch(
         `https://${env}.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials`,
-        { headers: { Authorization: `Basic ${creds}` } }
+        { headers: { Authorization: `Basic ${creds}` }, signal: AbortSignal.timeout(10_000) }
       );
+      if (!tokenRes.ok) return { ok: false, reason: "M-Pesa token request failed" };
       const tokenData = (await tokenRes.json()) as { access_token?: string };
       const token = tokenData.access_token;
       if (!token) return { ok: false, reason: "Failed to get M-Pesa token" };
@@ -3844,10 +3890,13 @@ async function verifyPaymentOnServer(
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ BusinessShortCode: shortcode, Password: password, Timestamp: timestamp, CheckoutRequestID: reference }),
+        signal: AbortSignal.timeout(10_000),
       });
+      if (!qRes.ok) return { ok: false, reason: "M-Pesa verification request failed" };
       const qData = (await qRes.json()) as Record<string, string>;
       const ok = qData["ResultCode"] === "0";
-      return ok ? { ok: true } : { ok: false, reason: qData["ResultDesc"] ?? "M-Pesa not confirmed" };
+      const initiation = await pool.query("SELECT expected_amount FROM mpesa_stk_initiations WHERE checkout_request_id=$1", [reference]);
+      return ok ? { ok: true, amount: Number(initiation.rows[0]?.expected_amount), currency: "KES" } : { ok: false, failureFinal: ["1","1032","1037","2001"].includes(String(qData.ResultCode)), reason: qData["ResultDesc"] ?? "M-Pesa not confirmed" };
     } catch {
       return { ok: false, reason: "M-Pesa verification request failed" };
     }
@@ -3855,17 +3904,13 @@ async function verifyPaymentOnServer(
 
   // ── Stripe ──
   if (method === "stripe") {
-    const stripeKey = process.env["STRIPE_SECRET_KEY"];
-    if (!stripeKey) {
-      // Mock mode: accept any session ID
-      return { ok: true };
-    }
     try {
-      const StripeSDK = await import("stripe");
-      const stripe = new StripeSDK.default(stripeKey);
+      // Initialization and reconciliation use one configured SDK and test seam.
+      const stripe = await (await import("./payments.js")).getStripe();
+      if (!stripe) return { ok: false, reason: "Stripe verification unavailable" };
       const session = await stripe.checkout.sessions.retrieve(reference);
       const ok = session.payment_status === "paid";
-      return ok ? { ok: true } : { ok: false, reason: `Stripe session status: ${session.payment_status}` };
+      return ok ? { ok: true, amount: Number(session.amount_total) / 100, currency: session.currency?.toUpperCase() } : { ok: false, failureFinal: session.status === "expired", reason: `Stripe session status: ${session.payment_status}` };
     } catch (e: unknown) {
       return { ok: false, reason: (e as Error).message };
     }
@@ -3874,14 +3919,10 @@ async function verifyPaymentOnServer(
   // ── Paystack ──
   if (method === "paystack") {
     const secretKey = process.env["PAYSTACK_SECRET_KEY"];
-    if (!secretKey) {
-      // Mock mode: accept any reference
-      return { ok: true };
-    }
     try {
       const vRes = await fetch(
         `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-        { headers: { Authorization: `Bearer ${secretKey}` } }
+        { headers: { Authorization: `Bearer ${secretKey}` }, signal: AbortSignal.timeout(10_000) }
       );
       // Treat upstream 5xx / 429 as a transient outage — Paystack blips commonly
       // manifest as a non-2xx HTTP response rather than a thrown exception.
@@ -3893,9 +3934,9 @@ async function verifyPaymentOnServer(
           ...(isTransient ? { retryable: true } : {}),
         };
       }
-      const vData = (await vRes.json()) as { status: boolean; data?: { status: string } };
+      const vData = (await vRes.json()) as { status: boolean; data?: { status: string; amount?: number; currency?: string } };
       const ok = vData.status && vData.data?.status === "success";
-      return ok ? { ok: true } : { ok: false, reason: `Paystack status: ${vData.data?.status ?? "unknown"}` };
+      return ok ? { ok: true, amount: Number(vData.data?.amount) / 100, currency: vData.data?.currency } : { ok: false, failureFinal: vData.status === true && ["failed","abandoned","reversed"].includes(vData.data?.status ?? ""), reason: `Paystack status: ${vData.data?.status ?? "unknown"}` };
     } catch {
       // Network or timeout — transient; caller should offer a retry path.
       return { ok: false, reason: "Paystack verification request failed", retryable: true };
@@ -3942,23 +3983,39 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
         if (fetched.length < PER_PAGE) { complete = true; break; }
       }
       if (complete) {
+        // Staff-confirmed guest COD orders are authorized by the durable
+        // assignment, not by fuzzy Woo billing-email search.
+        const assignedOrders = (await pool.query<{ wc_order_id: number | null; id: number }>(
+          `SELECT DISTINCT o.id,o.wc_order_id FROM uc_orders o
+           JOIN uc_customer_assignments a ON a.order_id=o.id
+           WHERE a.linked_account_id=$1 AND a.status='linked' AND o.user_id=$2`,
+          [Number(claims.id), userId])).rows;
+        const assignedWooIds = new Set(assignedOrders.flatMap(o => o.wc_order_id ? [o.wc_order_id] : []));
+        const missing = [...assignedWooIds].filter(id => !orders.some(o => Number(o["id"]) === id));
+        for (let offset = 0; offset < missing.length; offset += 100) {
+          const fetched = await wcFetchArray("/orders", { include: missing.slice(offset, offset + 100).join(","), per_page: "100" }, AbortSignal.timeout(15000));
+          if (!fetched || missing.slice(offset, offset + 100).some(id => !fetched.some(o => Number(o["id"]) === id))) {
+            res.status(502).json({ error: "Assigned order history is temporarily unavailable.", retryable: true }); return;
+          }
+          orders.push(...fetched);
+        }
         // The local cash ledger wins over a stale Woo mirror once staff has
         // confirmed collection. This only overlays COD payment truth; all
         // other Woo order data remains authoritative.
-        const localOrders = await db.select({
-          wcOrderId: ucOrdersTable.wcOrderId,
-          status: ucOrdersTable.status,
-          codCollectionStatus: ucOrdersTable.codCollectionStatus,
-          customerStage: ucOrdersTable.customerStage,
-          customerStageUpdatedAt: ucOrdersTable.customerStageUpdatedAt,
-        }).from(ucOrdersTable).where(eq(ucOrdersTable.userId, userId));
+        const localOrders = await db.select().from(ucOrdersTable).where(eq(ucOrdersTable.userId, userId));
         const collectedByWcId = new Map(localOrders
           .filter(local => local.codCollectionStatus === "collected" && local.wcOrderId != null)
           .map(local => [local.wcOrderId!, local]));
-        res.json(orders
+        const unsynchronized = await db.select().from(ucOrdersTable).where(and(eq(ucOrdersTable.userId, userId), isNull(ucOrdersTable.wcOrderId)));
+        const assignedLocalIds = unsynchronized.map(o => o.id);
+        const localAssigned = assignedLocalIds.length ? await db.select().from(ucOrdersTable)
+          .where(and(inArray(ucOrdersTable.id, assignedLocalIds), eq(ucOrdersTable.userId, userId))) : [];
+        const assignedItems = assignedLocalIds.length ? await db.select().from(ucOrderItemsTable)
+          .where(inArray(ucOrderItemsTable.orderId, assignedLocalIds)) : [];
+        const visibleOrders = orders
           .filter(o => {
             const billing = o["billing"] as Record<string, unknown> | undefined;
-            return String(billing?.["email"] ?? "").toLowerCase() === emailLc;
+            return String(billing?.["email"] ?? "").toLowerCase() === emailLc || assignedWooIds.has(Number(o["id"]));
           })
           .sort((a, b) => String(b["date_created"] ?? "").localeCompare(String(a["date_created"] ?? "")))
           .map(order => {
@@ -3968,6 +4025,11 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
             return projection
               ? {
                 ...normalized,
+                ...orderEvidence({ ...projection, status: String(normalized.status) }),
+                // A lagging local COD collection ledger must not overwrite
+                // Woo's explicit date_paid evidence with awaiting_collection.
+                ...(normalized.paymentStatus === "paid" ? { paymentStatus: "paid" } : {}),
+                shippingAddress: projection.shippingAddress ?? normalized.shippingAddress,
                 ...(projection.customerStage ? {
                   customerStage: projection.customerStage,
                   customerStageUpdatedAt: projection.customerStageUpdatedAt,
@@ -3975,7 +4037,17 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
                 ...(local ? { status: local.status, paymentStatus: "paid", codCollectionStatus: "collected" } : {}),
               }
               : normalized;
-          }));
+          });
+        res.json([...visibleOrders, ...localAssigned.map(o => ({
+          id: o.id, status: o.status, dateCreated: o.dateCreated,
+          total: o.total, currency: o.currency, paymentMethod: o.paymentMethod,
+          paymentReference: o.paymentReference ?? "", codCollectionStatus: o.codCollectionStatus,
+          ...orderEvidence(o),
+          shippingAddress: o.shippingAddress ?? {},
+          lineItems: assignedItems.filter(i => i.orderId === o.id).map(i => ({
+            productId: i.productId, name: i.name, quantity: i.quantity, total: i.total,
+          })),
+        }))]);
         return;
       }
       // The local mirror may not include historic store purchases. Never claim
@@ -4022,9 +4094,7 @@ router.get("/uc/orders", async (req: Request, res: Response): Promise<void> => {
       customerStageUpdatedAt: o.customerStageUpdatedAt ?? null,
       statusEvents:     (eventsByOrder[String(o.id)] ?? []).slice(0, 20),
       fulfillmentStatus: o.status,
-      paymentStatus:   o.status === "completed" || o.status === "processing"
-        ? "paid"
-        : ["cancelled", "failed", "refunded"].includes(o.status) ? o.status : "pending",
+      ...orderEvidence(o),
       dateCreated:     o.dateCreated,
       total:           o.total,
       currency:        o.currency,
@@ -4181,9 +4251,6 @@ router.get("/uc/orders/:orderId", async (req: Request, res: Response): Promise<v
       ),
     ]);
     const fulfillmentStatus = order.customerStage ?? order.status;
-    const paymentStatus = ["completed", "processing"].includes(order.status)
-      ? "paid"
-      : ["cancelled", "failed", "refunded"].includes(order.status) ? order.status : "pending";
     res.json({
       id: order.id,
       orderNumber: order.wcOrderId ?? order.id,
@@ -4191,7 +4258,9 @@ router.get("/uc/orders/:orderId", async (req: Request, res: Response): Promise<v
       customerStage: order.customerStage,
       customerStageUpdatedAt: order.customerStageUpdatedAt,
       fulfillmentStatus,
-      paymentStatus,
+      ...orderEvidence(order),
+      receiptSerial: orderReceiptSerial(order.wcOrderId ?? order.id, order.dateCreated),
+      paymentReference: order.paymentMethod === "cod" ? "" : order.mpesaReceipt || order.paymentReference || "",
       total: order.total,
       currency: order.currency,
       paymentMethod: order.paymentMethod,
@@ -4294,6 +4363,17 @@ async function saveCustomerStage(input: {
   } catch (err) { await client.query("ROLLBACK").catch(() => undefined); throw err; } finally { client.release(); }
 }
 
+router.get("/uc/admin/orders/reconciliation-report", async (req, res): Promise<void> => {
+  if (!(await isAdminRequest(req.headers.authorization))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const text = typeof req.query.ids === "string" ? req.query.ids : "";
+  const ids = [...new Set(text.split(",").map(Number))];
+  if (!ids.length || ids.length > 100 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+    res.status(400).json({ error: "Provide 1–100 local order IDs in ids, separated by commas." }); return;
+  }
+  res.set("Cache-Control", "no-store");
+  try { res.json(await checkoutDiagnostics(pool, ids)); }
+  catch (error) { logger.error({ error }, "Checkout diagnostics unavailable"); res.status(503).json({ error: "Diagnostics could not be read. No changes were made." }); }
+});
 router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void> => {
   const admin = await isAdminRequest(req.headers["authorization"]);
   if (!admin) {
@@ -4342,6 +4422,7 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
       total:            o.total,
       currency:         o.currency,
       paymentMethod:    o.paymentMethod,
+      ...orderEvidence(o),
       paymentReference: o.paymentReference ?? "",
       promoCode:        o.promoCode ?? "",
       discountPercent:  o.discountPercent,
@@ -4350,6 +4431,7 @@ router.get("/uc/admin/orders", async (req: Request, res: Response): Promise<void
       // True only for orders inserted by the webhook recovery path —
       // persisted at insert time, never derived from userId heuristics.
       webhookRecovery:  o.webhookRecovery ?? false,
+      recoveryEnrichedAt: o.recoveryEnrichedAt ?? null,
       codCollectionStatus: o.codCollectionStatus ?? null,
       codCollectedBy: o.codCollectedBy ?? null,
       codCollectedAt: o.codCollectedAt ?? null,
@@ -4540,6 +4622,71 @@ router.post("/uc/admin/orders/:id/cod-collection", async (req: Request, res: Res
   }
 });
 
+// Dispatch/collection is separate from payment classification and COD collection.
+router.patch("/uc/orders/:id/status", async (req: Request, res: Response): Promise<void> => {
+  if (!(await isAdminRequest(req.headers["authorization"]))) {
+    res.status(403).json({ error: "Admin access required" }); return;
+  }
+  const id = Number(req.params["id"]);
+  const body = req.body ?? {};
+  if (!Number.isSafeInteger(id) || id <= 0 || !["shipped", "ready-to-collect"].includes(body.status)) {
+    res.status(400).json({ error: "A valid order id and status (shipped or ready-to-collect) are required" }); return;
+  }
+  const details: Record<string, string> = {};
+  for (const [key, max] of Object.entries({
+    trackingNumber: 100, trackingUrl: 2048, estimatedDelivery: 10, collectionLocation: 300, note: 500,
+  })) {
+    if (body[key] === undefined) continue;
+    if (typeof body[key] !== "string" || body[key].length > max || /[\u0000-\u001f\u007f]/.test(body[key])) {
+      res.status(400).json({ error: `Invalid ${key}` }); return;
+    }
+    const value = body[key].trim();
+    if (value) details[key] = value;
+  }
+  if (details.estimatedDelivery &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(details.estimatedDelivery) ||
+       Number.isNaN(Date.parse(details.estimatedDelivery)) ||
+       new Date(details.estimatedDelivery).toISOString().slice(0, 10) !== details.estimatedDelivery)) {
+    res.status(400).json({ error: "estimatedDelivery must be a valid YYYY-MM-DD date" }); return;
+  }
+  if (details.trackingUrl) {
+    try {
+      const url = new URL(details.trackingUrl);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error();
+    } catch {
+      res.status(400).json({ error: "trackingUrl must be an HTTP or HTTPS URL without credentials" }); return;
+    }
+  }
+  if (body.status === "ready-to-collect" && !details.collectionLocation) {
+    res.status(400).json({ error: "collectionLocation is required for ready-to-collect orders" }); return;
+  }
+  if (body.idempotencyKey !== undefined &&
+      (typeof body.idempotencyKey !== "string" || !body.idempotencyKey.trim() || body.idempotencyKey.length > 200)) {
+    res.status(400).json({ error: "Invalid idempotencyKey" }); return;
+  }
+  try {
+    const saved = await transitionOrderStatus({
+      orderId: id, status: body.status, customerStage: "shipped",
+      fulfillment: details,
+      eventKey: `fulfillment:${id}:${body.idempotencyKey?.trim() ?? body.status}`,
+      actor: String(verifyToken(req.headers["authorization"])?.id ?? "admin"),
+      source: "staff",
+    });
+    res.json({
+      ok: true, id, status: saved.status, customerStage: saved.customerStage, repeated: saved.repeated,
+      notification: { status: saved.outboxCreated ? "queued" : "skipped", channels: ["sms", "push", "email"] },
+    });
+  } catch (err) {
+    const error = err as Error & { code?: string };
+    if (error.code === "NOT_FOUND") res.status(404).json({ error: error.message });
+    else if (error.code === "INVALID_STAGE_TRANSITION") res.status(409).json({ error: error.message });
+    else {
+      logger.error({ err, orderId: id }, "Failed to update order fulfillment");
+      res.status(500).json({ error: "Failed to update order fulfillment" });
+    }
+  }
+});
+
 router.patch("/uc/admin/orders/:id/customer-stage", async (req: Request, res: Response): Promise<void> => {
   if (!(await isAdminRequest(req.headers["authorization"]))) { res.status(403).json({ error: "Admin access required" }); return; }
   const id = Number(req.params["id"]);
@@ -4645,7 +4792,7 @@ router.delete("/uc/admin/orders/:id", async (req: Request, res: Response): Promi
 });
 
 // GET /api/uc/admin/orders/recovery-count — count of unresolved webhook recovery
-// orders (not completed and not cancelled). Used by the nav badge so the team
+// orders (not processing, completed or cancelled). Used by the nav badge so the team
 // can see pending recovery orders without navigating to the orders page.
 // Requires admin auth. Intentionally lightweight — no line-item joins.
 router.get("/uc/admin/orders/recovery-count", async (req: Request, res: Response): Promise<void> => {
@@ -4662,6 +4809,7 @@ router.get("/uc/admin/orders/recovery-count", async (req: Request, res: Response
       .where(
         and(
           eq(ucOrdersTable.webhookRecovery, true),
+          ne(ucOrdersTable.status, "processing"),
           ne(ucOrdersTable.status, "completed"),
           ne(ucOrdersTable.status, "cancelled"),
         )
@@ -4717,7 +4865,7 @@ router.get("/uc/admin/orders/reminder-gaps", async (req: Request, res: Response)
     // unreachable store must fail loudly, never report a false all-clear.
     let source = "mock";
     let normalized: Record<string, unknown>[] | null = null;
-    if (hasWCCredentials()) {
+    if (hasCompanionCatalogue()) {
       const products = await fetchAllPublishedProducts();
       if (products) {
         normalized = products.map(normalizeProduct);
@@ -5505,6 +5653,25 @@ router.post("/uc/admin/notification-logs/:id/retry", async (req: Request, res: R
       return;
     }
 
+    // Fulfillment attempts belong to a durable work item. Retry that item,
+    // never send alongside the scheduler or replay a synthetic audit record.
+    if (row.orderId && ["order_shipped", "order_ready-to-collect"].includes(row.template) &&
+        ["sms", "email"].includes(row.channel)) {
+      const status = row.template.slice("order_".length);
+      const queued = await pool.query(
+        `UPDATE uc_order_notification_outbox SET next_attempt_at=now()
+         WHERE order_id=$1 AND payload->>'channel'=$2 AND payload->>'status'=$3
+           AND status IN ('pending','failed') RETURNING id`,
+        [row.orderId, row.channel, status],
+      );
+      if (!queued.rowCount) {
+        res.status(409).json({ error: "This fulfillment notification is already sent, being sent, skipped, or no longer available" });
+        return;
+      }
+      res.json({ ok: true, message: "Retry queued", notification: { status: "queued", deliveryEvent: "outbox" } });
+      return;
+    }
+
     // Guard against retrying a failure already superseded by a later successful
     // delivery (e.g. Resend fails → sendEmail fallback succeeds).
     // Use the most specific identity available: entity ID (orderId / ticketId /
@@ -5650,6 +5817,7 @@ export function sendOrderConfirmationEmail(
     total:           string;
     currency:        string;
     paymentMethod:   string;
+    paymentStatus?:  string;
     shippingAddress?: Record<string, string>;
     discountAmount?:  number;
     promoCode?:       string;
@@ -5657,6 +5825,7 @@ export function sendOrderConfirmationEmail(
     dateCreated?:     string | Date;
     /** Payment trace for the receipt (M-Pesa code or gateway reference). */
     paymentReference?: string;
+    privateGuest?: boolean;
   },
 ): void {
   getUserContact(ownerUserId).then(contact => {
@@ -5665,7 +5834,7 @@ export function sendOrderConfirmationEmail(
         orderId:   order.orderId,
         total:     order.total,
         firstName: contact.firstName,
-      }), { template: "order_confirmation", orderId: order.orderId });
+      }), { template: "order_confirmation", orderId: order.orderId, redactLogs: order.privateGuest });
     }
     if (contact?.email) {
       const receipt = buildOrderReceiptEmail({
@@ -5676,6 +5845,7 @@ export function sendOrderConfirmationEmail(
         total:           order.total,
         currency:        order.currency,
         paymentMethod:   order.paymentMethod,
+        paymentStatus:   order.paymentStatus,
         shippingAddress: order.shippingAddress,
         discountAmount:  order.discountAmount,
         promoCode:       order.promoCode,
@@ -5688,9 +5858,13 @@ export function sendOrderConfirmationEmail(
         subject: receipt.subject,
         text:    receipt.text,
         html:    receipt.html,
-        meta:    { template: "order_receipt", orderId: order.orderId },
+        meta:    { template: "order_receipt", orderId: order.orderId, redactLogs: order.privateGuest },
       }).then(ok => {
         if (!ok) {
+          if (order.privateGuest) {
+            logger.warn({ code: "GUEST_ORDER_RECEIPT_NOT_DELIVERED", orderId: order.orderId }, "Guest-paid buyer receipt requires staff review; payment remains verified");
+            return; // Logged by the existing notification monitor; no hidden resend.
+          }
           logger.warn(`[resend] order confirmation not delivered to ${contact.email}; trying legacy email provider`);
           sendSlackTeamMessage(
             `⚠️ *Order confirmation email failed*\nResend could not deliver the receipt for order *#${order.orderId}* to ${contact.email}.\nThe legacy email provider is being attempted.`,
@@ -5700,11 +5874,67 @@ export function sendOrderConfirmationEmail(
         }
       });
     }
-  }).catch(() => {});
+  }).catch((err: unknown) => {
+    logger.error(order.privateGuest ? { code: "GUEST_ORDER_RECEIPT_PREPARATION_FAILED", orderId: order.orderId } :
+      { err, orderId: order.orderId }, "Order receipt preparation failed");
+  });
+}
+
+export async function notifyConfirmedCheckout(order: any) {
+  const guest = await pool.query("SELECT id FROM uc_guest_pay_links WHERE order_id=$1 LIMIT 1", [order.id]);
+  if (guest.rows[0]) {
+    const dispatch = await pool.query(`UPDATE uc_orders SET checkout_snapshot=checkout_snapshot ||
+      '{"confirmationDispatch":"queuing"}'::jsonb WHERE id=$1
+      AND checkout_snapshot->>'confirmationDispatch' IS NULL RETURNING id`, [order.id]);
+    if (!dispatch.rows[0]) return;
+  }
+  await reconcileCanonicalPurchaseDualWrite(order.id, `checkout:${order.id}`);
+  if (order.payment_method !== "cod" && order.payment_method !== "free") {
+    await enqueueReferralSettlement(order.id);
+    const userId = Number(order.user_id);
+    if (Number.isInteger(userId) && userId > 0) await creditQualifyingProductPoints(userId, order.id);
+  }
+  const response = await checkoutOrderResponse(order);
+  sendPushToUser(order.user_id, "Order confirmed", `Order #${response.id} confirmed for ${response.fulfillment === "collection" ? "collection" : "delivery"}.`,
+    { screen: "orders", orderId: String(response.id) }, "orders");
+  sendOrderConfirmationEmail(order.user_id, { orderId: response.id, lineItems: response.lineItems,
+    total: response.total, currency: response.currency, paymentMethod: order.payment_method,
+    shippingAddress: response.shippingAddress, discountAmount: response.discountAmount, promoCode: response.promoCode,
+    dateCreated: response.dateCreated, paymentStatus: response.paymentStatus,
+    paymentReference: order.payment_method === "cod" ? "" : order.mpesa_receipt || order.payment_reference,
+    privateGuest: !!guest.rows[0] });
+  if (guest.rows[0]) await pool.query(`UPDATE uc_orders SET checkout_snapshot=checkout_snapshot ||
+    '{"confirmationDispatch":"queued"}'::jsonb WHERE id=$1`, [order.id]);
 }
 
 // ─── Filter registration from purchase record ────────────────────────────────
 // POST /api/uc/filters/register-purchase
+router.get("/uc/purchases/offline", lookupLimiter, async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const claims = verifyToken(req.headers.authorization);
+  const id = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    const [lifespans, capacities] = await Promise.all([getProductLifespanMap(), getProductCapacityMap()]);
+    res.json(await listOfflinePurchases(id, { lifespans, capacities }));
+  } catch (error) {
+    if (error instanceof OfflinePurchaseError) res.status(error.status).json({ error: error.message });
+    else { logger.error({ error }, "Offline purchases unavailable"); res.status(500).json({ error: "Offline purchases unavailable. Retry later." }); }
+  }
+});
+router.post("/uc/filters/register-offline-purchase", lookupLimiter, async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const claims = verifyToken(req.headers.authorization);
+  const id = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    const [lifespans, capacities] = await Promise.all([getProductLifespanMap(), getProductCapacityMap()]);
+    res.json(await registerOfflinePurchase(id, req.body ?? {}, { lifespans, capacities }));
+  } catch (error) {
+    if (error instanceof OfflinePurchaseError) res.status(error.status).json({ error: error.message });
+    else { logger.error({ error }, "Offline registration failed"); res.status(500).json({ error: "Registration could not be completed. Retry later." }); }
+  }
+});
 //
 // A customer registers their installed filter with the receipt/order number
 // plus the phone number used at checkout. Deliberately NO new table: the
@@ -5726,9 +5956,22 @@ function phonesMatch(a: unknown, b: unknown): boolean {
 
 // Statuses whose purchase records may be used for registration. Cancelled,
 // refunded, failed and in-flight anchor ("pending-wc") orders are excluded.
-const REGISTRABLE_STATUSES = new Set([
-  "completed", "processing", "on-hold", "shipped", "delivered",
-]);
+router.get("/uc/filters/activation-purchases", lookupLimiter, async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const claims = verifyToken(req.headers.authorization);
+  const id = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    const account = (await pool.query("SELECT email FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [id])).rows[0];
+    if (!account) { res.status(401).json({ error: "Authentication required" }); return; }
+    const [lifespans, capacities] = await Promise.all([getProductLifespanMap(), getProductCapacityMap()]);
+    res.json(await activationPurchaseOptions(id, account.email, { lifespans, capacities },
+      { enabled: hasWCCredentials(), fetch: params => wcFetchArray("/orders", params, AbortSignal.timeout(15000)) }));
+  } catch (error) {
+    logger.error({ error, id }, "Activation purchases unavailable");
+    res.status(503).json({ error: "Purchase eligibility could not refresh. Retry when connected." });
+  }
+});
 
 const REGISTER_NOT_FOUND_MSG =
   "No purchase found matching that receipt number and phone number.";
@@ -5738,7 +5981,7 @@ router.post(
   lookupLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const claims = verifyToken(req.headers["authorization"]);
-    const accountId = claims ? Number(claims.id) : 0;
+    const accountId = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
     if (!Number.isInteger(accountId) || accountId <= 0 || accountId >= 1_000_000_000) {
       res.status(401).json({ error: "Authentication required" });
       return;
@@ -5752,13 +5995,19 @@ router.post(
       return;
     }
 
-    const { receipt, phone, productId: commitProductId, activatedAt: commitActivatedAt } = req.body as {
+    const { receipt, phone, productId: commitProductId, activatedAt: commitActivatedAt, unitId, source: requestedSource } = req.body as {
+      unitId?: unknown;
+      source?: unknown;
       receipt?: unknown;
       phone?: unknown;
       productId?: unknown;
       activatedAt?: unknown;
     };
     const receiptDigits = String(receipt ?? "").trim().replace(/^#/, "");
+    if (requestedSource !== undefined && requestedSource !== "app" && requestedSource !== "store" ||
+        unitId !== undefined && (typeof unitId !== "string" || unitId.length > 150)) {
+      res.status(400).json({ error: "Select a valid purchase unit from your account." }); return;
+    }
     const phoneDigits = String(phone ?? "").replace(/\D/g, "");
     if (!/^\d{1,10}$/.test(receiptDigits) || phoneDigits.length < 9) {
       logger.warn({ accountId, reason: "invalid_required_fields" }, "[register-purchase] rejected");
@@ -5770,17 +6019,20 @@ router.post(
     const orderId = Number(receiptDigits);
 
     type RegisterItem = {
+      lineId: number;
       productId: number; name: string; quantity: number; lifespanDays: number; capacityLitres: number;
     };
     const respond = async (
       source: "app" | "store",
       status: string,
       dateCreated: unknown,
-      rawItems: { productId: number; name: string; quantity: number }[],
+      rawItems: { lineId: number; productId: number; name: string; quantity: number }[],
+      evidence: Parameters<typeof activationEligibility>[0],
     ): Promise<void> => {
-      if (!REGISTRABLE_STATUSES.has(status)) {
+      const eligibility = activationEligibility(evidence, source);
+      if (!eligibility.eligible) {
         res.status(409).json({
-          error: "This purchase is not active (cancelled or refunded), so it can't be used for registration.",
+          error: eligibility.reason,
         });
         return;
       }
@@ -5807,8 +6059,10 @@ router.post(
       }));
       if (commitProductId !== undefined || commitActivatedAt !== undefined) {
         const productId = Number(commitProductId);
-        const item = items.find((candidate) => candidate.productId === productId);
-        const activatedAt = new Date(String(commitActivatedAt ?? dateCreated ?? ""));
+        const item = items.find((candidate) => candidate.productId === productId &&
+          (unitId === undefined || purchaseUnitIds(source, orderId, candidate.lineId, candidate.quantity).includes(String(unitId))));
+        const date = typeof commitActivatedAt === "string" ? commitActivatedAt.slice(0, 10) : "";
+        const activatedAt = new Date(date);
         if (!item || item.lifespanDays <= 0) {
           logger.warn({ accountId, orderId, reason: "ineligible_product" }, "[register-purchase] rejected");
           res.status(400).json({ error: "Select an eligible filter from this purchase." });
@@ -5818,29 +6072,20 @@ router.post(
           res.status(422).json({ error: "This filter does not have a rated litre capacity yet. Contact Ultra-Clear support." });
           return;
         }
-        if (Number.isNaN(activatedAt.getTime()) || activatedAt.getTime() > Date.now() + 60 * 60 * 1000) {
+        if (!validInstallationDate(date)) {
           logger.warn({ accountId, orderId, reason: "invalid_activation_date" }, "[register-purchase] rejected");
           res.status(400).json({ error: "Invalid activation date." });
           return;
         }
-        const inserted = await db.insert(ucRegisteredFiltersTable)
-          .values({
-            userId: accountId,
-            productId,
-            productName: item.name,
-            ratedCapacityLitres: item.capacityLitres,
-            activatedAt,
-            sourceOrderId: orderId,
-            source,
-          } as typeof ucRegisteredFiltersTable.$inferInsert)
-          .onConflictDoNothing()
-          .returning();
-        if (inserted.length === 0) {
-          logger.warn({ accountId, orderId, productId, source, reason: "duplicate_registration" }, "[register-purchase] rejected");
-          res.status(409).json({ error: "This filter from this receipt is already registered to your account." });
-          return;
+        try {
+          const selectedUnit = typeof unitId === "string" ? unitId : purchaseUnitIds(source, orderId, item.lineId, item.quantity)[0];
+          if (!selectedUnit) { res.status(422).json({ error: "Purchase quantity requires staff review." }); return; }
+          const registration = await registerOrderUnit({ accountId, source, orderId, productId, lineId: item.lineId,
+            unitId: selectedUnit, productName: item.name, capacityLitres: item.capacityLitres, activatedAt });
+          res.status(registration.repeated ? 200 : 201).json({ source, orderId, status, dateCreated, items, ...registration });
+        } catch (error) {
+          res.status(409).json({ error: error instanceof Error ? error.message : "Activation could not be completed." });
         }
-        res.status(201).json({ source, orderId, status, dateCreated, items, registration: inserted[0] });
         return;
       }
       res.json({ source, orderId, status, dateCreated, items });
@@ -5854,9 +6099,19 @@ router.post(
         .from(ucOrdersTable)
         .where(eq(ucOrdersTable.id, orderId))
         .limit(1);
-      if (row) {
+      if (row && requestedSource !== "store") {
         const addr = (row.shippingAddress ?? {}) as Record<string, string>;
         if (appPurchaseOwnedBy(accountId, row.userId, addr["phone"], phone, phonesMatch)) {
+          if (row.wcOrderId && hasWCCredentials()) {
+            const currentStoreOrder = await wcFetchOne(`/orders/${row.wcOrderId}`);
+            if (!currentStoreOrder) {
+              res.status(503).json({ error: "Store confirmation unavailable. Retry when connected before activation." }); return;
+            }
+            const currentEligibility = activationEligibility({ status: String(currentStoreOrder.status),
+              paymentMethod: row.paymentMethod, checkoutState: row.checkoutState, paymentConfirmedAt: row.paymentConfirmedAt,
+              codCollectionStatus: row.codCollectionStatus, customerStage: row.customerStage }, "app");
+            if (!currentEligibility.eligible) { res.status(409).json({ error: currentEligibility.reason }); return; }
+          }
           const items = await db
             .select()
             .from(ucOrderItemsTable)
@@ -5865,7 +6120,9 @@ router.post(
             "app",
             row.status,
             row.dateCreated,
-            items.map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity })),
+            items.map((i) => ({ lineId: i.id, productId: i.productId, name: i.name, quantity: i.quantity })),
+            { status: row.status, paymentMethod: row.paymentMethod, checkoutState: row.checkoutState,
+              paymentConfirmedAt: row.paymentConfirmedAt, codCollectionStatus: row.codCollectionStatus, customerStage: row.customerStage },
           );
           return;
         }
@@ -5877,7 +6134,12 @@ router.post(
     }
 
     // 2) Live store purchase record (store receipts / orders placed on the site)
-    if (hasWCCredentials()) {
+    if (hasWCCredentials() && requestedSource !== "app") {
+      const mirror = await db.select({ id: ucOrdersTable.id }).from(ucOrdersTable)
+        .where(and(eq(ucOrdersTable.wcOrderId, orderId), eq(ucOrdersTable.userId, String(accountId)))).limit(1);
+      if (mirror.length) {
+        res.status(409).json({ error: "Activate this checkout using the app purchase listed in your account, not its store mirror." }); return;
+      }
       const o = await wcFetchOne(`/orders/${orderId}`);
       if (o && Number(o["id"]) === orderId) {
         const billing = (o["billing"] ?? {}) as Record<string, unknown>;
@@ -5887,12 +6149,14 @@ router.post(
         if (storePurchaseOwnedBy(account.email, billing["email"], billing["phone"], shipping["phone"], phone, normalizeEmail, phonesMatch)) {
           const rawItems = Array.isArray(o["line_items"])
             ? (o["line_items"] as Record<string, unknown>[]).map((i) => ({
+                lineId: Number(i["id"]),
                 productId: Number(i["product_id"]),
                 name: String(i["name"] ?? ""),
                 quantity: Number(i["quantity"]) || 1,
               }))
             : [];
-          await respond("store", String(o["status"] ?? ""), o["date_created"], rawItems);
+          await respond("store", String(o["status"] ?? ""), o["date_created"], rawItems,
+            { status: String(o["status"] ?? ""), paymentMethod: String(o["payment_method"] ?? ""), datePaid: o["date_paid"] });
           return;
         }
       }
@@ -5912,13 +6176,45 @@ router.post(
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
 router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => {
+  if (req.headers.authorization && !verifyToken(req.headers.authorization)) {
+    res.status(401).json({error:"Authentication required"}); return;
+  }
   // Capture the caller's identity up-front so we can send a push notification
   // after the order is created without re-parsing the header each time.
   const orderUserId = userIdFromBearer(req.headers["authorization"]);
   const orderNumericId = Number(orderUserId);
   if (await guardDeletedAccount(orderNumericId, res)) return;
+  // Legacy order branches have parent-only promotion/recovery anchors. Never
+  // turn a child-priced request into parent fulfillment on those branches.
+  if (req.body?.fulfillment === undefined && Array.isArray(req.body?.lineItems) &&
+      req.body.lineItems.some((line: any) => line?.variationId !== undefined || line?.childSku !== undefined)) {
+    res.status(422).json({ error: "Refresh your cart and use the updated checkout to order this variant.",
+      code: "VARIANT_CHECKOUT_REFRESH_REQUIRED", retryable: false });
+    return;
+  }
+  if (req.body?.fulfillment !== undefined) {
+    try {
+      const { paymentMethod, paymentReference = "", ...input } = req.body;
+      const order = await prepareCheckoutOrder(input, orderUserId, paymentMethod);
+      const verification = await verifyPaymentOnServer(paymentMethod, paymentReference);
+      if (!verification.ok) { res.status(verification.retryable ? 503 : 402).json({ error: verification.reason ?? "Payment not confirmed" }); return; }
+      if (verification.amount !== undefined && (!Number.isFinite(verification.amount) ||
+          Math.abs(verification.amount - Number(order.total)) > 0.01 || verification.currency?.toUpperCase() !== "KES")) {
+        res.status(402).json({ error: "Verified payment does not match this checkout total or currency" }); return;
+      }
+      const confirmed = await confirmCheckoutOrder(order.id, paymentReference);
+      if (confirmed.reconciliationRequired) {
+        res.status(202).json({ ...await checkoutOrderResponse({ ...confirmed.order, wc_order_id: null }), reconciliationRequired: true });
+        return;
+      }
+      const response = await checkoutOrderResponse(confirmed.order);
+      if (!confirmed.repeated) await notifyConfirmedCheckout(confirmed.order);
+      res.json(response);
+    } catch (error) { res.status(422).json({ error: (error as Error).message, fields: (error as { fields?: Record<string, string> }).fields }); }
+    return;
+  }
 
-  let { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey } =
+  let { lineItems, paymentMethod, paymentReference, shippingAddress, promoCode, idempotencyKey, fulfillment = "collection", applyReferralDiscount } =
     req.body as {
       lineItems: { productId: number; quantity: number }[];
       paymentMethod: string;
@@ -5926,6 +6222,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       shippingAddress?: Record<string, string>;
       promoCode?: string;            // referral or promotion code
       idempotencyKey?: string;
+      fulfillment?: Fulfillment;
+      applyReferralDiscount?: boolean;
     };
   // Guest checkout is supported for orders that carry their own delivery
   // details.  In particular, never pass the sentinel "anonymous" through to
@@ -5936,13 +6234,18 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   let userEmail: string | undefined;
   if (Number.isInteger(orderNumericId) && orderNumericId > 0) {
     const accountResult = await pool.query(
-      `SELECT id,email FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
+      `SELECT id,email,phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL LIMIT 1`,
       [orderNumericId],
     );
     userEmail = accountResult.rows[0]?.email as string | undefined;
     if (!userEmail) {
       res.status(401).json({ error: "Authenticated customer account required" });
       return;
+    }
+    const profileContact = validateCustomerContact(accountResult.rows[0]);
+    if (!profileContact.ok) {
+      res.status(422).json({ code: "CONTACT_COMPLETION_REQUIRED", error: "Complete your account phone and contact address before checkout.",
+        fields: profileContact.fields }); return;
     }
   }
   if (!lineItems || !paymentMethod) {
@@ -5955,6 +6258,9 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   // local numbers; without a valid country, local formats are rejected rather
   // than guessed as Kenyan.
   const submittedShipping = shippingAddress;
+  const orderContact = validateCustomerContact({ phone: submittedShipping?.phone, address: submittedShipping?.address1, country: submittedShipping?.country });
+  const contactErrors = { ...orderContact.fields, ...(paymentMethod === "cod" ? validateCodShipping(submittedShipping).fields : {}) };
+  if (contactErrors.address) contactErrors.address1 = contactErrors.address;
   const submittedPhone = typeof submittedShipping?.phone === "string"
     ? submittedShipping.phone
     : "";
@@ -5964,6 +6270,10 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   const normalizedOrderPhone = submittedPhone
     ? normalizeInternationalPhone(submittedPhone, submittedCountry)
     : null;
+  if (!normalizedOrderPhone) contactErrors.phone = "Please enter a valid phone number for the selected country.";
+  if (Object.keys(contactErrors).length) {
+    res.status(400).json({ error: Object.values(contactErrors).join(" "), fields: contactErrors }); return;
+  }
   if (!normalizedOrderPhone) {
     if (paymentMethod === "cod") {
       const codCheck = validateCodShipping(submittedShipping);
@@ -6084,6 +6394,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
             total:         existingOrder.total,
             currency:      existingOrder.currency,
             paymentMethod: existingOrder.paymentMethod,
+            paymentStatus: receiptOrderPaymentStatus(existingOrder),
             shippingAddress: existingOrder.shippingAddress as Record<string, string> | undefined,
             dateCreated:   existingOrder.dateCreated,
             // Prefer the customer-recognisable M-Pesa code when the callback stored one.
@@ -6163,44 +6474,53 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   }
   // ───────────────────────────────────────────────────────────────────────────
 
-  // Resolve discount from promo/referral code (server re-validates; client cannot fake this)
-  let discountPercent = 0;
-  let discountType: "referral" | "promotion" | null = null;
-  if (promoCode?.trim()) {
-    const validation = await validateCodeForDiscount(promoCode.trim(), userEmail ?? "");
-    if (validation.valid) {
-      discountPercent = validation.discountPercent;
-      discountType = validation.type;
+  // Replay the stored checkout BEFORE quoting a code that might have reached
+  // its cap or expired as a result of the original successful transaction.
+  if (idempotencyKey?.trim()) {
+    // Older clients have an immutable in-flight Woo anchor without the new
+    // claim format. Do not require a fresh catalogue to acknowledge that
+    // already-priced attempt, or let a retry issue another remote POST.
+    const legacyPending = await pool.query(`SELECT id FROM uc_orders
+      WHERE user_id=$1 AND checkout_idempotency_key=$2 AND status='pending-wc'
+        AND checkout_claim_id IS NULL AND date_created > now()-interval '15 minutes' LIMIT 1`,
+      [orderUserId,idempotencyKey.trim()]);
+    if (legacyPending.rows[0]) { res.status(503).json({error:"Order is being processed, please retry shortly",retryable:true}); return; }
+    const prior = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 AND checkout_claim_id IS NOT NULL", [orderUserId, idempotencyKey.trim()]);
+    if (prior.rows[0]) {
+      const row = prior.rows[0];
+      if (hasWCCredentials() && !row.wc_order_id) {
+        const candidates = await wcFetchArray("/orders", { per_page: "100", status: "any", orderby: "date", order: "desc" });
+        const remote = candidates?.find(candidate => Array.isArray(candidate.meta_data) &&
+          (candidate.meta_data as any[]).some(m => m.key === "uc_checkout_claim_id" && m.value === row.checkout_claim_id));
+        if (!remote) { res.status(row.checkout_state ? 202 : 503).json({ id: row.id, retryable: true, reconciliationRequired: true }); return; }
+        await pool.query("UPDATE uc_orders SET wc_order_id=$2,status='processing',checkout_state='remote_confirmed' WHERE id=$1", [row.id, remote.id]);
+        row.wc_order_id = remote.id; row.status = "processing";
+      }
+      res.json(await checkoutOrderResponse(row)); return;
     }
   }
-
+  let pricing;
+  try { pricing = await checkoutQuote({ lineItems, fulfillment, code: promoCode, applyReferralDiscount }, Number.isInteger(orderNumericId) ? orderNumericId : undefined); }
+  catch (error) { res.status(422).json({ error: (error as Error).message }); return; }
+  if (fulfillment === "delivery" && (!normalizedShippingAddress.address1?.trim() || !normalizedShippingAddress.city?.trim())) {
+    res.status(400).json({ error: "Delivery address and city are required" }); return;
+  }
+  if (!normalizedShippingAddress.firstName?.trim()) { res.status(400).json({ error: "First name is required" }); return; }
+  shippingAddress = { ...normalizedShippingAddress, fulfillment, shippingAmount: String(pricing.delivery),
+    discountAmount: String(pricing.discountAmount), subtotal: String(pricing.subtotal) };
+  const productLines = pricing.lines;
+  const { subtotal, delivery, discountAmount, discountPercent, total: netTotal } = pricing;
+  const durableCheckoutPromotion = pricing.promotion;
+  const discountType = durableCheckoutPromotion ? "promotion" : discountPercent ? "referral" : null;
+  if ((durableCheckoutPromotion || pricing.referralBenefitId) && !idempotencyKey?.trim()) {
+    res.status(400).json({ error: "idempotencyKey is required when using a code or reward" }); return;
+  }
+  if (pricing.referralBenefitId && paymentMethod === "cod") { res.status(422).json({ error: "Referral rewards require a paid order" }); return; }
+  if (paymentMethod === "free" && netTotal !== 0) { res.status(422).json({ error: "This order requires payment" }); return; }
   const isPaid = paymentMethod !== "cod";
-
-  // Compute order total after discount (500 KES delivery already included by client)
-  const productLines = serverPricedLines(lineItems, true);
-  if (!productLines) { res.status(400).json({ error: "lineItems must contain known products with positive whole quantities" }); return; }
-  const subtotal = productLines.reduce((s, i) => s + i.subtotal, 0);
-  const delivery = 500;
-  const gross = subtotal + delivery;
-  let discountAmount = Math.round((gross * discountPercent) / 100);
-  // The durable promotion engine supersedes legacy in-memory promotions. A
-  // checkout discount is quoted against server-priced eligible product lines;
-  // the submitted client total is never considered.
-  let durableCheckoutPromotion: PromotionQuote | null = null;
-  if (promoCode?.trim() && Number.isInteger(orderNumericId) && orderNumericId > 0) {
-    const engineQuote = await quotePromotion(promoCode, "checkout", productLines.map((line) => line.productId), subtotal, productLines);
-    if (engineQuote) {
-      if (!idempotencyKey?.trim()) { res.status(400).json({ error: "idempotencyKey is required when using a durable promotion" }); return; }
-      durableCheckoutPromotion = engineQuote;
-      discountType = "promotion";
-      discountPercent = engineQuote.effectMode === "percentage" ? engineQuote.effectValue : 0;
-      discountAmount = Math.round(engineQuote.benefit);
-    }
-  }
-  const netTotal = gross - discountAmount;
   // Durable promoted WC checkout uses a local claim before its single remote
   // attempt.  A retry observes that claim and never posts another discount.
-  if (durableCheckoutPromotion && hasWCCredentials()) {
+  if (idempotencyKey?.trim() && hasWCCredentials() && (promoCode || applyReferralDiscount)) {
     const key = idempotencyKey!.trim();
     const prior = await pool.query("SELECT * FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2 LIMIT 1", [orderUserId, key]);
     if (prior.rows[0]) {
@@ -6237,8 +6557,11 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
         [orderUserId, String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), key, claimId, paymentMethod === "cod" ? "awaiting_collection" : null]);
       anchor = inserted.rows[0];
       for (const line of productLines) await client.query("INSERT INTO uc_order_items(order_id,product_id,name,quantity,total) VALUES($1,$2,$3,$4,$5)", [anchor.id,line.productId,line.name,line.quantity,String(line.subtotal)]);
-      const use = await consumePromotionOnClient(client, { quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout", actor: `customer:${orderNumericId}`, idempotencyKey: key, operationRef: `${claimId}:${anchor.id}` });
-      await client.query("UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2", [`${claimId}:${anchor.id}`, use.use.id]);
+      if (durableCheckoutPromotion) {
+        const use = await consumePromotionOnClient(client, { quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout", actor: `customer:${orderNumericId}`, idempotencyKey: key, operationRef: `${claimId}:${anchor.id}` });
+        await client.query("UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2", [`${claimId}:${anchor.id}`, use.use.id]);
+      }
+      await claimReferralBenefit(client, pricing.referralBenefitId, orderNumericId, anchor.id);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined); client.release();
@@ -6249,9 +6572,13 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
     client.release();
     await pool.query("UPDATE uc_orders SET checkout_state='remote_attempted',remote_attempted_at=now() WHERE id=$1", [anchor.id]);
     const payload = { payment_method: paymentMethod, set_paid: isPaid, shipping: shippingAddress,
-      line_items: productLines.map((line) => ({ product_id: line.productId, quantity: line.quantity })),
-      fee_lines: [{ name: `Promotion ${durableCheckoutPromotion.code}`, total: String(-Math.round(durableCheckoutPromotion.benefit)), taxable: false }],
-      meta_data: [{ key: "uc_checkout_claim_id", value: claimId }, { key: "uc_checkout_key", value: key }, { key: "uc_account_id", value: orderUserId }] };
+      billing: { email: userEmail, first_name: shippingAddress?.firstName, last_name: shippingAddress?.lastName,
+        phone: shippingAddress?.phone, country: shippingAddress?.country,
+        address_1: shippingAddress?.address1, city: shippingAddress?.city },
+      line_items: productLines.map((line) => ({ product_id: line.productId, quantity: line.quantity, subtotal: String(line.subtotal), total: String(line.subtotal) })),
+      shipping_lines: [{ method_id: fulfillment === "collection" ? "local_pickup" : "flat_rate", method_title: fulfillment === "collection" ? "Free collection" : "Delivery", total: String(delivery) }],
+      fee_lines: discountAmount ? [{ name: `Companion ${promoCode || "referral reward"}`, total: String(-discountAmount), taxable: false }] : [],
+      meta_data: [{ key: "uc_checkout_claim_id", value: claimId }, { key: "uc_checkout_key", value: key }, { key: "uc_account_id", value: orderUserId }, { key: "payment_reference", value: paymentReference ?? "" }, { key: "uc_fulfillment", value: fulfillment }] };
     try {
       const remote = await fetch(wcUrl("/orders"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!remote.ok) throw new Error(`WC order creation failed with ${remote.status}`);
@@ -6373,7 +6700,10 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:         String(normalized["total"] ?? "0"),
       currency:      String(normalized["currency"] ?? "KES"),
       paymentMethod: String(normalized["paymentMethod"] ?? ""),
+      paymentStatus: String(normalized["paymentStatus"] ?? "pending"),
       shippingAddress: normalized["shippingAddress"] as Record<string, string> | undefined,
+      discountAmount: Number(normalized["discountAmount"] ?? discountAmount),
+      promoCode: String(normalized["promoCode"] ?? promoCode ?? ""),
       dateCreated:   normalized["dateCreated"] as string | undefined,
       paymentReference: paymentReference ?? "",
     });
@@ -6721,14 +7051,16 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           paymentMethod === "paystack" ? "Paystack" : "Cash on Delivery",
         set_paid: isPaid,
         shipping: shippingAddress,
-        line_items: lineItems.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+        line_items: productLines.map((i) => ({ product_id: i.productId, variation_id: i.variationId || 0, quantity: i.quantity, subtotal: String(i.subtotal), total: String(i.subtotal) })),
+        shipping_lines: [{ method_id: fulfillment === "collection" ? "local_pickup" : "flat_rate", method_title: fulfillment === "collection" ? "Free collection" : "Delivery", total: String(delivery) }],
+        fee_lines: discountAmount ? [{ name: `Companion ${promoCode || "referral reward"}`, total: String(-discountAmount), taxable: false }] : [],
         meta_data: [
           { key: "payment_reference", value: paymentReference ?? "" },
           ...(wcCheckoutKey ? [{ key: "uc_checkout_key", value: wcCheckoutKey }] : []),
           { key: "promo_code", value: promoCode ?? "" },
           { key: "discount_percent", value: String(discountPercent) },
         ],
-        coupon_lines: discountType === "promotion" && discountPercent > 0 && promoCode ? [{ code: promoCode }] : [],
+        coupon_lines: [],
       };
 
       let wcOrder: Record<string, unknown> | null = null;
@@ -6825,7 +7157,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
   // Persist order to DB
   try {
     let dbOrder: any;
-    if (durableCheckoutPromotion) {
+    if (idempotencyKey?.trim()) {
       // Local-order path: one transaction owns the order, lines and promotion
       // use.  A cap/validation failure rolls all three back.
       // Claiming the key on the order itself (rather than on promotion use)
@@ -6853,12 +7185,30 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
            VALUES ($1,$2,$3,'KES',$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
           [orderUserId, paymentMethod === "cod" ? "pending" : "processing", String(netTotal), paymentMethod, paymentReference ?? "", promoCode ?? "", discountPercent, discountAmount, JSON.stringify(shippingAddress ?? {}), idempotencyKey!.trim(), paymentMethod === "cod" ? "awaiting_collection" : null],
         );
-        dbOrder = inserted.rows[0];
-        const promotionUse = await consumePromotionOnClient(client, {
+        const insertedOrder = inserted.rows[0];
+        // Raw SQL returns snake_case; the shared receipt/notification path
+        // below consumes the same camelCase fields as Drizzle-returned orders.
+        dbOrder = {
+          ...insertedOrder,
+          userId: insertedOrder.user_id,
+          dateCreated: insertedOrder.date_created,
+          paymentMethod: insertedOrder.payment_method,
+          paymentReference: insertedOrder.payment_reference,
+          paymentConfirmedAt: insertedOrder.payment_confirmed_at,
+          codCollectionStatus: insertedOrder.cod_collection_status,
+          checkoutState: insertedOrder.checkout_state,
+          wcOrderId: insertedOrder.wc_order_id,
+          shippingAddress: insertedOrder.shipping_address,
+          discountPercent: insertedOrder.discount_percent,
+          discountAmount: insertedOrder.discount_amount,
+          promoCode: insertedOrder.promo_code,
+        };
+        const promotionUse = durableCheckoutPromotion ? await consumePromotionOnClient(client, {
           quote: durableCheckoutPromotion, userId: orderNumericId, operation: "checkout",
           actor: `customer:${orderNumericId}`, idempotencyKey: idempotencyKey!.trim(),
-        });
-        if (promotionUse.repeated) {
+        }) : null;
+        await claimReferralBenefit(client, pricing.referralBenefitId, orderNumericId, dbOrder.id);
+        if (promotionUse?.repeated) {
           const priorOrderId = Number(promotionUse.use.operation_ref);
           const prior = Number.isInteger(priorOrderId)
             ? await client.query("SELECT * FROM uc_orders WHERE id=$1 AND user_id=$2 LIMIT 1", [priorOrderId, orderUserId])
@@ -6882,12 +7232,12 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
           return;
         }
         for (const line of productLines) await client.query(
-          `INSERT INTO uc_order_items (order_id,product_id,name,quantity,total) VALUES ($1,$2,$3,$4,$5)`,
-          [dbOrder.id, line.productId, line.name, line.quantity, String(line.subtotal)],
+          `INSERT INTO uc_order_items (order_id,product_id,name,quantity,total,variation_id,child_sku,variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [dbOrder.id, line.productId, line.name, line.quantity, String(line.subtotal), line.variationId ?? null, line.childSku ?? null, line.variantLabel ?? null],
         );
         await client.query(
           "UPDATE uc_promotion_uses SET operation_ref=$1 WHERE id=$2",
-          [String(dbOrder.id), promotionUse.use.id],
+          [String(dbOrder.id), promotionUse?.use.id ?? null],
         );
         await client.query("COMMIT");
       } catch (error) {
@@ -6933,14 +7283,15 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
 
     // The durable-promotion branch inserted its item rows inside the same
     // transaction as the order and promotion use. Do not duplicate them here.
-    if (dbOrder && productLines.length > 0 && !durableCheckoutPromotion) {
+    if (dbOrder && productLines.length > 0 && !idempotencyKey?.trim()) {
       await db.insert(ucOrderItemsTable).values(
-        productLines.map(({ productId, name, quantity, subtotal: t }) => ({
+        productLines.map(({ productId, name, quantity, subtotal: t, variationId, childSku, variantLabel }) => ({
           orderId:   dbOrder.id,
           productId,
           name,
           quantity,
           total:     String(t),
+          variationId, childSku, variantLabel,
         }))
       );
     }
@@ -6967,6 +7318,8 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           dbOrder!.total,
       currency:        dbOrder!.currency,
       paymentMethod:   dbOrder!.paymentMethod,
+      paymentStatus:   receiptOrderPaymentStatus(dbOrder!),
+      receiptSerial:   orderReceiptSerial(dbOrder!.wcOrderId ?? dbOrder!.id, dbOrder!.dateCreated),
       codCollectionStatus: dbOrder!.codCollectionStatus ?? null,
       shippingAddress: dbOrder!.shippingAddress ?? {},
       discountPercent,
@@ -6991,6 +7344,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           newOrder.total,
       currency:        newOrder.currency,
       paymentMethod:   newOrder.paymentMethod,
+      paymentStatus:   receiptOrderPaymentStatus(dbOrder!),
       shippingAddress: newOrder.shippingAddress as Record<string, string> | undefined,
       discountAmount:  newOrder.discountAmount,
       promoCode:       newOrder.promoCode,
@@ -7090,6 +7444,7 @@ router.post("/uc/orders", async (req: Request, res: Response): Promise<void> => 
       total:           fallbackOrder.total,
       currency:        fallbackOrder.currency,
       paymentMethod:   fallbackOrder.paymentMethod,
+      paymentStatus:   receiptOrderPaymentStatus(fallbackOrder),
       shippingAddress: fallbackOrder.shippingAddress as Record<string, string> | undefined,
       discountAmount:  fallbackOrder.discountAmount,
       promoCode:       fallbackOrder.promoCode,
@@ -8091,7 +8446,14 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
   }
   const ticketNumericId = Number(userId);
   if (await guardDeletedAccount(ticketNumericId, res)) return;
-  const { productModel, issueDescription, preferredContactTime, photos, videos } = req.body as {
+  const [ticketAccount] = await db.select().from(ucUsersTable).where(eq(ucUsersTable.id, ticketNumericId)).limit(1);
+  const ticketContact = validateCustomerContact(ticketAccount ?? {});
+  if (!ticketContact.ok) {
+    res.status(422).json({ error: "Complete your phone number and contact address in Account before requesting service.", fields: ticketContact.fields, code: "CONTACT_COMPLETION_REQUIRED" });
+    return;
+  }
+  const { productModel, issueDescription, preferredContactTime, photos, videos, contactDetails } = req.body as {
+    contactDetails?: { phone?: unknown; address?: unknown; country?: unknown };
     productModel?: string;
     issueDescription?: string;
     preferredContactTime?: string;
@@ -8101,6 +8463,10 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
   if (!productModel || !issueDescription) {
     res.status(400).json({ error: "Required fields missing" });
     return;
+  }
+  const serviceContact = validateCustomerContact(contactDetails ?? ticketAccount ?? {});
+  if (!serviceContact.ok) {
+    res.status(400).json({ error: Object.values(serviceContact.fields).join(" "), fields: serviceContact.fields }); return;
   }
   const photoList = sanitizeMediaUrls(photos, 6);
   const videoList = sanitizeMediaUrls(videos, 2);
@@ -8124,6 +8490,8 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
       `Product(s):    ${productModel}`,
       `Issue:         ${issueDescription}`,
       `Contact time:  ${preferredContactTime ?? "Any time"}`,
+      `Service phone: ${serviceContact.phone}`,
+      `Service address: ${serviceContact.address}`,
       `Customer:      ${customerStr}`,
       ...(photoList!.length ? [`Photos:        ${photoList!.join(", ")}`] : []),
       ...(videoList!.length ? [`Videos:        ${videoList!.join(", ")}`] : []),
@@ -8162,6 +8530,7 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
     appendToLocalStore("tickets.jsonl", {
       id: ticketId, userId, productModel, issueDescription,
       preferredContactTime: preferredContactTime ?? "Any time",
+      contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
       photos: photoList, videos: videoList, submittedAt: new Date().toISOString(),
     });
   }
@@ -8175,6 +8544,7 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
       preferredContactTime: preferredContactTime ?? "Any time",
       photos: photoList,
       videos: videoList,
+      contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
     }).returning();
     dispatchTktNotifications(ticket.id);
     res.status(201).json(ticket);
@@ -8182,6 +8552,7 @@ router.post("/uc/tickets", async (req: Request, res: Response): Promise<void> =>
     console.error("[tickets] DB insert failed, using fallback:", err);
     const fallback = {
       id, userId, productModel, issueDescription,
+      contactDetails: { phone: serviceContact.phone!, address: serviceContact.address },
       preferredContactTime: preferredContactTime ?? "Any time",
       photos: photoList,
       videos: videoList,
@@ -8203,6 +8574,11 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
   }
   const wtNumericId = Number(userId);
   if (await guardDeletedAccount(wtNumericId, res)) return;
+  const account = (await pool.query("SELECT phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [wtNumericId])).rows[0];
+  if (!account || !validateCustomerContact(account).ok) {
+    res.status(422).json({ code: "CONTACT_COMPLETION_REQUIRED", error: "Complete your account phone and contact address before requesting a physical test." });
+    return;
+  }
   const { name, address, phone, email: formEmail, waterSource, concerns, photos, videos } = req.body as {
     name?: string;
     address?: string;
@@ -8213,10 +8589,12 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
     photos?: string[];
     videos?: string[];
   };
-  if (!name || !address || !phone) {
-    res.status(400).json({ error: "Required fields missing" });
+  const testContact = validateCustomerContact({ phone, address });
+  if (!testContact.ok || typeof name !== "string" || !name.trim()) {
+    res.status(400).json({ error: Object.values(testContact.fields).join(" ") || "Enter your name.", fields: testContact.fields });
     return;
   }
+  req.body.phone = testContact.phone;
   const photoList = sanitizeMediaUrls(photos, 6);
   const videoList = sanitizeMediaUrls(videos, 2);
   if (photoList === null || videoList === null) {
@@ -8297,7 +8675,7 @@ router.post("/uc/water-tests", async (req: Request, res: Response): Promise<void
 
   try {
     const [wt] = await db.insert(ucWaterTestsTable).values({
-      id, userId, name, address, phone,
+      id, userId, name: name!.trim(), address: testContact.address, phone: testContact.phone!,
       waterSource: waterSource ?? "Municipal",
       concerns:    concerns ?? "",
       photos:      photoList,
@@ -8537,6 +8915,7 @@ router.patch("/uc/admin/products/:id", async (req, res): Promise<void> => {
     }
 
     logger.info({ productId, updated: Object.keys(wcPayload) }, "[product-edit] product updated in WooCommerce");
+    invalidateCatalogueCache();
     res.json({ ok: true, productId, updated: Object.keys(wcPayload), source: "woocommerce" });
   } catch (err) {
     logger.error({ err, productId }, "[product-edit] WooCommerce PUT error");
@@ -8587,6 +8966,7 @@ router.patch("/uc/admin/inventory/:productId", async (req, res): Promise<void> =
 
     const confirmedQty: number =
       typeof data["stock_quantity"] === "number" ? data["stock_quantity"] : stockQuantity;
+    invalidateCatalogueCache();
 
     // ── Immediate low-stock alert ─────────────────────────────────────────
     // Fire an email when the newly confirmed quantity is at or below the
@@ -8800,7 +9180,8 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
                'g'
              ) ILIKE $${pi})`
       );
-      params.push(`%${q}%`);
+      // PostgreSQL LIKE treats %, _ and backslash specially; search text is literal.
+      params.push(`%${q.replace(/[\\%_]/g, "\\$&")}%`);
       pi++;
     }
     if (from) {
@@ -8872,17 +9253,21 @@ router.get("/uc/admin/customers", async (req, res): Promise<void> => {
       }
     }
 
-    const customers = custRes.rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      firstName: r.first_name,
-      lastName: r.last_name,
-      name: `${r.first_name} ${r.last_name}`.trim(),
-      phone: r.phone,
-      joinedAt: r.created_at,
-      orderCount: orderCountMap[r.id] ?? 0,
-      products: productNamesMap[r.id] ?? [],
-    }));
+    const customers = custRes.rows.map((r) => {
+      const firstName = r.first_name.trim().replace(/\s+/g, " ");
+      const lastName = r.last_name.trim().replace(/\s+/g, " ");
+      return {
+        id: r.id,
+        email: r.email,
+        firstName,
+        lastName,
+        name: [firstName, lastName].filter(Boolean).join(" "),
+        phone: r.phone,
+        joinedAt: r.created_at,
+        orderCount: orderCountMap[r.id] ?? 0,
+        products: productNamesMap[r.id] ?? [],
+      };
+    });
 
     res.json({ customers, total, page, limit });
   } catch (err) {
@@ -8983,6 +9368,9 @@ router.get("/uc/admin/customers/export", async (req: Request, res: Response): Pr
 // Any logged-in team member (admin or regular) can read this count.
 // UC-only credentials are not accepted; the endpoint uses the ProjectHub
 // team-session JWT issued by POST /api/auth/login.
+// Reporting contract: Africa/Nairobi; weeks start Monday at 00:00 and months
+// start on the first at 00:00. Convert local boundaries back to absolute instants
+// so PostgreSQL's session timezone cannot change signup classification.
 router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
   const claims = verifyToken(req.headers["authorization"]);
   if (!claims || claims.type !== "team-session") {
@@ -8990,20 +9378,15 @@ router.get("/uc/admin/customers/count", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { rows } = await pool.query<{ count: number; new_this_week: number; new_this_month: number }>(
-      `SELECT
-         COUNT(*)::int                                                        AS count,
-         COUNT(*) FILTER (WHERE created_at >= date_trunc('week',  now()))::int AS new_this_week,
-         COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int AS new_this_month
-       FROM uc_users
-       WHERE deleted_at IS NULL`
-    );
-    const row = rows[0];
-    res.json({
-      count:        row?.count         ?? 0,
-      newThisWeek:  row?.new_this_week  ?? 0,
-      newThisMonth: row?.new_this_month ?? 0,
-    });
+    // Identity claims alone cannot prove this is still an active team account.
+    // Keep member access, but reject deactivated/deleted and legacy principals.
+    const [teamUser] = await db.select({ isActive: teamUsersTable.isActive })
+      .from(teamUsersTable).where(eq(teamUsersTable.id, String(claims.id))).limit(1);
+    if (!teamUser?.isActive) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    res.json(await getCustomerStatistics());
   } catch (err) {
     logger.error({ err }, "[customers/count] query failed");
     res.status(500).json({ error: "Internal server error" });

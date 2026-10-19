@@ -1,0 +1,49 @@
+Implement the attached Ultra Clear / Hydra Flux visual sample in the existing Ultra Clear Companion App. Complete the working implementation and verification, not just a plan.
+
+Treat the image as the visual reference for layout, spacing, colour treatment and information hierarchy. The three phones represent consecutive sections of ONE scrolling product page, not three separate pages.
+
+INSPECT AND PRESERVE
+
+First inspect the existing app, product data, styles, assets, routes and checkout.
+Reuse existing components and integrations.
+Preserve confirmed information and working functionality.
+Do not rebuild unrelated areas or replace established product data with placeholders.
+
+Confirmed product facts:
+- Hydra Flux: 750 ml container capacity.
+- Truva Go: 750 ml container capacity.
+- Survivor straw: 300 litres filtration lifespan.
+
+UC_SKU_Master_v6.xlsx is a fallback reference only. Use it for missing, non-conflicting information. It must not supersede confirmed work.
+
+VISUAL DIRECTION
+
+Follow the attached sample:
+- Clean white background.
+- Deep navy headings.
+- Teal primary buttons.
+- Pale aqua information cards.
+- Rounded corners and restrained borders.
+- Generous spacing.
+- Clear, readable typography.
+- Simple, consistent line icons.
+
+Use the existing approved Ultra Clear logo and brand tokens where available. Keep the visual character of the reference while respecting established branding.
+
+Do not reproduce the phone frames, presentation title, numbered labels or concept footer inside the app.
+
+SECTION 1 — CHOOSE
+
+Build the opening section with:
+- Compact app header, Ultra Clear branding and functional cart control.
+- “Hydra Flux” heading.
+- “750 ml filter bottle” subtitle.
+- Large product image.
+- Four labelled gallery thumbnails: Product, In use, Size, Included.
+- Colour selection using actual established variants.
+- Confirmed selling price.
+- Delivery information or delivery-cost lookup where supported.
+- Prominent primary purchase button.
+- Secondary “Will it suit my water?” link.
+
+Use actual product photographs already

@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { normalizeInternationalPhone, type SupportedCountryCode } from "./phone";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { parsePhoneNumberFromString } from "./phone-runtime.js";
 
 const FIRST_NAME_PATTERN = /^\p{L}[\p{L}\p{M}]*(?:[ '\u2019-]\p{L}[\p{L}\p{M}]*)*$/u;
 const REPEATED_CHARACTER_PATTERN = /([\p{L}\p{M}])\1{2,}/iu;

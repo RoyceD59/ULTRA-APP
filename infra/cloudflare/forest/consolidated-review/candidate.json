@@ -1,0 +1,35 @@
+{
+  "sourceCommit": "e91771af7f56fd838152d2b66560ecacfc451b85",
+  "parentSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "candidateSha256": "57b70b22b6faf692cc14c17b7858da52111d208354acab84f4e5d14f24c36feb",
+  "derivedDependencyPaths": [
+    "package.json",
+    "pnpm-lock.yaml",
+    "artifacts/api-server/package.json"
+  ],
+  "sourceFiles": 1908,
+  "sourceBytes": 14721931,
+  "protectedExactParentPaths": [
+    "artifacts/api-server/scripts/import-global-impact.ts",
+    "artifacts/api-server/src/lib/global-impact-store.ts",
+    "artifacts/api-server/src/routes/uc-impact.ts",
+    "artifacts/api-server/src/lib/jwt.ts",
+    "artifacts/api-server/src/lib/review-media-signature.ts",
+    "artifacts/api-server/src/routes/storage.ts",
+    "lib/db/src/schema/uc-global-impact.ts",
+    "lib/db/migrations/0067_uc_global_impact.sql",
+    "artifacts/uc-companion/hooks/useGlobalImpact.ts",
+    "artifacts/uc-companion/lib/globalImpact.ts",
+    "artifacts/uc-companion/lib/releasePolicy.ts",
+    "artifacts/uc-companion/scripts/active-static-build.cjs",
+    "artifacts/uc-companion/scripts/prepare-static-build.cjs"
+  ],
+  "excluded": "Untracked files, other products, runtime records, secret files and generated build output",
+  "status": "consolidated source review only; NOT SELECTED; NOT PUBLISHED",
+  "selectionApproved": false,
+  "publicationApproved": false,
+  "schemaApplied": false,
+  "clientAdvancement": false,
+  "changedFileCount": 928,
+  "scopeSha256": "b86f3a461b0f8b127b2d6620c63f5e423518d6a11e117dbaffbc9de4646050ed"
+}

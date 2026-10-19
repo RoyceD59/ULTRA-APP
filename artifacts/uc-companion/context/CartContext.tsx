@@ -6,9 +6,12 @@ import {
   CART_STORAGE_KEY,
   loadCartFromStorage,
   mergeItem,
+  cartLineKey,
   totalItems as calcTotalItems,
   totalPrice as calcTotalPrice,
 } from './cartStorage';
+import { trackEvent } from '@/lib/analytics';
+import { trackProductEvent } from '@/lib/productAnalytics';
 
 export type { CartItem };
 
@@ -28,8 +31,8 @@ interface CartContextValue {
    */
   cartLoadError: boolean;
   addItem: (product: CartItem) => void;
-  removeItem: (id: number) => void;
-  updateQty: (id: number, qty: number) => void;
+  removeItem: (id: number | string) => void;
+  updateQty: (id: number | string, qty: number) => void;
   clearCart: () => void;
   /** Re-read cart from AsyncStorage.  Call on tab focus to guarantee fresh data. */
   refreshCart: () => Promise<void>;
@@ -175,22 +178,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
       persist(next, v);
       return next;
     });
+    // Every real customer-facing add path funnels through this method.
+    // Keep analytics outside the state updater to avoid Strict Mode replays.
+    trackEvent('cart_item_added', { productId: product.id, quantity: product.quantity });
+    trackProductEvent('add_to_cart', { productId: product.id, sku: product.childSku || product.sku, quantity: product.quantity });
   }, [writeSync, persist]);
 
-  const removeItem = useCallback((id: number) => {
+  const removeItem = useCallback((id: number | string) => {
     const v = ++writeSync.version;
     setItems(prev => {
-      const next = prev.filter(i => i.id !== id);
+      const next = prev.filter(i => typeof id === 'string' ? cartLineKey(i) !== id : i.id !== id);
       persist(next, v);
       return next;
     });
   }, [writeSync, persist]);
 
-  const updateQty = useCallback((id: number, qty: number) => {
+  const updateQty = useCallback((id: number | string, qty: number) => {
     if (qty <= 0) { removeItem(id); return; }
     const v = ++writeSync.version;
     setItems(prev => {
-      const next = prev.map(i => i.id === id ? { ...i, quantity: qty } : i);
+      const next = prev.map(i => (typeof id === 'string' ? cartLineKey(i) === id : i.id === id) ? { ...i, quantity: qty } : i);
       persist(next, v);
       return next;
     });

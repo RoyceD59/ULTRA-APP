@@ -1,0 +1,50 @@
+{
+  "checkedAt": "2026-10-03T20:03:55.045Z",
+  "companion": {
+    "revision": "a20475fad106ff663dc1cf674c8b9e5ad0720f79",
+    "buildId": "1791046893101-342",
+    "signedInFlow": "blocked",
+    "nativeDeviceChecks": "not performed"
+  },
+  "router": {
+    "name": "ucfilters-host-router",
+    "deploymentId": "42a99cfe1b4c4492afc8b62755b37da3",
+    "etag": "773ba24971eaca0ac71465d64641539044acea3c899efd44fd6207ff1ed87d51",
+    "before": "router-before.txt",
+    "after": "router-after.js",
+    "scope": "Exact public forest GET/HEAD and corresponding OPTIONS only",
+    "settingsPreserved": true,
+    "candidateChecksPassed": 9
+  },
+  "production": {
+    "forestGet": 200,
+    "forestHead": 200,
+    "getPreflight": 204,
+    "headPreflight": 204,
+    "postPreflightHasCors": false,
+    "guestPrivateTree": 401,
+    "signedTeamPrincipalPrivateTree": 401,
+    "privateTreeHasForestCors": false,
+    "trailingSlashHasForestCors": false,
+    "suffixPathHasForestCors": false,
+    "deletedPrincipal": "covered in isolated tests; no deleted production fixture exists",
+    "forestBrowserShowsLiveFigures": true
+  },
+  "programme": {
+    "eligibleRevenueKes": 0,
+    "contributionRate": 0.03,
+    "treeShare": 0.5,
+    "treeFundKes": 0,
+    "cleanWaterKes": 0,
+    "fieldEvidenceStatus": "pending"
+  },
+  "isolatedApiTestsPassed": 11,
+  "productionCommandsRestored": false,
+  "remaining": [
+    "Authenticate the dedicated production test customer",
+    "Verify signed-in card-to-forest, account switching and retained personal impact values",
+    "Package and publish approved sign-in fixes without unrelated features if required",
+    "Resolve production social authentication Invalid host error",
+    "Restore normal artifact production commands after successful signed-in verification"
+  ]
+}

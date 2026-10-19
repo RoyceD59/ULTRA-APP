@@ -36,8 +36,13 @@
 
 import { Pool } from "pg";
 import { spawn, type ChildProcess } from "node:child_process";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { testResourceLimits } from "./resource-limits.js";
+
+// Each tsx worker starts esbuild. High advertised host CPU counts combined
+// with 32 workers can exhaust the container's OS-thread limit before tests run.
+const resourceLimits = testResourceLimits(process.env);
 
 // ── 0. Require DATABASE_URL ───────────────────────────────────────────────────
 
@@ -104,7 +109,7 @@ function spawnAsync(
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
-      env: opts.env,
+      env: { ...opts.env, GOMAXPROCS: resourceLimits.goMaxProcs },
       stdio: opts.stdio === "pipe" ? ["pipe", "pipe", "pipe"] : "inherit",
     });
     activeChild = child;
@@ -243,6 +248,27 @@ if (pushExitCode !== 0) {
   process.exit(1);
 }
 
+// Review edit/deletion invariants live in a database trigger, not Drizzle DDL.
+// Apply the same idempotent SQL used at API startup in every isolated test DB.
+const reviewMigrationDb = new Pool({ connectionString: TEST_URL });
+try {
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0056_review_analysis.sql", import.meta.url), "utf8",
+  ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0061_uc_customer_statistics.sql", import.meta.url), "utf8",
+  ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0062_referral_threshold_audit_append_only.sql", import.meta.url), "utf8",
+  ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0065_runtime_observability.sql", import.meta.url), "utf8",
+  ));
+  await reviewMigrationDb.query(await readFile(
+    new URL("../../../../lib/db/migrations/0067_uc_global_impact.sql", import.meta.url), "utf8",
+  ));
+} finally { await reviewMigrationDb.end(); }
+
 console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 
 // ── 6. Run the test suite as a child process ──────────────────────────────────
@@ -252,21 +278,40 @@ console.log(`[test-setup] Database "${TEST_DB}" ready — running tests…\n`);
 // connects to the isolated database.
 
 const testGlob = process.env["TEST_GLOB"];
-// These remaining suites share process-wide or account/settlement state.
+// These remaining suites share process-wide or account/settlement state, or
+// exercise bounded parser workers that must not compete with the parallel pool.
 // The default run executes ordinary files in one parallel phase, then these
 // files in a separate serial phase against the same isolated database.
 const SHARED_STATE_FILES = [
+  // Recovery badge assertions compare a global count; isolate other suites' writes.
+  "admin-recovery-status",
   "agent-oauth-routes",
   "blog-editorial",
   "canonical-dual-write-routes",
   "cod-order-validation",
   "dual-failure-alert",
+  // Both files exercise the same global stock-digest advisory lock. Keep
+  // unrelated test workers from being mistaken for an overlapping cron run.
+  "inventory-integrations",
+  // Keep real PDF worker rejection checks inside their production time budget.
+  // Serialize the CPU-heavy fixture instead of increasing the parser timeout.
+  "library-knowledge",
+  "library-knowledge-routes",
+  "low-stock-alert",
+  // Both suites drain the same global order outbox; isolate them from the
+  // parallel phase so one worker cannot claim another suite's work.
+  "order-fulfillment",
+  "order-status-pipeline",
   "orders-csv-export",
   "paystack-retryable",
+  // Threshold audit and lifecycle tests both mutate singleton referral settings.
+  "referral-alert-threshold-audit",
   "referral-lifecycle",
   "reminder-checkin-sent-stages",
   "reminder-good-checkin-revert",
   "reminder-sync-first-insert",
+  // Seeds the legacy singleton passcode hash; do not race other settings tests.
+  "session-secret-rotation",
   "wishlist-restock-check",
 ];
 const testNamePattern = process.env["TEST_NAME_PATTERN"];
@@ -309,7 +354,7 @@ async function runTestPhase(
     ],
     {
       cwd: testCwd,
-      env: { ...process.env, DATABASE_URL: TEST_URL },
+      env: { ...process.env, DATABASE_URL: TEST_URL, NODE_ENV: "test" },
       stdio: "inherit",
     },
   );
@@ -318,7 +363,7 @@ async function runTestPhase(
 let childExitCode: number;
 if (testGlob) {
   // Explicit TEST_GLOB runs retain their historical single-phase behavior.
-  const concurrency = SHARED_STATE_FILES.some((part) => testGlob.includes(part)) ? 1 : 32;
+  const concurrency = SHARED_STATE_FILES.some((part) => testGlob.includes(part)) ? 1 : resourceLimits.concurrency;
   childExitCode = await runTestPhase("focused tests", [testGlob], concurrency);
 } else {
   const allTests = await listTestFiles(`${testCwd}/src/tests`);
@@ -339,7 +384,7 @@ if (testGlob) {
   const ordinaryExitCode = await runTestPhase(
     "ordinary tests",
     [asGlob(ordinaryTests)],
-    32,
+    resourceLimits.concurrency,
     ordinaryTests.length,
   );
   const sharedExitCode = await runTestPhase(

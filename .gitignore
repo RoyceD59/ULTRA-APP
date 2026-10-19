@@ -1,3 +1,4 @@
+.hydrate-release/
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output
@@ -48,8 +49,31 @@ Thumbs.db
 .cache/
 .local/
 
+# Generated monitor evidence is retained by CI, not source or release input.
+/generated-artifacts/public-impact-monitor/
+/generated-artifacts/guest-payment-fixture/
+/generated-artifacts/product-page-release/
+
 # WhatsApp session state — live credentials written at runtime; never commit
 artifacts/api-server/.whatsapp-session/
 
 # Runtime JSONL data records (contain customer PII) — never commit
 artifacts/api-server/data/
+
+# Local secrets and generated Companion releases
+.env
+.env.*
+!.env.example
+artifacts/uc-companion/static-build/
+artifacts/uc-companion/forest-dist/
+.offline-filter-release/
+.checkout-activation-release/
+.companion-consistency-release/
+# Disposable checksum-scoped compilation only. Approved source archives and
+# docs/development-change-log.md are intentionally tracked (see docs/gitignore-record.md).
+.consistency-build/
+
+# Exact public rollback dependencies, hash-verified against served bundles.
+# These are release inputs, not installed workspace dependency trees.
+!infra/cloudflare/forest/rollback-static/**/node_modules/
+!infra/cloudflare/forest/rollback-static/**/node_modules/**

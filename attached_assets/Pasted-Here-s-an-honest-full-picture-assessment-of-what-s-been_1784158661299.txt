@@ -1,0 +1,70 @@
+Here's an honest full-picture assessment of what's been built, what each piece does, and where the orchestration connections are strong versus still incomplete.
+What's Been Built
+1. API Server — artifacts/api-server
+
+The backbone of everything. Express + TypeScript + PostgreSQL (Drizzle ORM).
+Route	Function
+GET /api/agents	Lists all 8 agents + their status
+GET /api/agents/:id	Single agent detail
+GET /api/activity	Live activity feed from DB
+GET /api/stats	Aggregate metrics
+POST /api/anthropic/conversations	Create a conversation tied to an agent
+GET /api/anthropic/conversations/:id/messages	Load message history
+POST /api/anthropic/conversations/:id/messages	Send a message → streams Claude's reply via SSE
+POST /api/webhook/projecthub	Receives status reports from Team-AI-Embedded
+
+The 8 agents in the database each have a unique system prompt defining their role — Orchestrator, Product Data, SEO, Content, CRO, Support, Inventory, Analytics.
+2. Web Dashboard — artifacts/agent-dashboard
+
+The command center. React + Vite, "Cyber Lab" dark theme.
+
+    Grid of all 8 agent cards with live status (active/busy/paused)
+    Click any agent → opens a real streaming chat powered by Claude Sonnet via the API
+    Global Activity feed
+    System Config tab
+
+Connection strength: Strong — fully wired to the API via auto-generated React Query hooks.
+3. Mobile App — artifacts/agent-mobile
+
+Mirror of the dashboard on iOS/Android. Expo React Native, identical design tokens.
+
+    Agents list → tap → full streaming chat screen per agent
+    Activity feed with pull-to-refresh
+    Stats grid (agents, conversations, messages)
+
+Connection strength: Strong — uses the same generated API client and hits the same API server.
+4. Shared Libraries — lib/
+Package	Does
+lib/db	Drizzle schema: agents, conversations, messages, activity tables
+lib/api-zod	Zod validation schemas for every API shape
+lib/api-client-react	Auto-generated React Query hooks (orval)
+lib/integrations-anthropic-ai	Anthropic client wrapper (streaming)
+How Well Are They Linked?
+✅ Strong connections
+
+    Web + Mobile → API → DB → Claude — this full chain works end-to-end. A message typed on the phone streams back Claude's reply in real time using the agent's system prompt.
+    Shared types — the same Zod schemas + generated client means the web, mobile, and API all speak exactly the same data shapes.
+    Activity logging — every AI interaction writes to the activity table, which both the web and mobile read live.
+
+⚠️ Partial connections
+
+    Webhook → Orchestrator — the webhook receives ProjectHub reports and logs them, but the // TODO handoff to the Orchestrator agent isn't wired yet. Reports arrive and disappear into the console rather than being ingested.
+
+❌ Gaps in true AI orchestration
+
+These are the honest gaps between "agents that each chat with Claude" and a real orchestration system:
+
+    Agents don't talk to each other — each conversation is siloed. The Orchestrator agent can discuss orchestration with a human but can't actually dispatch a task to the SEO agent programmatically.
+    No task queue or event bus — there's no mechanism for an agent to trigger another agent's action. A real orchestration layer would need something like a job queue (e.g. BullMQ) or a pub/sub system.
+    No shared memory between agents — the Orchestrator has no access to what the Content or SEO agents said in their conversations. Each agent's memory is isolated to its own conversation thread.
+    Webhook reports aren't acted on — when ProjectHub pushes a status report, it should trigger the Orchestrator to analyse it and potentially dispatch tasks to other agents. Right now it just logs.
+
+What Would Complete the Orchestration
+
+The highest-value next steps to turn this from "8 independent chatbots" into a real AI orchestration layer:
+
+    Wire the webhook → Orchestrator — when a ProjectHub report arrives, POST it to the Orchestrator's conversation as a system message so Claude can analyse it
+    Agent-to-agent dispatch — let the Orchestrator trigger another agent (e.g. POST to /api/agents/2/tasks) and store the result
+    Shared context store — a simple key/value table where agents can write and read shared state (e.g. current campaign brief, active risks)
+
+The foundation is solid — the infrastructure, streaming AI, real database, and shared libraries are all production-quality. The gap is the orchestration logic that connects the agents into a coordinated system rather than independent ones.

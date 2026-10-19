@@ -1,0 +1,815 @@
+{
+  "measuredAt": "2026-10-04T02:40:10.296Z",
+  "origin": "https://app.ucfilters.com",
+  "note": "Chromium workspace simulation. Cold/warm refer to browser cache only. LCP/CLS are lab observations; INP requires representative interactions/field data. No physical Android/iPhone claims.",
+  "samples": [
+    {
+      "throttled": false,
+      "run": 0,
+      "warmth": "cold",
+      "route": "/guide/survivor-straw-guide",
+      "observationMs": 7771,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 1276,
+        "cls": 0.005679415449076466,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 265.20000000018626,
+          "transfer": 1197464,
+          "encoded": 1197164,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 86.9000000001397,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 67.29999999981374,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 116.5999999998603,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 19.5,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/favicon.ico",
+          "duration": 169.89999999990687,
+          "transfer": 309,
+          "encoded": 9,
+          "decoded": 9
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 14.400000000139698,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 12.5,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 12.300000000046566,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 11.800000000046566,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 364.39999999990687,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 0.5,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 76.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 5310.800000000047,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 231.69999999995343,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 135,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/guide/survivor-straw-guide",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 750,
+        "navigationId": 3898,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 3.699999999953434,
+        "domainLookupStart": 7.599999999860302,
+        "domainLookupEnd": 7.599999999860302,
+        "connectStart": 7.599999999860302,
+        "secureConnectionStart": 13.199999999953434,
+        "connectEnd": 75,
+        "requestStart": 76.30000000004657,
+        "responseStart": 238.5,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 238.5,
+        "responseEnd": 240.30000000004657,
+        "transferSize": 1458,
+        "encodedBodySize": 1158,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "MISS"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 6,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 142,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 273.80000000004657,
+        "domContentLoadedEventStart": 741.3999999999069,
+        "domContentLoadedEventEnd": 744,
+        "domComplete": 746.0999999998603,
+        "loadEventStart": 749.8999999999069,
+        "loadEventEnd": 750,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "high"
+        }
+      },
+      "visibleText": "guide/[id]\nINSTALLATION\n4 min read\n\nSurvivor Straw — field use & maintenance\nSurvivor Straw\nDrink safely from any water source: rivers, streams, boreholes, or emergency supplies.\n\n5 sections · tap to expand\n1\nHow the Survivor Straw works\n\n\nThe Survivor Straw contains a compressed filtration block that removes >99.9% of bacteria (E. coli, Salmonella, Vibrio cholerae) and protozoa (Giardia, Cryptosporidium) as water is drawn through it by suction. It does not remove dissolved chemicals, heavy metals, or viruses — in those conditions, combine with water purification tablets.\n2\nFirst use\n\n3\nBackflushing (cleaning)\n\n4\nWhen to replace\n\n5\nField storage\n\nWas this guide helpful?\n\nYes, helpful\n\nNot really\n\nStill need help?\nCall 0717774049 or submit a ticket\nGet Help",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 0.634515,
+        "TaskDuration": 0.817934
+      }
+    },
+    {
+      "throttled": false,
+      "run": 0,
+      "warmth": "warm",
+      "route": "/guide/survivor-straw-guide",
+      "observationMs": 7142,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 244,
+        "cls": 0.005679415449076466,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 1197164,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 9,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 27.9000000001397,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 27.600000000093132,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 27.300000000046566,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 311.89999999990687,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 7,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 65,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 15.199999999953434,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 152.60000000009313,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 220.80000000004657,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 225.9000000001397,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/guide/survivor-straw-guide",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 535.3999999999069,
+        "navigationId": 7178,
+        "initiatorType": "navigation",
+        "deliveryType": "cache",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0.7999999998137355,
+        "domainLookupStart": 0.7999999998137355,
+        "domainLookupEnd": 0.7999999998137355,
+        "connectStart": 0.7999999998137355,
+        "secureConnectionStart": 0.7999999998137355,
+        "connectEnd": 0.7999999998137355,
+        "requestStart": 1.6999999999534339,
+        "responseStart": 1.6999999999534339,
+        "firstInterimResponseStart": 1.6999999999534339,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 4.599999999860302,
+        "transferSize": 0,
+        "encodedBodySize": 1158,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "MISS"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 6,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 142,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 11.099999999860302,
+        "unloadEventEnd": 11.099999999860302,
+        "domInteractive": 27.899999999906868,
+        "domContentLoadedEventStart": 125.89999999990687,
+        "domContentLoadedEventEnd": 126.5999999998603,
+        "domComplete": 534.8999999999069,
+        "loadEventStart": 535.2999999998137,
+        "loadEventEnd": 535.3999999999069,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "low"
+        }
+      },
+      "visibleText": "guide/[id]\nINSTALLATION\n4 min read\n\nSurvivor Straw — field use & maintenance\nSurvivor Straw\nDrink safely from any water source: rivers, streams, boreholes, or emergency supplies.\n\n5 sections · tap to expand\n1\nHow the Survivor Straw works\n\n\nThe Survivor Straw contains a compressed filtration block that removes >99.9% of bacteria (E. coli, Salmonella, Vibrio cholerae) and protozoa (Giardia, Cryptosporidium) as water is drawn through it by suction. It does not remove dissolved chemicals, heavy metals, or viruses — in those conditions, combine with water purification tablets.\n2\nFirst use\n\n3\nBackflushing (cleaning)\n\n4\nWhen to replace\n\n5\nField storage\n\nWas this guide helpful?\n\nYes, helpful\n\nNot really\n\nStill need help?\nCall 0717774049 or submit a ticket\nGet Help",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 0.145339,
+        "TaskDuration": 0.301985
+      }
+    },
+    {
+      "throttled": true,
+      "run": 0,
+      "warmth": "cold",
+      "route": "/guide/survivor-straw-guide",
+      "observationMs": 25231,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 8256,
+        "cls": 0.005679415449076466,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 6217.699999999953,
+          "transfer": 1195562,
+          "encoded": 1195262,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 194.69999999995343,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 296.30000000004657,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 225.39999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 166.4000000001397,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 0.5999999998603016,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 0.8000000000465661,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 1,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 0.30000000004656613,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 847.1000000000931,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 0.39999999990686774,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 164.20000000018626,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 559.1999999999534,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 245,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 232.5,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/guide/survivor-straw-guide",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 7130.90000000014,
+        "navigationId": 5537,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0.5,
+        "domainLookupStart": 1.1000000000931323,
+        "domainLookupEnd": 5.5,
+        "connectStart": 5.5,
+        "secureConnectionStart": 16.700000000186265,
+        "connectEnd": 43.800000000046566,
+        "requestStart": 43.9000000001397,
+        "responseStart": 109,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 109,
+        "responseEnd": 206.80000000004657,
+        "transferSize": 1456,
+        "encodedBodySize": 1156,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "EXPIRED"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 12,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 37,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 278.10000000009313,
+        "domContentLoadedEventStart": 7108.700000000186,
+        "domContentLoadedEventEnd": 7121.40000000014,
+        "domComplete": 7124.200000000186,
+        "loadEventStart": 7130,
+        "loadEventEnd": 7130.90000000014,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "low"
+        }
+      },
+      "visibleText": "guide/[id]\nINSTALLATION\n4 min read\n\nSurvivor Straw — field use & maintenance\nSurvivor Straw\nDrink safely from any water source: rivers, streams, boreholes, or emergency supplies.\n\n5 sections · tap to expand\n1\nHow the Survivor Straw works\n\n\nThe Survivor Straw contains a compressed filtration block that removes >99.9% of bacteria (E. coli, Salmonella, Vibrio cholerae) and protozoa (Giardia, Cryptosporidium) as water is drawn through it by suction. It does not remove dissolved chemicals, heavy metals, or viruses — in those conditions, combine with water purification tablets.\n2\nFirst use\n\n3\nBackflushing (cleaning)\n\n4\nWhen to replace\n\n5\nField storage\n\nWas this guide helpful?\n\nYes, helpful\n\nNot really\n\nStill need help?\nCall 0717774049 or submit a ticket\nGet Help",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 1.810748,
+        "TaskDuration": 2.305652
+      }
+    },
+    {
+      "throttled": true,
+      "run": 0,
+      "warmth": "warm",
+      "route": "/guide/survivor-straw-guide",
+      "observationMs": 19380,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 2120,
+        "cls": 0.005679415449076466,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 1195262,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 176.29999999981374,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 179.60000000009313,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 51.89999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 45.200000000186265,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 43.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 42.39999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 831,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 8.399999999906868,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 157.4000000001397,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 559.9000000001397,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 158.5,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 169.69999999995343,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/guide/survivor-straw-guide",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 1862.1999999999534,
+        "navigationId": 8588,
+        "initiatorType": "navigation",
+        "deliveryType": "cache",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 8.5,
+        "domainLookupStart": 8.5,
+        "domainLookupEnd": 8.5,
+        "connectStart": 8.5,
+        "secureConnectionStart": 8.5,
+        "connectEnd": 8.5,
+        "requestStart": 15.600000000093132,
+        "responseStart": 15.800000000046566,
+        "firstInterimResponseStart": 15.800000000046566,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 20.699999999953434,
+        "transferSize": 0,
+        "encodedBodySize": 1156,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "EXPIRED"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 12,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 37,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 215.5,
+        "unloadEventEnd": 215.5,
+        "domInteractive": 676,
+        "domContentLoadedEventStart": 1253,
+        "domContentLoadedEventEnd": 1310.9000000001397,
+        "domComplete": 1850.4000000001397,
+        "loadEventStart": 1861.1000000000931,
+        "loadEventEnd": 1862.1999999999534,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "high"
+        }
+      },
+      "visibleText": "guide/[id]\nINSTALLATION\n4 min read\n\nSurvivor Straw — field use & maintenance\nSurvivor Straw\nDrink safely from any water source: rivers, streams, boreholes, or emergency supplies.\n\n5 sections · tap to expand\n1\nHow the Survivor Straw works\n\n\nThe Survivor Straw contains a compressed filtration block that removes >99.9% of bacteria (E. coli, Salmonella, Vibrio cholerae) and protozoa (Giardia, Cryptosporidium) as water is drawn through it by suction. It does not remove dissolved chemicals, heavy metals, or viruses — in those conditions, combine with water purification tablets.\n2\nFirst use\n\n3\nBackflushing (cleaning)\n\n4\nWhen to replace\n\n5\nField storage\n\nWas this guide helpful?\n\nYes, helpful\n\nNot really\n\nStill need help?\nCall 0717774049 or submit a ticket\nGet Help",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 1.275534,
+        "TaskDuration": 2.522353
+      }
+    }
+  ]
+}

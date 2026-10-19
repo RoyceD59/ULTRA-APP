@@ -150,7 +150,49 @@ the app the entire process is torn down; on the next launch `useState(false)` ru
 `processing` starts as `false`.  The checkout button therefore cannot be stuck disabled after
 a force-quit regardless of which payment step was in-flight.
 
-The three scenarios below confirm this on both iOS and Android.
+The scenarios below are manual checks for both iOS and Android; they are not
+evidence that a physical-device force-quit has been performed.
+
+### Cart persistence confirmation
+
+Source inspection confirms that `context/CartContext.tsx` already persists the
+cart to AsyncStorage under `uc_cart_v1` on every mutation: `addItem`,
+`removeItem`, `updateQty` (including removal at quantity zero), and `clearCart`.
+Writes are serialized, superseded snapshots are skipped, and a failed write is
+retried once. The latest snapshot is saved without waiting for checkout success
+or a background event. A fresh `CartProvider` loads it on mount; cart and checkout
+wait for `cartHydrated` instead of treating the initial in-memory `[]` as an empty
+saved basket.
+
+**Confirmed by automated regression:** `hooks/__tests__/cartForceQuit.test.mts`
+drives each mutation through the real provider, lets the storage write settle,
+discards the provider, and mounts a fresh one against the surviving AsyncStorage
+mock. It checks restored item details, quantities, totals, removals, and explicit
+clearing. No persistence implementation change was necessary.
+
+**Limits:** these tests simulate a cold launch, not native disk I/O or an OS kill.
+AsyncStorage writes are asynchronous: killing the process before the latest write
+finishes can lose that latest change. If both write attempts fail, only the previous
+successfully saved snapshot survives. Uninstalling the app or clearing its storage
+also removes the cart. The device checks below remain manual verification.
+
+**Cart assertions for scenarios 8 and 9**
+1. Before checkout, add two distinct products and change one quantity. Record
+   their names, quantities, line prices, and cart subtotal.
+2. Force-quit during the specified payment step, before client-side order success
+   calls `clearCart`. On Android, use Settings → Apps → UC Companion → **Force stop**
+   if swiping Recents does not terminate the process; on iOS, swipe the app away
+   in the app switcher.
+3. Relaunch the same installation without clearing its storage. Navigate to Cart
+   if the launch route is not Checkout, and wait for hydration.
+4. Confirm both products, edited quantities, and subtotal are unchanged; checkout
+   must use those restored items. A loading/error state is not an empty-cart result.
+5. As a control, explicitly remove an item and relaunch: it must stay removed.
+   Explicitly clear the cart and relaunch: it must stay empty.
+
+Cart restoration does **not** confirm whether the previous payment completed.
+Check payment/order status before attempting another charge; these cart checks
+do not establish payment-recovery or duplicate-charge safety.
 
 ---
 

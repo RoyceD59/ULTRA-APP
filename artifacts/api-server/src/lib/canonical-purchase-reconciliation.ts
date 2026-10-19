@@ -32,6 +32,7 @@ type Order = {
   payment_method: string; payment_reference: string | null; mpesa_receipt: string;
   discount_amount: number; date_created: Date | string; payment_confirmed_at: Date | string | null;
   wc_order_id: number | null;
+  fulfillment_payment_status: string | null;
 };
 type Item = { id: number; product_id: number; name: string; quantity: number; total: string };
 type Purchase = {
@@ -66,13 +67,17 @@ function customer(value: string): number | null {
 }
 function providerStatus(order: Order): string {
   const status = order.status.toLowerCase();
+  if (["dispatched", "shipped", "ready-to-collect", "delivered", "out-for-delivery"].includes(status) &&
+      ["paid", "pending", "failed"].includes(order.fulfillment_payment_status ?? "")) {
+    return order.fulfillment_payment_status!;
+  }
   return order.payment_confirmed_at || ["processing", "completed", "paid"].includes(status)
     ? "paid" : ["failed", "cancelled"].includes(status) ? "failed" : "pending";
 }
 function fulfilmentStatus(order: Order): string {
   const status = order.status.toLowerCase();
   return ["completed", "delivered"].includes(status) ? "completed"
-    : ["processing", "shipped", "out-for-delivery"].includes(status) ? "processing" : "pending";
+    : ["processing", "dispatched", "shipped", "ready-to-collect", "out-for-delivery"].includes(status) ? "processing" : "pending";
 }
 async function advisory(client: PoolClient, key: string) {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]);
@@ -133,7 +138,7 @@ export async function reconcileCanonicalPurchase(
     if (ownsTransaction) await client.query("BEGIN");
     const orderResult = await client.query<Order>(
       `SELECT id,user_id,status,total,currency,payment_method,payment_reference,mpesa_receipt,
-              discount_amount,date_created,payment_confirmed_at,wc_order_id
+              discount_amount,date_created,payment_confirmed_at,wc_order_id,fulfillment_payment_status
        FROM uc_orders WHERE id=$1 FOR UPDATE`, [input.orderId],
     );
     const order = orderResult.rows[0];
@@ -235,7 +240,9 @@ export async function reconcileCanonicalPurchase(
       if (candidate.customer_id !== null && sourceCustomer === null) {
         reasons.push(RECONCILIATION_REASONS.UNKNOWN_SOURCE_OWNER, RECONCILIATION_REASONS.CROSS_CUSTOMER);
       }
-      if (candidate.customer_id === null && sourceCustomer === null) {
+      // Refreshing the same unresolved source does not claim customer ownership.
+      // Unresolved identities still cannot adopt a purchase selected by another key.
+      if (candidate.customer_id === null && sourceCustomer === null && candidate.companion_order_id !== order.id) {
         reasons.push(RECONCILIATION_REASONS.UNKNOWN_SOURCE_OWNER);
       }
       if (candidate.woocommerce_order_id !== null && order.wc_order_id !== null &&

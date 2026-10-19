@@ -2,7 +2,7 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Platform,
   Alert, ActivityIndicator, Keyboard, KeyboardAvoidingView, ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -31,6 +31,7 @@ export default function RegisterScreen() {
   const [lastName,     setLastName]     = useState('');
   const [email,        setEmail]        = useState('');
   const [phone,        setPhone]        = useState('');
+  const [address, setAddress] = useState('');
   const [phoneCountry, setPhoneCountry] = useState<SupportedCountryCode>('KE');
   const [password,     setPassword]     = useState('');
   const [referralCode, setReferralCode] = useState('');
@@ -48,8 +49,8 @@ export default function RegisterScreen() {
   }
 
   async function handleRegister() {
-    if (!firstName || !email || !phone || !password) {
-      Alert.alert('Required fields', 'Please fill in your name, email, phone number and password.');
+    if (!firstName.trim() || !email.trim() || !phone.trim() || !password || !address.trim()) {
+      setRegisterError({ message: 'Enter your name, email, valid phone number, contact address and password.' });
       return;
     }
     if (password.length < 6) {
@@ -70,6 +71,7 @@ export default function RegisterScreen() {
       lastName,
       email:        email.trim(),
       phone:        normalizedPhone,
+      address: address.trim(),
       password,
       referralCode: referralCode.trim() || undefined,
     });
@@ -151,7 +153,7 @@ export default function RegisterScreen() {
                 autoComplete="tel" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} placeholderTextColor={colors.border}
                 style={[styles.inputInner, { color: colors.text }]}
               />
-              {phone && isValidInstantPhone(phone, phoneCountry) && (
+              {!!phone && isValidInstantPhone(phone, phoneCountry) && (
                 <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
               )}
             </View>
@@ -160,6 +162,13 @@ export default function RegisterScreen() {
             </Text>
           </View>
 
+          <View style={styles.field}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Contact address *</Text>
+            <TextInput accessibilityLabel="Contact address" value={address} onChangeText={setAddress}
+              placeholder="Street, building and town" maxLength={500}
+              placeholderTextColor={colors.border}
+              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]} />
+          </View>
           {/* Password */}
           <View style={styles.field}>
             <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Password *</Text>
@@ -209,7 +218,7 @@ export default function RegisterScreen() {
               : <Text style={styles.registerBtnText}>Create Account</Text>}
           </TouchableOpacity>
 
-          {registerError && (
+          {!!registerError && (
             <RegistrationErrorNotice
               message={registerError.message}
               hint={registerError.hint}

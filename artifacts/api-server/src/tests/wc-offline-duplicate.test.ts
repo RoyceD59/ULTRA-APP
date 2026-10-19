@@ -74,6 +74,7 @@ async function createTestUser(): Promise<{ id: number; jwt: string }> {
       firstName: "Test",
       lastName: "Offline",
       phone: "+254711000099",
+      address: "Test building, Nairobi",
     })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;
@@ -164,6 +165,7 @@ describe("WooCommerce path — duplicate delivery when WC is offline on retry", 
     function makeOnlineFetch(): typeof globalThis.fetch {
       return async (url: unknown, init?: RequestInit): Promise<Response> => {
         const u = String(url);
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
 
         if (u.includes("resend.com") && u.includes("/emails")) {
           resendCalls.push(JSON.parse((init?.body as string) ?? "{}"));

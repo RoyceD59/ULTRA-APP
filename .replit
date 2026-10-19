@@ -5,7 +5,7 @@ router = "application"
 deploymentTarget = "autoscale"
 
 [deployment.postBuild]
-args = ["pnpm", "store", "prune"]
+args = ["node", "scripts/prepare-deployment-image.mjs", "--post-build"]
 env = { "CI" = "true" }
 
 [workflows]
@@ -40,38 +40,42 @@ args = "expo-doctor-uc-companion"
 task = "workflow.run"
 args = "api-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "companion-startup-fonts"
+
 [[workflows.workflow]]
 name = "typecheck-projecthub"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/projecthub && pnpm exec tsc --noEmit"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs && cd artifacts/projecthub && pnpm exec tsc --noEmit"
 
 [[workflows.workflow]]
 name = "typecheck-uc-companion"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/uc-companion && pnpm exec tsc --noEmit"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs && cd artifacts/uc-companion && pnpm exec tsc --noEmit"
 
 [[workflows.workflow]]
 name = "typecheck-api-server"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/api-server && pnpm exec tsc --noEmit"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck:libs && cd artifacts/api-server && pnpm exec tsc --noEmit"
 
 [[workflows.workflow]]
 name = "typecheck-libs"
@@ -106,6 +110,17 @@ args = "cd artifacts/api-server && pnpm test"
 [workflows.workflow.metadata]
 isValidation = true
 
+[[workflows.workflow]]
+name = "companion-startup-fonts"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/uc-companion run check:startup-fonts"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -126,5 +141,24 @@ WHATSAPP_SESSION_BUCKET_PATH = "/replit-objstore-83ddc91a-d087-49a2-9cbf-3f91d91
 WC_BASE_URL = "https://www.ucfilters.com"
 STRIPE_ENABLED = "false"
 
+[userenv.development]
+EXPO_PUBLIC_FOREST_URL = "https://uc-hydrate-forest.pages.dev/"
+
+[userenv.production]
+EXPO_PUBLIC_FOREST_URL = "https://uc-hydrate-forest.pages.dev/"
+
 [objectStorage]
 defaultBucketID = "replit-objstore-83ddc91a-d087-49a2-9cbf-3f91d91008cd"
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 20002
+externalPort = 3000
+exposeLocalhost = true
+
+[[ports]]
+localPort = 20100
+externalPort = 80

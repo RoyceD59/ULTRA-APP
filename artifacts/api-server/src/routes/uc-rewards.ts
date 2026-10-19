@@ -11,7 +11,7 @@
  * Customer route (Bearer token — any authenticated UC user):
  *   GET    /uc/customer/rewards          — returns spendable balance, lifetime redeemed, and last 20 ledger entries
  */
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   db, pool, ucNotificationLogTable, ucRewardsRulesTable, ucRewardsLedgerTable,
@@ -24,6 +24,9 @@ import { sendRewardPushNotification } from "../lib/push.js";
 import { normalizeEmail, normalizePhone } from "../lib/customer-identity.js";
 import { consumePromotionOnClient, quotePromotion } from "../lib/reward-promotions.js";
 import { serverPricedLines } from "./uc.js";
+import { checkoutQuote } from "../lib/checkout-pricing.js";
+import { cancelCheckout } from "../lib/checkout-cancellation.js";
+import { hashQrToken, inspectRewardsQr, recoverRewardsQr } from "../lib/rewards-qr.js";
 
 const router: IRouter = Router();
 
@@ -52,14 +55,6 @@ async function isPrimaryAdmin(req: Request): Promise<boolean> {
   return !!primary && (await adminActor(req)).toLowerCase() === primary;
 }
 
-function hashQrToken(token: string): string {
-  return createHash("sha256").update(token, "utf8").digest("hex");
-}
-
-function newQrToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
 function starLevel(litres: number): number {
   if (litres >= 5000) return 5;
   if (litres >= 1000) return 4;
@@ -72,12 +67,15 @@ async function personalImpact(userId: number) {
   const result = await pool.query<{
     id: number; product_id: number; product_name: string; rated_capacity_litres: number;
     activated_at: Date; source_order_id: number | null; used_litres: string;
+    user_id: number; verification_status: string;
+    capacity_usage_valid: boolean;
   }>(`
     SELECT rf.id, rf.product_id, rf.product_name, rf.rated_capacity_litres,
-           rf.activated_at, rf.source_order_id,
-           COALESCE(SUM(w.litres), 0)::text AS used_litres
+            rf.activated_at, rf.source_order_id, rf.user_id, rf.verification_status,
+            COALESCE(SUM(w.litres), 0)::text AS used_litres,
+            COALESCE(BOOL_AND(w.created_at >= rf.activated_at), true) AS capacity_usage_valid
     FROM uc_registered_filters rf
-    LEFT JOIN uc_water_impact_ledger w ON w.registered_filter_id = rf.id
+    LEFT JOIN uc_water_impact_ledger w ON w.registered_filter_id = rf.id AND w.user_id = rf.user_id
     WHERE rf.user_id = $1 AND rf.active = true
     GROUP BY rf.id
     ORDER BY rf.created_at DESC
@@ -86,6 +84,9 @@ async function personalImpact(userId: number) {
     const usedLitres = Number(row.used_litres);
     return {
       id: row.id,
+      userId: row.user_id,
+      verificationStatus: row.verification_status,
+      capacityUsageValid: row.capacity_usage_valid,
       productId: row.product_id,
       productName: row.product_name,
       ratedCapacityLitres: row.rated_capacity_litres,
@@ -133,9 +134,9 @@ async function personalImpact(userId: number) {
   };
 }
 
-async function authenticatedCustomer(req: Request, res: Response): Promise<number | null> {
+export async function authenticatedCustomer(req: Request, res: Response): Promise<number | null> {
   const claims = verifyToken(req.headers["authorization"]);
-  const userId = claims ? Number(claims.id) : 0;
+  const userId = claims && claims.type !== "team-session" ? Number(claims.id) : 0;
   if (!Number.isInteger(userId) || userId <= 0 || userId >= 1_000_000_000) {
     res.status(401).json({ error: "Authentication required" });
     return null;
@@ -171,24 +172,13 @@ router.get("/uc/customer/rewards", async (req: Request, res: Response): Promise<
       .orderBy(desc(ucRewardsLedgerTable.createdAt))
       .limit(20);
 
-    const [user] = await db.select({
-      rewardsQrHash: ucUsersTable.rewardsQrHash,
-      rewardsQrRevokedAt: ucUsersTable.rewardsQrRevokedAt,
-    }).from(ucUsersTable).where(eq(ucUsersTable.id, userId)).limit(1);
-    let qrToken: string | null = null;
-    if (!user?.rewardsQrHash || user.rewardsQrRevokedAt) {
-      const token = newQrToken();
-      await db.update(ucUsersTable).set({
-        rewardsQrHash: hashQrToken(token),
-        rewardsQrRevokedAt: null,
-      }).where(eq(ucUsersTable.id, userId));
-      qrToken = token;
-    }
+    const qr = await inspectRewardsQr(userId);
+    res.setHeader("Cache-Control", "no-store");
     res.json({
       balance: Number(balanceRow?.balance ?? 0),
       lifetimeRedeemed: Number(balanceRow?.lifetimeRedeemed ?? 0),
       ledger,
-      qrToken,
+      qrToken: qr?.qrToken ?? null,
       impact: await personalImpact(userId),
     });
   } catch (err) {
@@ -200,12 +190,38 @@ router.get("/uc/customer/rewards", async (req: Request, res: Response): Promise<
 router.post("/uc/customer/rewards/qr/rotate", async (req: Request, res: Response): Promise<void> => {
   const userId = await authenticatedCustomer(req, res);
   if (!userId) return;
-  const token = newQrToken();
-  await db.update(ucUsersTable).set({
-    rewardsQrHash: hashQrToken(token),
-    rewardsQrRevokedAt: null,
-  }).where(eq(ucUsersTable.id, userId));
-  res.json({ qrToken: token });
+  const version = req.body?.expectedVersion;
+  if (version !== null && (typeof version !== "string" || !/^[a-f0-9]{64}$/.test(version))) {
+    res.status(400).json({ error: "Refresh QR status before recovering your code" }); return;
+  }
+  try {
+    const result = await recoverRewardsQr(userId, version);
+    if (!result) { res.status(401).json({ error: "Authentication required" }); return; }
+    if ("conflict" in result) { res.status(409).json({ error: "QR status changed. Refresh before trying again." }); return; }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(result);
+  } catch {
+    req.log.error("Rewards QR recovery failed");
+    res.status(503).json({ error: "QR recovery unavailable. Please retry." });
+  }
+});
+
+router.post("/uc/customer/rewards/qr/validate", async (req: Request, res: Response): Promise<void> => {
+  const userId = await authenticatedCustomer(req, res);
+  if (!userId) return;
+  const candidate = req.body?.qrToken;
+  if (candidate !== null && (typeof candidate !== "string" || !/^[A-Za-z0-9_-]{40,64}$/.test(candidate))) {
+    res.status(400).json({ error: "Invalid QR token format" }); return;
+  }
+  try {
+    const result = await inspectRewardsQr(userId, candidate ?? undefined);
+    if (!result) { res.status(401).json({ error: "Authentication required" }); return; }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(result);
+  } catch {
+    req.log.error("Rewards QR validation failed");
+    res.status(503).json({ error: "QR verification unavailable. Please retry." });
+  }
 });
 
 router.get("/uc/customer/impact", async (req: Request, res: Response): Promise<void> => {
@@ -606,17 +622,19 @@ router.patch("/uc/admin/rewards/conversion", async (req: Request, res: Response)
 function promotionPayload(body: Record<string, unknown>) {
   const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
   const type = body.type;
-  const effectMode = body.effectMode;
-  const effectValue = Number(body.effectValue);
+  const waived = type === "free_shipping" || type === "free_water_test";
+  const effectMode = waived ? "fixed" : body.effectMode;
+  const effectValue = waived ? 0 : Number(body.effectValue);
   const startsAt = new Date(String(body.startsAt ?? ""));
   const endsAt = body.endsAt == null || body.endsAt === "" ? null : new Date(String(body.endsAt));
   const eligibleProductIds = Array.isArray(body.eligibleProductIds) ? body.eligibleProductIds.map(Number) : [];
   const globalUseLimit = body.globalUseLimit == null || body.globalUseLimit === "" ? null : Number(body.globalUseLimit);
   const perUserUseLimit = body.perUserUseLimit == null || body.perUserUseLimit === "" ? null : Number(body.perUserUseLimit);
-  if (!/^[A-Z0-9_-]{3,64}$/.test(code) || !["bonus_points","redemption_boost","checkout_discount"].includes(String(type)) ||
-      !["fixed","percentage"].includes(String(effectMode)) || !Number.isFinite(effectValue) || effectValue <= 0 ||
+  if (!/^[A-Z0-9_-]{3,64}$/.test(code) || !["bonus_points","redemption_boost","checkout_discount","free_shipping","free_water_test"].includes(String(type)) ||
+      !["fixed","percentage"].includes(String(effectMode)) || !Number.isFinite(effectValue) || (!waived && effectValue <= 0) ||
       (effectMode === "percentage" && effectValue > 100) || isNaN(startsAt.getTime()) ||
       (endsAt && (isNaN(endsAt.getTime()) || endsAt <= startsAt)) || eligibleProductIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+      (type === "free_water_test" && eligibleProductIds.length > 0) ||
       [globalUseLimit, perUserUseLimit].some((n) => n !== null && (!Number.isInteger(n) || n <= 0))) return null;
   return { code, type: String(type), effectMode: String(effectMode), effectValue, startsAt, endsAt, eligibleProductIds: [...new Set(eligibleProductIds)], globalUseLimit, perUserUseLimit };
 }
@@ -656,15 +674,60 @@ router.get("/uc/admin/promotions/:id/usage", async (req,res): Promise<void> => {
   const r=await pool.query(`SELECT operation,count(*)::int AS uses,COALESCE(sum(benefit_amount),0)::text AS benefit FROM uc_promotion_uses WHERE promotion_id=$1 GROUP BY operation`,[id]); res.json({promotionId:id,usage:r.rows});
 });
 
+router.post(["/uc/checkout/quote", "/uc/customer/referrals/discount/quote"], async (req,res): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  const userId = claims?.type !== "team-session" && Number.isInteger(Number(claims?.id)) ? Number(claims?.id) : undefined;
+  try {
+    const quote = await checkoutQuote({ ...req.body, applyReferralDiscount: req.path.includes("/referrals/") || req.body?.applyReferralDiscount === true }, userId);
+    res.json({ ...quote, promotion: quote.promotion ?? { code: quote.code, label: quote.label } });
+  } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+});
+router.post("/uc/checkout/cancel", async (req,res): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  if (req.headers.authorization && !claims) { res.status(401).json({error:"Authentication required"}); return; }
+  if (claims?.type === "team-session") { res.status(403).json({error:"Customer checkout required"}); return; }
+  const userId = claims?.type !== "team-session" && claims ? String(claims.id) : "anonymous";
+  if (typeof req.body?.idempotencyKey !== "string" || req.body.idempotencyKey.length < 8 || req.body.idempotencyKey.length > 200) { res.status(400).json({error:"Checkout key required"}); return; }
+  try { await cancelCheckout(req.body.idempotencyKey,userId); res.json({cancelled:true}); }
+  catch (error) { res.status(409).json({error:(error as Error).message}); }
+});
+router.get("/uc/checkout/recovery", async (req,res): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization);
+  if (claims?.type === "team-session") { res.status(403).json({error:"Customer checkout required"}); return; }
+  if (req.headers.authorization && !claims) { res.status(401).json({error:"Authentication required"}); return; }
+  const userId = claims ? String(claims.id) : "anonymous";
+  const key = req.query.idempotencyKey;
+  if (typeof key !== "string" || key.length < 8 || key.length > 200) { res.status(400).json({error:"Checkout key required"}); return; }
+  try {
+    const result = await pool.query("SELECT id,checkout_state,status FROM uc_orders WHERE user_id=$1 AND checkout_idempotency_key=$2", [userId,key]);
+    const order = result.rows[0];
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ resolution: !order || order.checkout_state === "cancelled" ? "editable"
+      : order.checkout_state === "confirmed" ? "completed" : "unresolved", orderId: order?.id ?? null });
+  } catch { res.status(503).json({error:"Saved checkout status is unavailable. Keep your original checkout and try checking again."}); }
+});
 router.post("/uc/customer/promotions/:operation/quote", async (req,res): Promise<void> => {
   const userId=await authenticatedCustomer(req,res); if(!userId)return;
-  const op=req.params.operation; if(op!=="checkout"&&op!=="redemption"&&op!=="award"){res.status(400).json({error:"Invalid promotion operation"});return;}
-  const lines = op === "checkout" ? serverPricedLines(req.body?.lineItems) : null;
+  if (req.params.operation === "checkout") {
+    try {
+      const quote = await checkoutQuote({ ...req.body, code: req.body?.code }, userId);
+      res.json({ ...quote, promotion: quote.promotion ?? { code: quote.code, label: quote.label } });
+    } catch (error) { res.status(422).json({ error: (error as Error).message }); }
+    return;
+  }
+  const op=req.params.operation; if(op!=="checkout"&&op!=="redemption"&&op!=="award"&&op!=="water_test"){res.status(400).json({error:"Invalid promotion operation"});return;}
+  const lines = op === "checkout" ? await serverPricedLines(req.body?.lineItems) : null;
   if (op === "checkout" && !lines) { res.status(400).json({ error: "checkout quotes require known lineItems with positive whole quantities" }); return; }
   const subtotal = lines ? lines.reduce((sum, line) => sum + line.subtotal, 0) : Number(req.body?.subtotal ?? 0);
-  const quote=await quotePromotion(String(req.body?.code??""),op,lines ? lines.map((line) => line.productId) : Array.isArray(req.body?.productIds)?req.body.productIds.map(Number):[],subtotal);
+  const quote=await quotePromotion(String(req.body?.code??""),op,lines ? lines.map((line) => line.productId) : Array.isArray(req.body?.productIds)?req.body.productIds.map(Number):[],subtotal, lines ?? undefined, userId);
   if(!quote){res.status(422).json({error:"Promotion is invalid, inactive, ineligible, or expired"});return;}
-  if (op === "checkout") { const delivery = 500; res.json({ promotion: quote, subtotal, delivery, discountAmount: Math.round(quote.benefit), total: Math.max(0, subtotal + delivery - Math.round(quote.benefit)) }); return; }
+  if (op === "checkout") {
+    const fulfillment = req.body?.fulfillment;
+    if (fulfillment !== "collection" && fulfillment !== "delivery") { res.status(400).json({ error: "Choose collection or delivery" }); return; }
+    if (quote.type === "free_shipping" && fulfillment !== "delivery") { res.status(422).json({ error: "Free shipping applies only to delivery" }); return; }
+    const delivery = fulfillment === "delivery" && quote.type !== "free_shipping" ? 500 : 0;
+    res.json({ promotion: quote, fulfillment, subtotal, delivery, discountAmount: Math.round(quote.benefit), total: Math.max(0, subtotal + delivery - Math.round(quote.benefit)) }); return;
+  }
   res.json({promotion:quote});
 });
 // Promotion consumption is intentionally not exposed as a customer operation.

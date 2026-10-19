@@ -1,0 +1,113 @@
+{
+  "recordedAt": "2026-10-10T11:16:00Z",
+  "purpose": "Rollout of the paired consistency clients after the API-first publication. Evidence only: no raw logs, credentials or customer identifiers.",
+  "publishedApi": {
+    "buildId": "a04caf0a-0279-4ce7-a00f-c0a8f38bf9a8",
+    "status": "success",
+    "buildCreated": "2026-10-10T10:10:43Z",
+    "deploymentSuccessful": "2026-10-10T10:20:11Z",
+    "mainRevisionAfterPublish": "cca56cc4 (2026-10-10T10:20:20Z)",
+    "approval": {
+      "selectionApprovalRecord": "security-center-cache-review/owner-approval.json, dated 2026-10-09 (selection and tested backports only)",
+      "publicationApprovalTimestamp": "unverified - no saved publication-approval record; the owner approved API publication in chat",
+      "clientAdvancementInRecord": false,
+      "clientAdvancementApprovalSource": "owner instruction in chat on 2026-10-10 (premised on API source db2ef861; see lineage)"
+    },
+    "compiledCandidateSha256": "d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+    "buildCommand": "node infra/cloudflare/forest/build-approved-consistency.mjs api --copy-output",
+    "buildChecks": {
+      "dependencyBackportFixtures": "7 reported passing before compile",
+      "sessionAndMediaFixtures": "34 passed, 0 failed",
+      "typecheck": "passed",
+      "compileMessage": "Approved api candidate compiled; deployment preparation; NOT PUBLISHED."
+    },
+    "postBuildCleanup": {
+      "result": "completed; installed node_modules removed from approved and scratch folders",
+      "approvedFolders": 6,
+      "scratchFolders": 7,
+      "invalidMarkerFolders": 0
+    },
+    "imageSize": {
+      "totalContentEstimateMiB": 3346.4,
+      "warningThresholdMiB": 7168,
+      "note": "7168 MiB is the project's warning threshold, not a platform hard limit; the platform hard limit is unverified. Image push completed."
+    },
+    "startup": {
+      "buildLogs": "Pushed image manifest 10:18:46Z; Waiting for service to be ready 10:20:07Z; Deployment successful 10:20:11Z",
+      "runtimeLogs": "Health checks for /api and /uc-companion/ returned 500 at 10:19:55Z before the service became ready; no failures after Deployment successful",
+      "healthNow": "both public hosts /api/healthz returned 200 at 11:15Z"
+    },
+    "unverified": [
+      "Which source the running API process is executing: no public runtime attestation exists; this is inferred from the compiled build path in the publish logs",
+      "Publication approval timestamp",
+      "Platform hard image-size limit"
+    ]
+  },
+  "lineage": {
+    "liveApiCompiledSource": "d7ee99bdc3df01868cab10da1aa61bcde14f9737c659d306f09ddbf597dfc921",
+    "ownerStatedLiveSource": "db2ef861871dcff39cde08350d9374e9b8d1220409e2f506141cf9c4666cad59",
+    "result": "The live API was compiled from d7ee99bd, not db2ef861. d7ee99bd is the source currently selected in main. Byte comparison of the two retained archives shows only security-only API changes (session expiry, upload/media allowlist, customer-count authorization and their tests) plus package/lock dependency pins. Hub, Companion, impact routes, schema, OpenAPI and generated client files are identical to db2ef861.",
+    "differingFiles": 13,
+    "securityCandidate88f896ab": "Earlier security-only parent of the lineage (auth/upload); not the selected build and not separately shipped by this release.",
+    "schemaDiff": "Full development-to-production schema diff reported no statements, removals or warnings.",
+    "ownerConfirmation": "Owner confirmed in chat on 2026-10-10 that client advancement covers clients built from the d7ee99bd source; the immutable 2026-10-09 approval record is unchanged."
+  },
+  "snapshotGate": {
+    "checkedAt": "2026-10-10T11:15:12Z",
+    "freshCompatibleAndAgreeing": true,
+    "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+    "adjustmentRevision": 1,
+    "totals": {
+      "totalUsers": 6,
+      "litresFiltered": 1550,
+      "plasticsAvoided": 3100,
+      "cleanWaterDays": 0
+    },
+    "hosts": [
+      "https://api.ucfilters.com",
+      "https://team-horizon--jerryaroyce.replit.app"
+    ]
+  },
+  "servedPredecessor": {
+    "note": "The served client changed since the earlier record: build 1791526319429-504 was replaced by the API publication on 2026-10-10.",
+    "buildId": "1791627160418-469",
+    "revision": "a787b1a16fad710f8725a9e1fb7722a89661c54e",
+    "builtAt": "2026-10-10T10:13:39.905Z",
+    "nativeLaunch": {
+      "ios": {
+        "manifestId": "f9c1cb80-d3e3-4a3a-9e68-a9ce3bd7b747",
+        "launchKey": "bundle-1791627160418-469"
+      },
+      "android": {
+        "manifestId": "efcd70f6-fb53-4490-8d1a-81000d2a4e3c",
+        "launchKey": "bundle-1791627160418-469"
+      }
+    },
+    "retainedAt": "infra/cloudflare/forest/rollback-static/1791627160418-469",
+    "retainedFiles": 60,
+    "referencedAssetFailures": 0,
+    "retentionValidation": "Passed through the builder's retainRollback check (123 files with the older retained build). Capture manifest: rollback-static/1791627160418-469-capture.json",
+    "versionedNativeManifestUrls": "404 on the live host; the active manifests (matching build) were retained under the versioned paths",
+    "olderRetainedBuild": "1791182522315-296 kept untouched"
+  },
+  "selection": {
+    "hubBuild": "node infra/cloudflare/forest/build-approved-consistency.mjs hub --copy-output",
+    "companionBuild": "node infra/cloudflare/forest/build-approved-consistency.mjs companion --retain-static=infra/cloudflare/forest/rollback-static",
+    "companionRun": "node infra/cloudflare/forest/build-approved-consistency.mjs serve-companion",
+    "apiBuildUnchanged": true,
+    "unchanged": [
+      "hosting",
+      "DNS",
+      "authentication",
+      "OTA (disabled)",
+      "native distribution"
+    ],
+    "status": "configured, owner-confirmed, awaiting the owner's Publish action"
+  },
+  "pendingAfterPublish": [
+    "Verify served HTML, version.json, iOS/Android launch IDs and URLs, downloaded bundle hashes and API origin on both public hosts",
+    "Compare Home, About and ProjectHub snapshot IDs and values signed out, with the configured admin and with the two approved customers (second customer's identifier supplied in chat and deliberately not recorded here; secure access still to be provided)",
+    "Physical-phone checks stay with the separate usability task",
+    "Rollback of the complete client selection only if any gate fails"
+  ]
+}

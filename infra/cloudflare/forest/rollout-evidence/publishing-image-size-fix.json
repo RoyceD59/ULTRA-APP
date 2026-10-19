@@ -1,0 +1,85 @@
+{
+  "checkedAt": "2026-10-07T07:03:29.704Z",
+  "failure": {
+    "timeCreated": "2026-10-07T06:38:08.945Z",
+    "status": "failed",
+    "phase": "deployment image creation after all service compilations",
+    "fatalMessage": "image size is over the limit of 8 GiB: total size of layers exceeds limit"
+  },
+  "fix": {
+    "validatedPostBuildHook": "node scripts/prepare-deployment-image.mjs --post-build",
+    "retainsStorePrune": true,
+    "publishingInputExclusions": [
+      ".cache/"
+    ],
+    "removalScope": "installed dependency trees only in marked frozen stages and their immediate workspace packages",
+    "preserves": [
+      "root and workspace runtime dependencies",
+      "compiled API logging worker directories",
+      "Companion core-Node server and static assets",
+      "prepared stage identities",
+      "all source archives and rollback inputs"
+    ],
+    "developmentStageTreesNotDeleted": true,
+    "removedBroadIgnores": [
+      "whole frozen stage exclusions",
+      "recursive staging node_modules exclusion"
+    ],
+    "ignoreReason": "Do not rely on ignore-filter timing or exclude runtime worker/server paths and static node_modules assets; post-build cleanup removes installed staging dependencies precisely."
+  },
+  "verification": {
+    "existingPackageAndConsistencyChecks": {
+      "passed": 21,
+      "failed": 0
+    },
+    "cleanupAndRuntimeChecks": {
+      "passed": 6,
+      "failed": 0
+    },
+    "totalUniqueChecks": 27,
+    "checksExitCode": 0,
+    "syntaxCheckPassed": true,
+    "diffWhitespaceCheckPassed": true,
+    "apiAndHubPreviewRunning": true,
+    "apiPreviewHealth": "ok",
+    "mainArchivesStillVerified": true
+  },
+  "production": {
+    "additionalUrls": [],
+    "deploymentType": "autoscale",
+    "hasSuccessfulBuild": true,
+    "isDeployed": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "success": true,
+    "visibility": "public"
+  },
+  "fullSchemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": false,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "limits": [
+    "Actual final deployment layer size is not observable locally; publishing retry must confirm it",
+    "No new publication or client-source activation performed",
+    "Security fixes recently merged into main are not automatically incorporated into the frozen approved archive",
+    "Candidate clients remain gated on compatible API and agreeing fresh snapshots"
+  ],
+  "frozenSourceReview": {
+    "matchesRecentMergedMain": false,
+    "files": [
+      "artifacts/api-server/src/lib/jwt.ts",
+      "artifacts/api-server/src/lib/objectStorage.ts",
+      "artifacts/api-server/src/lib/review-media-signature.ts",
+      "artifacts/api-server/src/routes/storage.ts"
+    ],
+    "action": "Separate owner-reviewed security-only archive revision; no change made in this packaging fix"
+  }
+}

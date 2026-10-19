@@ -27,6 +27,8 @@ import {
 import { formatRelativeDate } from "@/components/shared/badges";
 import { getTeamToken } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
+import { OrderDetailsDialog } from "@/components/orders/OrderDetailsDialog";
+import { RecoveryEnrichmentDialog } from "@/components/orders/RecoveryEnrichmentDialog";
 
 const BASE      = API_ORIGIN;
 const TOKEN_KEY = "uc_orders_admin_token";
@@ -34,6 +36,15 @@ const TOKEN_KEY = "uc_orders_admin_token";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AdminOrder {
+  checkoutState?: string | null;
+  paymentStatus?: string;
+  synchronizationStatus?: string;
+  paymentConfirmedAt?: string | null;
+  wcOrderId?: number | null;
+  shippingAddress?: Record<string, string>;
+  recoveryEnrichedAt?: string | null;
+  discountAmount?: number;
+  promoCode?: string;
   id: number;
   userId: string;
   status: string;
@@ -168,6 +179,7 @@ function statusColor(status: string) {
   switch (status) {
     case "pending":    return "bg-amber-100 text-amber-800";
     case "processing": return "bg-blue-100 text-blue-800";
+    case "dispatched": return "bg-blue-100 text-blue-800";
     case "paid":       return "bg-emerald-100 text-emerald-800";
     case "completed":  return "bg-emerald-100 text-emerald-800";
     case "declined":   return "bg-red-100 text-red-800";
@@ -257,7 +269,7 @@ function OrderActions({
 
   async function setStatus(status: string) {
     setBusy(status);
-    await call("PATCH", "/status", { status });
+    await call("PATCH", status === "dispatched" ? "" : "/status", { status });
     setBusy(null);
   }
 
@@ -283,7 +295,26 @@ function OrderActions({
   return (
     <div className="mt-3 pt-3 border-t space-y-2">
       <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
-        {!isRefunded && order.status !== "paid" && (
+        {order.webhookRecovery && (
+          <RecoveryEnrichmentDialog order={order} token={token} onChanged={onChanged} disabled={busy !== null || isRefunded} />
+        )}
+        {order.webhookRecovery && (["processing", "completed"] as const).map(status => (
+          <Button key={status} variant="outline" size="sm" className="min-h-11 sm:min-h-7 text-xs"
+            disabled={busy !== null || isRefunded || order.status === status || (status === "processing" && order.status === "completed")}
+            onClick={() => setStatus(status)}>
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+            {busy === status ? "Saving…" : `Mark ${status}`}
+          </Button>
+        ))}
+        {!isRefunded && !["dispatched", "completed", "cancelled", "declined"].includes(order.status) && (
+          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-7 text-xs"
+            disabled={busy !== null || (order.webhookRecovery && !order.recoveryEnrichedAt)}
+            onClick={() => setStatus("dispatched")}>
+            <Package className="w-3.5 h-3.5 mr-1" />
+            {busy === "dispatched" ? "Saving…" : "Mark dispatched"}
+          </Button>
+        )}
+        {!isRefunded && !["paid", "dispatched", "completed"].includes(order.status) && (
           <Button
             variant="outline" size="sm"
             onClick={() => setStatus("paid")}
@@ -409,6 +440,12 @@ function OrderActions({
           </AlertDialogContent>
         </AlertDialog>
       </div>
+      {order.webhookRecovery && <p className="text-xs text-muted-foreground">
+        {order.recoveryEnrichedAt
+          ? `Enriched ${new Date(order.recoveryEnrichedAt).toLocaleString()}${order.status === "dispatched" ? " — dispatched." : ["paid", "pending", "processing"].includes(order.status) ? " — ready to dispatch." : " — details confirmed."}`
+          : "Save enrichment to confirm items and shipping before dispatch."}
+        {" "}Internal status only; customer delivery updates are separate.
+      </p>}
 
       {error && (
         <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-md p-2">
@@ -502,10 +539,15 @@ function OrderCard({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-semibold">Order #{order.id}</span>
+            {!!order.checkoutState && <Badge variant="outline">Checkout: {order.checkoutState.replaceAll("_", " ")}</Badge>}
+            {!!order.paymentStatus && <Badge variant="outline">Payment: {order.paymentStatus.replaceAll("_", " ")}</Badge>}
+            {order.synchronizationStatus === "reconciliation_required" && <Badge variant="destructive">Synchronization needs review — do not resubmit payment</Badge>}
+            {order.synchronizationStatus === "local_only" && <Badge variant="outline">Accepted locally</Badge>}
+            {!!order.shippingAddress?.fulfillment && <Badge variant="outline">{order.shippingAddress.fulfillment === "collection" ? "Free collection" : "Delivery"}</Badge>}
             {/* Webhook recovery badge — persisted flag, never derived from heuristics */}
             {isRecovery && (
-              <Badge className="bg-amber-500 text-white hover:bg-amber-600 gap-1 text-xs font-medium">
-                <AlertTriangle className="w-3 h-3" />
+              <Badge className="border-amber-300 bg-amber-100 text-amber-950 hover:bg-amber-100 gap-1 text-xs font-medium">
+                <AlertTriangle className="w-3 h-3" aria-hidden="true" />
                 Webhook recovery
               </Badge>
             )}
@@ -531,9 +573,12 @@ function OrderCard({
               </Badge>
             )}
           </div>
-          <span className="text-muted-foreground text-xs">
-            {formatRelativeDate(order.dateCreated)}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground text-xs">
+              {formatRelativeDate(order.dateCreated)}
+            </span>
+            <OrderDetailsDialog order={order} />
+          </div>
         </div>
 
         {/* Customer row */}
@@ -632,6 +677,8 @@ function OrderCard({
           </Button>
           <div className="text-sm font-semibold text-right">
             Total: {order.currency} {order.total}
+            {order.shippingAddress?.shippingAmount !== undefined && <span className="text-xs ml-2">Shipping: KES {order.shippingAddress.shippingAmount}</span>}
+            {!!order.discountAmount && <span className="text-xs ml-2">Discount: KES {order.discountAmount} {order.promoCode}</span>}
           </div>
         </div>
         <OrderActions order={order} token={token} onChanged={onChanged} />
@@ -692,6 +739,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
   const { data: orders, isLoading, isError, refetch, isFetching } = useQuery<AdminOrder[]>({
     queryKey: ["admin-orders", token, fromDate, toDate],
+    refetchInterval: 30_000,
     queryFn: async () => {
       const params = buildParams();
       const url = `${BASE}/api/uc/admin/orders${params.size ? `?${params}` : ""}`;
@@ -734,7 +782,7 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
 
   const recoveryOrders  = orders?.filter(o => o.webhookRecovery) ?? [];
   const unresolvedCount = recoveryOrders.filter(
-    o => o.status !== "completed" && o.status !== "cancelled"
+    o => !["processing", "completed", "cancelled"].includes(o.status)
   ).length;
 
   // Status chips — fixed order, only statuses present in the data are shown
@@ -751,9 +799,32 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
   let baseOrders = recoveryOnly ? recoveryOrders : (orders ?? []);
   if (gapsOnly) baseOrders = baseOrders.filter(o => gapsByOrderId.has(o.id));
   const visibleOrders = statusFilter ? baseOrders.filter(o => o.status === statusFilter) : baseOrders;
+  const [diagnosticError, setDiagnosticError] = useState("");
+  async function downloadDiagnostics() {
+    setDiagnosticError("");
+    const ids = visibleOrders.slice(0, 100).map(o => o.id);
+    if (!ids.length) { setDiagnosticError("Clear your filters or select a date range with orders first."); return; }
+    try {
+      const response = await fetch(`${BASE}/api/uc/admin/orders/reconciliation-report?ids=${ids.join(",")}`,
+        { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error("The report could not be read. No orders were changed.");
+      const body = await response.json();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a"); link.href = url; link.download = "checkout-diagnostics.json"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setDiagnosticError(error instanceof Error ? error.message : "Report unavailable."); }
+  }
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" onClick={downloadDiagnostics}>Download read-only checkout diagnostics</Button>
+        <span className="text-sm text-muted-foreground">First 100 visible orders only. No payment, ownership or synchronization changes.</span>
+        {!!diagnosticError && <p role="alert" className="text-destructive">{diagnosticError}</p>}
+        {visibleOrders.length < (orders?.length ?? 0) && <span className="text-sm text-muted-foreground">
+          {(orders?.length ?? 0) - visibleOrders.length} orders hidden by the current status/recovery filters.
+        </span>}
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -952,7 +1023,10 @@ function OrdersList({ token, onLogout }: { token: string; onLogout: () => void }
               key={order.id}
               order={order}
               token={token}
-              onChanged={() => refetch()}
+              onChanged={() => {
+                void refetch();
+                window.dispatchEvent(new Event("uc-orders-changed"));
+              }}
               gapItems={gapsByOrderId.get(order.id)}
             />
           ))}

@@ -24,6 +24,17 @@ export interface CartItem {
   quantity: number;
   image: string;
   sku: string;
+  variationId?: number;
+  childSku?: string;
+  variantLabel?: string;
+}
+
+export function cartLineKey(item: Pick<CartItem, 'id' | 'variationId' | 'childSku'>): string {
+  return `${item.id}:${item.variationId ?? 'parent'}:${item.childSku ?? ''}`;
+}
+export function checkoutLine(item: CartItem) {
+  return { productId: item.id, quantity: item.quantity,
+    ...(item.variationId ? { variationId: item.variationId, childSku: item.childSku } : {}) };
 }
 
 /** Minimal subset of AsyncStorage that the storage boundary needs. */
@@ -82,10 +93,10 @@ export async function saveCartToStorage(
  * The input array is never mutated.
  */
 export function mergeItem(items: CartItem[], product: CartItem): CartItem[] {
-  const existing = items.find(i => i.id === product.id);
+  const existing = items.find(i => cartLineKey(i) === cartLineKey(product));
   if (existing) {
     return items.map(i =>
-      i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i,
+      cartLineKey(i) === cartLineKey(product) ? { ...i, quantity: i.quantity + 1 } : i,
     );
   }
   return [...items, { ...product, quantity: 1 }];

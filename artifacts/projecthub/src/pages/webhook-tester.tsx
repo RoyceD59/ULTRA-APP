@@ -77,7 +77,7 @@ export default function WebhookTester() {
     defaultValues: {
       event: "task.created",
       sourcePlatform: "jira",
-      taskData: "{\n  \"title\": \"Update API documentation\",\n  \"description\": \"Sync swagger docs with recent code changes\",\n  \"priority\": \"high\"\n}"
+      taskData: "{\n  \"title\": \"Update API documentation\",\n  \"description\": \"Sync swagger docs with recent code changes\",\n  \"priority\": \"high\",\n  \"assigneeId\": 1,\n  \"resourceRequired\": true,\n  \"deliveryFormat\": \"pdf\"\n}"
     }
   });
 
@@ -195,10 +195,11 @@ export default function WebhookTester() {
           <ul className="list-disc pl-5 space-y-1">
             <li><code>title</code> (required) - Name of the task</li>
             <li><code>description</code> - Detailed context</li>
-            <li><code>assigneeId</code> - Numeric ID of team member</li>
+            <li><code>assigneeId</code> (required) - Numeric ID of team member</li>
             <li><code>projectId</code> - Numeric ID of associated project</li>
             <li><code>priority</code> - low, medium, high, urgent</li>
-            <li><code>resourceRequired</code> - Boolean flag</li>
+            <li><code>resourceRequired</code> (required) - Boolean flag (use true in the test payload)</li>
+            <li><code>deliveryFormat</code> (required) - Output format, e.g. "pdf"</li>
             <li><code>notifyVia</code> - e.g. "email,whatsapp"</li>
           </ul>
         </AlertDescription>

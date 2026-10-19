@@ -1,0 +1,212 @@
+{
+  "archive": {
+    "path": "/home/runner/workspace/infra/cloudflare/forest/security-center-review/release-sources.tar.gz",
+    "sha256": "a982fb107d05be012dc560e06823ecee97c4f0a5a307f98e00cc3880d319a387"
+  },
+  "tools": {
+    "node": "v24.13.0",
+    "pnpm": "10.26.1"
+  },
+  "runs": [
+    {
+      "name": "cold-1",
+      "command": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --store-dir <isolated> --force",
+      "seconds": 38,
+      "ok": true,
+      "evidence": {
+        "stage": "/tmp/t1055/repro/cold-1/stage",
+        "packages": {
+          "braces": {
+            "version": "3.0.3",
+            "patchHash": "6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+            "resolved": "node_modules/.pnpm/braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9/node_modules/braces",
+            "copies": [
+              {
+                "directory": "braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+                "guarded": true
+              }
+            ]
+          },
+          "http-cache-semantics": {
+            "version": "4.2.0",
+            "patchHash": "29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+            "resolved": "node_modules/.pnpm/http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9/node_modules/http-cache-semantics",
+            "copies": [
+              {
+                "directory": "http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+                "guarded": true
+              }
+            ]
+          },
+          "node-forge": {
+            "version": "1.4.0",
+            "patchHash": "dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+            "resolved": "node_modules/.pnpm/node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4/node_modules/node-forge",
+            "copies": [
+              {
+                "directory": "node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+                "guarded": true
+              }
+            ]
+          }
+        },
+        "fixtures": {
+          "status": 0,
+          "summary": "ℹ tests 7, ℹ pass 7, ℹ fail 0"
+        }
+      }
+    },
+    {
+      "name": "warm-store-fresh-modules",
+      "command": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --store-dir <isolated>",
+      "seconds": 12,
+      "ok": true,
+      "evidence": {
+        "stage": "/tmp/t1055/repro/warm-new-stage/stage",
+        "packages": {
+          "braces": {
+            "version": "3.0.3",
+            "patchHash": "6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+            "resolved": "node_modules/.pnpm/braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9/node_modules/braces",
+            "copies": [
+              {
+                "directory": "braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+                "guarded": true
+              }
+            ]
+          },
+          "http-cache-semantics": {
+            "version": "4.2.0",
+            "patchHash": "29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+            "resolved": "node_modules/.pnpm/http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9/node_modules/http-cache-semantics",
+            "copies": [
+              {
+                "directory": "http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+                "guarded": true
+              }
+            ]
+          },
+          "node-forge": {
+            "version": "1.4.0",
+            "patchHash": "dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+            "resolved": "node_modules/.pnpm/node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4/node_modules/node-forge",
+            "copies": [
+              {
+                "directory": "node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+                "guarded": true
+              }
+            ]
+          }
+        },
+        "fixtures": {
+          "status": 0,
+          "summary": "ℹ tests 7, ℹ pass 7, ℹ fail 0"
+        }
+      }
+    },
+    {
+      "name": "warm-in-place-repeat",
+      "command": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --store-dir <isolated>",
+      "seconds": 2,
+      "ok": true,
+      "evidence": {
+        "stage": "/tmp/t1055/repro/cold-1/stage",
+        "packages": {
+          "braces": {
+            "version": "3.0.3",
+            "patchHash": "6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+            "resolved": "node_modules/.pnpm/braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9/node_modules/braces",
+            "copies": [
+              {
+                "directory": "braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+                "guarded": true
+              }
+            ]
+          },
+          "http-cache-semantics": {
+            "version": "4.2.0",
+            "patchHash": "29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+            "resolved": "node_modules/.pnpm/http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9/node_modules/http-cache-semantics",
+            "copies": [
+              {
+                "directory": "http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+                "guarded": true
+              }
+            ]
+          },
+          "node-forge": {
+            "version": "1.4.0",
+            "patchHash": "dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+            "resolved": "node_modules/.pnpm/node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4/node_modules/node-forge",
+            "copies": [
+              {
+                "directory": "node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+                "guarded": true
+              }
+            ]
+          }
+        },
+        "fixtures": {
+          "status": 0,
+          "summary": "ℹ tests 7, ℹ pass 7, ℹ fail 0"
+        }
+      }
+    },
+    {
+      "name": "cold-2-production-env",
+      "command": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --store-dir <isolated> --force",
+      "seconds": 36,
+      "NODE_ENV": "production",
+      "ok": true,
+      "evidence": {
+        "stage": "/tmp/t1055/repro/cold-2-production-env/stage",
+        "packages": {
+          "braces": {
+            "version": "3.0.3",
+            "patchHash": "6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+            "resolved": "node_modules/.pnpm/braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9/node_modules/braces",
+            "copies": [
+              {
+                "directory": "braces@3.0.3_patch_hash=6afd45f7926968dc62b08d9d6ea0c1c174539192c1f06bcc32ca70abedd2d4b9",
+                "guarded": true
+              }
+            ]
+          },
+          "http-cache-semantics": {
+            "version": "4.2.0",
+            "patchHash": "29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+            "resolved": "node_modules/.pnpm/http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9/node_modules/http-cache-semantics",
+            "copies": [
+              {
+                "directory": "http-cache-semantics@4.2.0_patch_hash=29714885ee2ad44bfbdcccc51f46858eaf7b93879888d048dca2cd5a818e9ae9",
+                "guarded": true
+              }
+            ]
+          },
+          "node-forge": {
+            "version": "1.4.0",
+            "patchHash": "dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+            "resolved": "node_modules/.pnpm/node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4/node_modules/node-forge",
+            "copies": [
+              {
+                "directory": "node-forge@1.4.0_patch_hash=dbb34570de0a91ee49ba3ae97a441fb344cf611168583214081d67150ed19dd4",
+                "guarded": true
+              }
+            ]
+          }
+        },
+        "fixtures": {
+          "status": 0,
+          "summary": "ℹ tests 7, ℹ pass 7, ℹ fail 0"
+        }
+      }
+    }
+  ],
+  "negative": {
+    "rejectedAfterTamper": true,
+    "plainFrozenReinstallStillRejected": true,
+    "forcedReinstallRestores": true,
+    "plainFrozenOutput": "Already up to date | Done in 3.6s using pnpm v10.26.1"
+  },
+  "passed": true
+}

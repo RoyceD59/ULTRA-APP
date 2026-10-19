@@ -2,8 +2,10 @@ import { Router, type IRouter, type Request } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { desc, eq, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { db, aiReportsTable, aiPushEventsTable, tasksTable } from "@workspace/db";
+import { db, aiReportsTable, aiPushEventsTable, tasksTable, teamUsersTable } from "@workspace/db";
 import { requireTeamAuth } from "../auth.js";
+import { verifyToken } from "../../lib/jwt.js";
+import { rateLimit } from "express-rate-limit";
 import {
   AiQueryBody,
   AiQueryResponse,
@@ -18,6 +20,14 @@ import { buildProjectContext } from "./context";
 import { sendViaResend } from "../../lib/resend.js";
 
 const router: IRouter = Router();
+const queryLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(verifyToken(req.headers.authorization)!.id),
+  message: { error: "Too many AI queries. Please try again in a minute." },
+});
 
 interface AiReport {
   summary: string;
@@ -437,13 +447,26 @@ router.post("/ai/push-task", requireTeamAuth, async (req, res): Promise<void> =>
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Inbound webhook: Ultra Clear AI Orchestrator asks a question
+// Authenticated team query: private ProjectHub context must never be public.
 // POST /api/ai/query
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/ai/query", async (req, res): Promise<void> => {
+router.post("/ai/query", requireTeamAuth, async (req, res, next): Promise<void> => {
+  const claims = verifyToken(req.headers.authorization)!;
+  const [user] = await db.select({ isActive: teamUsersTable.isActive })
+    .from(teamUsersTable).where(eq(teamUsersTable.id, String(claims.id))).limit(1);
+  if (!user?.isActive) {
+    res.status(403).json({ error: "An active team account is required." });
+    return;
+  }
+  next();
+}, queryLimiter, async (req, res): Promise<void> => {
   const parsed = AiQueryBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (parsed.data.question.length > 4000) {
+    res.status(400).json({ error: "question must not exceed 4000 characters" });
     return;
   }
 

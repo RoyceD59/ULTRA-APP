@@ -1,0 +1,138 @@
+name: ultra-preview
+
+x-workspace: &workspace
+  build:
+    context: ../..
+    dockerfile: infra/preview/Dockerfile
+  image: ultra-preview-workspace:local
+  networks: [preview]
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: preview
+      POSTGRES_PASSWORD: preview-local-only
+      POSTGRES_DB: ultra_preview
+    volumes:
+      - preview-db:/var/lib/postgresql/data
+    networks: [preview]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preview -d ultra_preview"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  db-init:
+    <<: *workspace
+    environment:
+      DATABASE_URL: postgres://preview:preview-local-only@db:5432/ultra_preview
+      PREVIEW_SAFE_MODE: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["pnpm", "--filter", "@workspace/db", "run", "preview-init"]
+
+  team-ai-mock:
+    <<: *workspace
+    environment:
+      PORT: "6060"
+    command: ["node", "scripts/preview/mock-team-ai.mjs"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:6060/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    <<: *workspace
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      DATABASE_URL: postgres://preview:preview-local-only@db:5432/ultra_preview
+      SESSION_SECRET: isolated-local-preview-session-secret
+      PREVIEW_SAFE_MODE: "1"
+      PREVIEW_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5055
+      UC_REFILL_GOVERNANCE_PREVIEW: "true"
+      AI_ORCHESTRATOR_WEBHOOK_URL: http://team-ai-mock:6060/webhook/projecthub
+      AI_INTEGRATIONS_ANTHROPIC_BASE_URL: http://team-ai-mock:6060/anthropic
+      AI_INTEGRATIONS_ANTHROPIC_API_KEY: preview-no-external-ai
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      team-ai-mock:
+        condition: service_healthy
+    command: ["sh", "-ec", "pnpm --filter @workspace/api-server build && pnpm --filter @workspace/api-server start"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  hub:
+    <<: *workspace
+    environment:
+      NODE_ENV: production
+      PORT: "5055"
+      BASE_PATH: /
+      VITE_API_BASE_URL: http://localhost:5000
+      VITE_PREVIEW_SAFE_MODE: "1"
+      VITE_UC_REFILL_GOVERNANCE_PREVIEW: "true"
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["sh", "-ec", "node scripts/preview/validate-web-env.mjs hub && pnpm --filter @workspace/projecthub build && pnpm --filter @workspace/projecthub serve"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5055/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  companion:
+    <<: *workspace
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      EXPO_PUBLIC_API_DOMAIN: localhost:5000
+      EXPO_PUBLIC_DOMAIN: localhost:3000
+      EXPO_PUBLIC_PREVIEW_SAFE_MODE: "1"
+    depends_on:
+      hub:
+        condition: service_healthy
+    command: ["sh", "-ec", "node scripts/preview/validate-web-env.mjs companion && cd artifacts/uc-companion && pnpm exec expo export --platform web --max-workers 2 && node ../../scripts/preview/serve-static.mjs dist"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  gateway:
+    image: nginx:stable-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [preview, browser]
+    ports:
+      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:5055:5055"
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+      hub:
+        condition: service_healthy
+      companion:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  preview-db:
+
+networks:
+  preview:
+    internal: true
+  browser:
+    driver: bridge

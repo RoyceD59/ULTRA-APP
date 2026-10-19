@@ -39,7 +39,7 @@ describe("Companion registration identity gates", () => {
     const suffix = randomUUID();
     const email = `registration-${suffix}@example.test`;
     const phone = `+2547${Math.floor(Math.random() * 1e8).toString().padStart(8, "0")}`;
-    const payload = { email, phone, password: "registration-secret", firstName: "Test" };
+    const payload = { email, phone, address: "Test building, Nairobi", password: "registration-secret", firstName: "Test" };
     const responses = await Promise.all([post(payload), post(payload)]);
     assert.equal(responses.filter((response) => response.status === 200).length, 1);
     assert.equal(responses.filter((response) => response.status === 409).length, 1);
@@ -63,6 +63,7 @@ describe("Companion registration identity gates", () => {
     try {
       const response = await post({
         email: sentinelEmail, phone: sentinelPhone, password: "registration-secret", firstName: "Test",
+        address: "Test building, Nairobi",
       });
       assert.equal(response.status, 503);
       const serialized = JSON.stringify(calls);

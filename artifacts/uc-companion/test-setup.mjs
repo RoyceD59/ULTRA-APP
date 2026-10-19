@@ -31,6 +31,10 @@ const STUBS = {
     path.join(mocks, 'react-native.ts'),
   '@expo/vector-icons':
     path.join(mocks, '@expo-vector-icons.ts'),
+  '@expo/vector-icons/Ionicons':
+    path.join(mocks, 'ionicons.ts'),
+  '@expo/vector-icons/Feather':
+    path.join(mocks, 'feather.ts'),
   'expo-notifications':
     path.join(mocks, 'expo-notifications.ts'),
   'expo-linking':
@@ -45,6 +49,9 @@ const STUBS = {
 
 const original = Module._resolveFilename.bind(Module);
 Module._resolveFilename = (request, parent, isMain, options) => {
+  if (request.startsWith('expo-notifications/build/')) {
+    return STUBS['expo-notifications'];
+  }
   if (Object.prototype.hasOwnProperty.call(STUBS, request)) {
     return STUBS[request];
   }

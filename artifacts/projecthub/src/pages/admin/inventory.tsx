@@ -1,8 +1,9 @@
+import { trackEvent } from "@/lib/analytics";
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
-  Package, RefreshCw, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing, Search, Tag, Pencil
+  Package, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Edit2, Check, X, Settings2, Users, BellRing, Search, Pencil, HelpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { isTeamAdmin, getAuthHeaders } from "@/lib/team-auth";
 import { API_ORIGIN } from "@/lib/api-base";
-import { useProducts, useUpdateProduct } from "@/hooks/use-products";
+import { SkuRegisterPanel } from "@/components/sku-register-panel";
+import { useProducts, useUpdateProduct, STOCK_LABELS, type StockStatus } from "@/hooks/use-products";
 
 const BASE = API_ORIGIN;
 
@@ -23,15 +25,17 @@ interface InventoryProduct {
   id: number;
   name: string;
   sku: string;
-  stockQuantity: number;
-  stockStatus: string;
-  permalink: string | null;
-  syncedAt: string;
+  /** null = unmanaged quantity, not zero. */
+  stockQuantity: number | null;
+  stockStatus: StockStatus | string;
+  permalink?: string | null;
+  syncedAt?: string;
+  updatedAt?: string;
 }
 
 interface InventoryResponse {
   products: InventoryProduct[];
-  source: "woocommerce" | "mock";
+  source?: string;
 }
 
 interface InventorySettings {
@@ -50,13 +54,14 @@ interface WishlistDemand {
   restockDemandAlertedAt: string | null;
 }
 
-type StockStatusFilter = "all" | "instock" | "outofstock" | "onbackorder";
+type StockStatusFilter = "all" | StockStatus;
 
 const STOCK_STATUS_FILTERS: Array<{ value: StockStatusFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "instock", label: "In stock" },
   { value: "outofstock", label: "Out of stock" },
   { value: "onbackorder", label: "On backorder" },
+  { value: "unknown", label: "Needs review" },
 ];
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -70,7 +75,7 @@ async function fetchInventory(): Promise<InventoryResponse> {
   return res.json() as Promise<InventoryResponse>;
 }
 
-async function updateStock(productId: number, stockQuantity: number): Promise<void> {
+async function updateStock(productId: number, stockQuantity: number | null): Promise<void> {
   const res = await fetch(`${BASE}/api/uc/admin/inventory/${productId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...(getAuthHeaders() ?? {}) },
@@ -80,17 +85,7 @@ async function updateStock(productId: number, stockQuantity: number): Promise<vo
     const d = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(d.error ?? `Request failed (${res.status})`);
   }
-}
-
-async function triggerSync(): Promise<void> {
-  const res = await fetch(`${BASE}/api/uc/admin/inventory/sync`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(getAuthHeaders() ?? {}) },
-  });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(d.error ?? `Request failed (${res.status})`);
-  }
+  trackEvent("inventory_updated", { productId, stockQuantity: stockQuantity ?? undefined });
 }
 
 async function fetchInventorySettings(): Promise<InventorySettings> {
@@ -130,15 +125,19 @@ async function saveInventorySettings(settings: {
 
 // ─── Stock status badge ───────────────────────────────────────────────────────
 
-function StockStatusBadge({ status, qty, threshold }: { status: string; qty: number; threshold: number }) {
+function StockStatusBadge({ status, qty, threshold }: { status: string; qty: number | null; threshold: number }) {
+  if (status === "unknown") {
+    return <Badge variant="outline" className="gap-1 text-slate-700 border-slate-300 bg-slate-50 dark:bg-slate-900/40" data-testid="status-stock-unknown"><HelpCircle className="w-3 h-3" />Stock unknown</Badge>;
+  }
   if (status === "outofstock" || qty === 0) {
     return <Badge variant="destructive">Out of stock</Badge>;
   }
-  if (qty <= threshold) {
+  if (status === "onbackorder") return <Badge variant="secondary">On backorder</Badge>;
+  if (qty !== null && qty <= threshold) {
     return <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 dark:bg-amber-950/30">Low stock</Badge>;
   }
   if (status === "instock") {
-    return <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 dark:bg-green-950/30">In stock</Badge>;
+    return <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 dark:bg-green-950/30">{qty === null ? "In stock (unmanaged)" : "In stock"}</Badge>;
   }
   return <Badge variant="secondary">{status}</Badge>;
 }
@@ -153,7 +152,7 @@ function InlinePriceEditor({
 }: {
   productId: number;
   productName: string;
-  field: "regularPrice" | "salePrice";
+  field: "regularPrice";
   currentValue: string;
 }) {
   const { toast } = useToast();
@@ -249,7 +248,7 @@ function InlineStockStatusEditor({
   if (!editing) {
     return (
       <div className="flex items-center gap-2 group">
-        <span className="text-sm">{currentStatus}</span>
+        <span className="text-sm">{STOCK_LABELS[currentStatus as StockStatus] ?? currentStatus}</span>
         <button
           onClick={() => setEditing(true)}
           className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
@@ -261,7 +260,7 @@ function InlineStockStatusEditor({
     );
   }
 
-  const handleUpdate = (status: "instock" | "outofstock" | "onbackorder") => {
+  const handleUpdate = (status: StockStatus) => {
     updateProduct.mutate({ id: productId, data: { stockStatus: status } }, {
       onSuccess: () => {
         toast({ title: "Status updated", description: `${productName}: stock status set to ${status}.` });
@@ -279,13 +278,14 @@ function InlineStockStatusEditor({
       <select
         className="h-7 px-1 text-sm border rounded"
         value={currentStatus}
-        onChange={(e) => handleUpdate(e.target.value as "instock" | "outofstock" | "onbackorder")}
+        onChange={(e) => handleUpdate(e.target.value as StockStatus)}
         disabled={updateProduct.isPending}
         onBlur={() => setEditing(false)}
       >
         <option value="instock">In stock</option>
         <option value="outofstock">Out of stock</option>
         <option value="onbackorder">On backorder</option>
+        {currentStatus === "unknown" && <option value="unknown" disabled>Stock unknown (choose a reviewed state)</option>}
       </select>
       {updateProduct.isPending && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
     </div>
@@ -301,13 +301,17 @@ function InlineStockEditor({
 }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(product.stockQuantity));
+  const [value, setValue] = useState(product.stockQuantity === null ? "" : String(product.stockQuantity));
   const inputRef = useRef<HTMLInputElement>(null);
 
   const mutation = useMutation({
-    mutationFn: () => updateStock(product.id, Number(value)),
+    mutationFn: () => {
+      const t = value.trim();
+      if (t !== "" && (!/^\d+$/.test(t))) throw new Error("Quantity must be a whole number of 0 or more, or blank for unmanaged.");
+      return updateStock(product.id, t === "" ? null : Number(t));
+    },
     onSuccess: () => {
-      toast({ title: "Stock updated", description: `${product.name}: quantity set to ${value}.` });
+      toast({ title: "Stock saved", description: `${product.name}: ${value.trim() === "" ? "quantity is now unmanaged" : `managed quantity set to ${value.trim()}`}.` });
       setEditing(false);
       onSaved();
     },
@@ -319,9 +323,9 @@ function InlineStockEditor({
   if (!editing) {
     return (
       <div className="flex items-center gap-2 group">
-        <span className="font-mono text-sm">{product.stockQuantity}</span>
+        <span className="font-mono text-sm">{product.stockQuantity === null ? <span className="font-sans text-xs text-muted-foreground">Unmanaged</span> : product.stockQuantity}</span>
         <button
-          onClick={() => { setValue(String(product.stockQuantity)); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }}
+          onClick={() => { setValue(product.stockQuantity === null ? "" : String(product.stockQuantity)); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }}
           className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
           title="Edit stock quantity"
         >
@@ -338,8 +342,10 @@ function InlineStockEditor({
         type="number"
         min={0}
         value={value}
+        placeholder="Unmanaged"
+        aria-label="Managed quantity, blank for unmanaged"
         onChange={(e) => setValue(e.target.value)}
-        className="h-7 w-20 font-mono text-sm"
+        className="h-7 w-24 font-mono text-sm"
         disabled={mutation.isPending}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !mutation.isPending) mutation.mutate();
@@ -350,7 +356,7 @@ function InlineStockEditor({
         size="icon"
         variant="ghost"
         className="h-7 w-7"
-        disabled={mutation.isPending || value === ""}
+        disabled={mutation.isPending}
         onClick={() => mutation.mutate()}
       >
         {mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 text-green-600" />}
@@ -366,20 +372,6 @@ function InlineStockEditor({
       </Button>
     </div>
   );
-}
-
-// ─── WooCommerce product edit URL ─────────────────────────────────────────────
-
-function wcAdminUrl(productId: number, permalink: string | null): string {
-  if (permalink) {
-    try {
-      const base = new URL(permalink).origin;
-      return `${base}/wp-admin/post.php?post=${productId}&action=edit`;
-    } catch {
-      /* fall through */
-    }
-  }
-  return `https://www.ucfilters.com/wp-admin/post.php?post=${productId}&action=edit`;
 }
 
 // ─── Alert Settings panel ─────────────────────────────────────────────────────
@@ -574,16 +566,6 @@ export default function AdminInventoryPage() {
     staleTime: 30_000,
   });
 
-  const syncMutation = useMutation({
-    mutationFn: triggerSync,
-    onSuccess: () => {
-      toast({ title: "Sync triggered", description: "n8n inventory sync has been started successfully." });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Sync failed", description: err.message, variant: "destructive" });
-    },
-  });
-
   if (!isTeamAdmin()) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -597,8 +579,9 @@ export default function AdminInventoryPage() {
   const restockDemandThreshold = settings?.restockDemandThreshold.value ?? 5;
   const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : null;
 
-  const outOfStockCount = products.filter((p) => p.stockQuantity === 0).length;
-  const lowStockCount   = products.filter((p) => p.stockQuantity > 0 && p.stockQuantity <= threshold).length;
+  const outOfStockCount = products.filter((p) => p.stockStatus !== "unknown" && (p.stockStatus === "outofstock" || p.stockQuantity === 0)).length;
+  const lowStockCount   = products.filter((p) => p.stockStatus !== "unknown" && p.stockQuantity !== null && p.stockQuantity > 0 && p.stockQuantity <= threshold).length;
+  const unknownCount    = products.filter((p) => p.stockStatus === "unknown").length;
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const filteredProducts = products.filter((product) => {
     const matchesSearch = normalizedSearch === ""
@@ -606,10 +589,10 @@ export default function AdminInventoryPage() {
       || product.sku.toLocaleLowerCase().includes(normalizedSearch);
     const matchesStatus = statusFilter === "all"
       || (statusFilter === "outofstock"
-        ? product.stockStatus === "outofstock" || product.stockQuantity === 0
+        ? product.stockStatus === "outofstock" || (product.stockStatus !== "unknown" && product.stockQuantity === 0)
         : statusFilter === "instock"
-          ? product.stockStatus === "instock" && product.stockQuantity > 0
-          : product.stockStatus === "onbackorder");
+          ? product.stockStatus === "instock" && product.stockQuantity !== 0
+          : product.stockStatus === statusFilter);
 
     return matchesSearch && matchesStatus;
   });
@@ -623,19 +606,11 @@ export default function AdminInventoryPage() {
             <Package className="w-6 h-6" /> Inventory
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            View and adjust stock levels for all UC products. Changes are written back to WooCommerce immediately.
+            Review and adjust app-owned stock for every UC product. Quantity blank means unmanaged; stock unknown means a staff review is still needed before the item can be sold.
           </p>
           {lastFetched && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {data?.source === "mock" ? (
-                <span className="text-amber-600 flex items-center gap-1 mt-1">
-                  <AlertTriangle className="w-3 h-3" /> Showing mock data — WooCommerce credentials not configured
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 mt-1 text-green-700 dark:text-green-400">
-                  <CheckCircle2 className="w-3 h-3" /> Live from WooCommerce · fetched at {lastFetched}
-                </span>
-              )}
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Product records fetched at {lastFetched}
             </p>
           )}
         </div>
@@ -652,24 +627,18 @@ export default function AdminInventoryPage() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button
-            className="gap-2"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            title="Trigger the n8n inventory sync automation"
-          >
-            {syncMutation.isPending ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
-            ) : (
-              <><RefreshCw className="w-4 h-4" /> Sync now</>
-            )}
-          </Button>
         </div>
       </div>
 
       {/* Stock summary banners */}
-      {!isLoading && !error && (outOfStockCount > 0 || lowStockCount > 0) && (
+      {!isLoading && !error && (outOfStockCount > 0 || lowStockCount > 0 || unknownCount > 0) && (
         <div className="flex gap-3 flex-wrap">
+          {unknownCount > 0 && (
+            <button type="button" onClick={() => setStatusFilter("unknown")} data-testid="button-filter-unknown" className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 dark:bg-slate-900/40 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100">
+              <HelpCircle className="w-4 h-4 shrink-0" />
+              <span><strong>{unknownCount}</strong> product{unknownCount !== 1 ? "s" : ""} awaiting stock review. Not sellable until reviewed.</span>
+            </button>
+          )}
           {outOfStockCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-2 text-sm text-destructive">
               <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -846,8 +815,7 @@ export default function AdminInventoryPage() {
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead>SKU</TableHead>
-                <TableHead>Regular Price</TableHead>
-                <TableHead>Sale Price</TableHead>
+                <TableHead title="Authoritative record price. Discounts come from promotions.">Price (KES)</TableHead>
                 <TableHead>Stock qty</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -860,9 +828,11 @@ export default function AdminInventoryPage() {
                 <TableRow
                   key={product.id}
                   className={
-                    product.stockQuantity === 0
+                    product.stockStatus === "unknown"
+                      ? "bg-slate-50/60 dark:bg-slate-900/20"
+                      : product.stockQuantity === 0
                       ? "bg-destructive/5"
-                      : product.stockQuantity <= threshold
+                      : product.stockQuantity !== null && product.stockQuantity <= threshold
                       ? "bg-amber-50/50 dark:bg-amber-950/10"
                       : ""
                   }
@@ -881,18 +851,6 @@ export default function AdminInventoryPage() {
                         productName={product.name}
                         field="regularPrice"
                         currentValue={fullProduct.regularPrice}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {fullProduct ? (
-                      <InlinePriceEditor
-                        productId={product.id}
-                        productName={product.name}
-                        field="salePrice"
-                        currentValue={fullProduct.salePrice}
                       />
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -925,12 +883,6 @@ export default function AdminInventoryPage() {
                           Edit
                         </Link>
                       </Button>
-                      <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-muted-foreground" title="View in WooCommerce">
-                        <a href={wcAdminUrl(product.id, product.permalink)} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-3 h-3" />
-                          <span className="sr-only">View in WooCommerce</span>
-                        </a>
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -938,7 +890,7 @@ export default function AdminInventoryPage() {
               })}
               {filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
                     {products.length === 0
                       ? "No products found."
                       : "No products match the selected filters."}
@@ -952,9 +904,11 @@ export default function AdminInventoryPage() {
 
       {products.length > 0 && (
         <p className="text-xs text-muted-foreground text-right">
-          {products.length} product{products.length !== 1 ? "s" : ""} · Hover a quantity to edit inline · Click "Sync now" to trigger n8n
+          {products.length} product{products.length !== 1 ? "s" : ""} · Hover a quantity to edit inline · Blank quantity saves as unmanaged
         </p>
       )}
+
+      <SkuRegisterPanel />
     </div>
   );
 }

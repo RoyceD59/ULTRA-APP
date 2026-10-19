@@ -6,13 +6,18 @@ import {
   normalizeInstantPhone as normalizeSharedPhone,
 } from "@workspace/api-zod/instant-water-identity";
 import { countryCodeFromValue } from "@workspace/api-zod/phone";
+import { validateCustomerContact } from "@workspace/api-zod/customer-contact";
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, ObjectStorageService } from "./objectStorage.js";
 import {
   scoreInstantWaterCheck,
+  normalizeWaterSelections,
   type InstantWaterCheckAnswers,
   type InstantWaterCheckResult,
 } from "./instant-water-check.js";
 import { enqueueLeadDelivery } from "./lead-delivery.js";
+import { quotePromotion, consumePromotionOnClient } from "./reward-promotions.js";
+import { notifyPhysicalTest } from "./physical-test-notifications.js";
+import { withWaterRecommendationTarget, type CatalogueLoader } from "./water-recommendation-targets.js";
 
 const PUBLIC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTION_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -38,6 +43,7 @@ export type AssessmentRow = {
   source: string;
   concern: string;
   setting: string;
+  raw_answers: InstantWaterCheckAnswers;
   result: InstantWaterCheckResult;
   area_flags: { hardGroundwater?: boolean; riftValleyFluoride?: boolean };
   source_attribution: Record<string, string>;
@@ -56,6 +62,21 @@ export type AssessmentResponse = {
   resultTokenExpiresAt?: Date;
   result: ReturnType<typeof redactInstantWaterResult>;
 };
+/** Old snapshots may have empty raw_answers but valid compatibility columns.
+ * Restore selections only; never recompute the saved result. */
+function storedWaterAnswers(row: {
+  raw_answers?: Partial<InstantWaterCheckAnswers>;
+  area?: string; country?: string; source?: string; concern?: string; setting?: string;
+}) {
+  return normalizeWaterSelections({
+    country: row.country,
+    area: row.area ?? "Unknown",
+    source: row.source as InstantWaterCheckAnswers["source"],
+    concern: row.concern as InstantWaterCheckAnswers["concern"],
+    setting: row.setting as InstantWaterCheckAnswers["setting"],
+    ...row.raw_answers,
+  });
+}
 
 export function normalizeInstantPhone(raw: string, country?: Parameters<typeof normalizeSharedPhone>[1]): string | null {
   return normalizeSharedPhone(raw, country);
@@ -318,19 +339,20 @@ export async function createInstantAssessment(input: {
   consentVersion: string;
   country: string;
   area: string;
-  answers: InstantWaterCheckAnswers;
+  answers: Partial<InstantWaterCheckAnswers> & { area: string };
   sourceAttribution?: Record<string, string | undefined>;
   customerUserId?: string | null;
   scope: string;
   idempotencyKey: string;
   rateKey?: string;
-}): Promise<{ response: AssessmentResponse; replay: boolean }> {
+}, options: { loadCatalogue?: CatalogueLoader } = {}): Promise<{ response: AssessmentResponse; replay: boolean }> {
   const normalizedFirstName = normalizeInstantFirstName(input.firstName);
   if (!normalizedFirstName) throw new Error("INVALID_FIRST_NAME");
   const normalizedPhone = normalizeSharedPhone(input.phone, countryCodeFromValue(input.country) ?? "KE");
   if (!normalizedPhone) throw new Error("INVALID_PHONE");
-  const result = scoreInstantWaterCheck(input.answers, input.country);
-  const requestHash = hashSecret(stablePayload({
+  const answers = normalizeWaterSelections(input.answers);
+  input = { ...input, answers };
+  const requestPayload = {
     firstName: normalizedFirstName,
     normalizedPhone,
     consentVersion: input.consentVersion,
@@ -339,10 +361,32 @@ export async function createInstantAssessment(input: {
     answers: input.answers,
     sourceAttribution: input.sourceAttribution ?? {},
     customerUserId: input.customerUserId ?? null,
-  }));
+  };
+  const requestHash = hashSecret(stablePayload(requestPayload));
+  const legacyAnswers = { ...answers };
+  delete legacyAnswers.sources; delete legacyAnswers.concerns; delete legacyAnswers.settings;
+  const compatibleHashes = new Set([requestHash]);
+  if (answers.sources!.length === 1 && answers.concerns!.length === 1 && answers.settings!.length === 1) {
+    compatibleHashes.add(hashSecret(stablePayload({ ...requestPayload, answers: legacyAnswers })));
+  }
+  // Completed retries need neither fresh scoring nor a remote catalogue lookup.
+  const stored = await pool.query(
+    `SELECT request_hash, response FROM instant_water_idempotency
+     WHERE endpoint = 'create-instant-water-assessment' AND scope = $1
+       AND idempotency_key = $2 AND expires_at > now()`,
+    [input.scope, input.idempotencyKey],
+  );
+  if (stored.rows[0]) {
+    if (!compatibleHashes.has(stored.rows[0].request_hash)) throw new Error("IDEMPOTENCY_CONFLICT");
+    return { response: stored.rows[0].response as AssessmentResponse, replay: true };
+  }
+  const result = scoreInstantWaterCheck(answers, input.country);
+  // Do not acquire a transaction/client while waiting on WooCommerce.
+  result.recommendation = await withWaterRecommendationTarget(result.recommendation, options.loadCatalogue);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Another submission may have completed during the catalogue lookup.
     const prior = await client.query(
       `SELECT request_hash, response FROM instant_water_idempotency
        WHERE endpoint = 'create-instant-water-assessment' AND scope = $1
@@ -351,7 +395,7 @@ export async function createInstantAssessment(input: {
       [input.scope, input.idempotencyKey],
     );
     if (prior.rows[0]) {
-      if (prior.rows[0].request_hash !== requestHash) {
+      if (!compatibleHashes.has(prior.rows[0].request_hash)) {
         await client.query("ROLLBACK");
         throw new Error("IDEMPOTENCY_CONFLICT");
       }
@@ -370,6 +414,18 @@ export async function createInstantAssessment(input: {
       }
     }
 
+    // After 30 days the key may start a new submission. Retire only its retry
+    // record, never the assessment/ticket. Do this after rate checks because
+    // rejected attempts commit their counters but must retain the expired key.
+    // Other creation failures roll this back. Concurrent deletes wait on the
+    // expired row; the unique-key replay recovery below handles the winner.
+    const expired = await client.query(
+      `DELETE FROM instant_water_idempotency
+       WHERE endpoint = 'create-instant-water-assessment' AND scope = $1
+         AND idempotency_key = $2 AND expires_at <= now()
+       RETURNING id`,
+      [input.scope, input.idempotencyKey],
+    );
     const id = randomUUID();
     const reference = `WT-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
     const publicToken = input.customerUserId ? undefined : token();
@@ -397,8 +453,8 @@ export async function createInstantAssessment(input: {
         id, reference, input.customerUserId ?? null, normalizedFirstName, normalizedPhone,
         input.customerUserId ? "verified" : "unverified",
         input.customerUserId ? new Date() : null, "result_and_follow_up",
-        input.consentVersion, input.country.trim(), input.area.trim(), input.answers.source,
-        input.answers.concern, input.answers.setting, input.answers, result.rulesVersion,
+        input.consentVersion, input.country.trim(), input.area.trim(), answers.source,
+        answers.concern, answers.setting, answers, result.rulesVersion,
         result, result.areaFlags, input.sourceAttribution ?? {}, lifecycle, accountState,
         "not_requested", publicTokenHash, tokenExpires,
       ],
@@ -417,16 +473,19 @@ export async function createInstantAssessment(input: {
        VALUES ($1,'create-instant-water-assessment',$2,$3,$4,$5,$6,now() + interval '30 days')`,
       [randomUUID(), input.scope, input.idempotencyKey, requestHash, id, response],
     );
+    // The outbox/provider dedupe keys outlive the 30-day retry window. A
+    // recycled key must not suppress delivery of this new assessment.
+    const deliveryKey = `${input.scope}:${input.idempotencyKey}${expired.rows.length ? `:${id}` : ""}`;
     await enqueueLeadDelivery(client, {
-      submissionId: `${input.scope}:${input.idempotencyKey}`,
-      idempotencyKey: `${input.scope}:${input.idempotencyKey}`,
+      submissionId: deliveryKey,
+      idempotencyKey: deliveryKey,
       firstName: normalizedFirstName,
       phone: normalizedPhone,
       country: input.country.trim(),
       area: input.area.trim(),
-      source: input.answers.source,
-      concern: input.answers.concern,
-      setting: input.answers.setting,
+      source: answers.sources!.join(", "),
+      concern: answers.concerns!.join(", "),
+      setting: answers.settings!.join(", "),
       consent: "result_and_follow_up",
       consentVersion: input.consentVersion,
       sourceAttribution: input.sourceAttribution ?? {},
@@ -446,7 +505,8 @@ export async function createInstantAssessment(input: {
            AND idempotency_key = $2 AND expires_at > now()`,
         [input.scope, input.idempotencyKey],
       );
-      if (prior.rows[0]?.request_hash === requestHash) {
+      if (prior.rows[0]) {
+        if (!compatibleHashes.has(prior.rows[0].request_hash)) throw new Error("IDEMPOTENCY_CONFLICT");
         return { response: prior.rows[0].response as AssessmentResponse, replay: true };
       }
     }
@@ -517,6 +577,18 @@ export async function requestVerification(input: {
       if (error instanceof Error && error.message === "RATE_LIMITED") await client.query("COMMIT");
       throw error;
     }
+    // After 30 days this key may request a new challenge, even for a changed
+    // channel/consent payload. Retire only this endpoint/scope/key's expired
+    // retry record, never its historical challenge. Rate-limit rejections
+    // commit counters, so retirement must follow those checks. Any later
+    // failure rolls it back; concurrent replacements are resolved by the
+    // unique-key replay recovery below and the atomic delivery claim.
+    await client.query(
+      `DELETE FROM instant_water_idempotency
+       WHERE endpoint = 'request-instant-water-verification'
+         AND scope = $1 AND idempotency_key = $2 AND expires_at <= now()`,
+      [input.assessmentId, input.idempotencyKey],
+    );
     await client.query(
       `INSERT INTO instant_water_verification_challenges
         (id, assessment_id, channel, phone_hash, code_hash, code_ciphertext, expires_at)
@@ -568,6 +640,7 @@ async function dispatchOtpChallenge(
         SET delivery_status = 'sending', delivery_attempts = delivery_attempts + 1,
             delivery_claimed_at = now(), delivery_error_category = NULL
       WHERE id = $1 AND delivery_attempts < 3
+        AND used_at IS NULL AND expires_at > now()
         AND (delivery_status = 'pending'
           OR (delivery_status = 'failed' AND (delivery_next_retry_at IS NULL OR delivery_next_retry_at <= now()))
           OR (delivery_status = 'sending' AND delivery_claimed_at < now() - interval '5 minutes'))
@@ -576,9 +649,14 @@ async function dispatchOtpChallenge(
   );
   if (!claimed.rowCount) {
     const current = await pool.query(
-      `SELECT delivery_status FROM instant_water_verification_challenges WHERE id = $1`,
+      `SELECT delivery_status, used_at, expires_at <= now() AS expired
+         FROM instant_water_verification_challenges WHERE id = $1`,
       [challengeId],
     );
+    // The request key lasts longer than the code. Never renew a challenge on
+    // replay: a fresh request must pass consent and rate-limit checks again.
+    if (current.rows[0]?.used_at) throw new Error("VERIFICATION_USED");
+    if (current.rows[0]?.expired) throw new Error("VERIFICATION_EXPIRED");
     if (current.rows[0]?.delivery_status === "sent") return { channel };
     throw new Error("DELIVERY_IN_PROGRESS");
   }
@@ -892,7 +970,8 @@ export async function requestPhysicalTest(input: {
   acknowledgement: boolean;
   mediaReferences?: Array<{ reference: string; mediaType: string }>;
   idempotencyKey: string;
-}): Promise<{ assessmentId: string; reference: string; serviceState: string; ticketId: string }> {
+  promoCode?: string;
+}): Promise<{ assessmentId: string; reference: string; serviceState: string; ticketId: string; freeWaterTest?: boolean; promoCode?: string }> {
   if (!input.acknowledgement) throw new Error("ACKNOWLEDGEMENT_REQUIRED");
   const media = input.mediaReferences ?? [];
   if (media.length > 7) throw new Error("MEDIA_LIMIT");
@@ -917,6 +996,14 @@ export async function requestPhysicalTest(input: {
     row = result.rows[0] as AssessmentRow;
     if (!row) throw new Error("NOT_FOUND");
   } else throw new Error("ACTION_UNAUTHORIZED");
+  if (input.userId && row.customer_user_id && String(row.customer_user_id) !== input.userId) throw new Error("ACTION_UNAUTHORIZED");
+  const contact = validateCustomerContact({ phone: row.normalized_phone, address: input.serviceAddress, country: row.country });
+  if (!contact.ok) throw new Error(!contact.phone ? "INVALID_PHONE" : "CONTACT_ADDRESS_REQUIRED");
+  if (input.userId) {
+    if (!Number.isSafeInteger(Number(input.userId)) || Number(input.userId) <= 0) throw new Error("CONTACT_COMPLETION_REQUIRED");
+    const account = (await pool.query("SELECT phone,address FROM uc_users WHERE id=$1 AND deleted_at IS NULL", [Number(input.userId)])).rows[0];
+    if (!account || !validateCustomerContact(account).ok) throw new Error("CONTACT_COMPLETION_REQUIRED");
+  }
   const serviceState = physicalServiceState(row.country);
   const requestHash = hashSecret(stablePayload({
     assessmentId: input.assessmentId,
@@ -925,38 +1012,81 @@ export async function requestPhysicalTest(input: {
     preferredContactTime: input.preferredContactTime.trim(),
     acknowledgement: input.acknowledgement,
     mediaReferences: media,
+    ...(input.promoCode?.trim() ? { promoCode: input.promoCode.trim().toUpperCase() } : {}),
   }));
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`physical-test:${input.assessmentId}`]);
     const prior = await client.query(
-      `SELECT request_hash, response FROM instant_water_idempotency
+      `SELECT id, request_hash, response, expires_at > now() AS active FROM instant_water_idempotency
         WHERE endpoint = 'request-instant-water-physical-test'
-          AND scope = $1 AND idempotency_key = $2 AND expires_at > now()
+          AND scope = $1 AND idempotency_key = $2
         FOR UPDATE`,
       [input.assessmentId, input.idempotencyKey],
     );
     if (prior.rows[0]) {
       if (prior.rows[0].request_hash !== requestHash) throw new Error("IDEMPOTENCY_CONFLICT");
-      await client.query("COMMIT");
-      return prior.rows[0].response as { assessmentId: string; reference: string; serviceState: string; ticketId: string };
+      if (prior.rows[0].active) {
+        await client.query("COMMIT");
+        return prior.rows[0].response as { assessmentId: string; reference: string; serviceState: string; ticketId: string };
+      }
     }
     const ticket = await client.query(
-      `SELECT id, service_state FROM instant_water_check_tickets WHERE assessment_id = $1 FOR UPDATE`,
+      `SELECT id, service_state, physical_request_acknowledged_at, free_water_test, promo_code FROM instant_water_check_tickets WHERE assessment_id = $1 FOR UPDATE`,
       [input.assessmentId],
     );
     if (!ticket.rows[0]) throw new Error("NOT_FOUND");
-    if (ticket.rows[0].service_state !== "instant_result_ready" && ticket.rows[0].service_state !== "follow_up_requested" && ticket.rows[0].service_state !== serviceState) {
+    if (prior.rows[0]) {
+      // Unlike assessment creation, this key identifies an action on an existing
+      // ticket. Expiry never authorizes a second action or overwriting service
+      // details. Renew identical retries with the current state, even if staff
+      // have scheduled, completed, or closed the ticket in the meantime.
+      const response = {
+        assessmentId: input.assessmentId,
+        reference: row.reference,
+        serviceState: String(ticket.rows[0].service_state),
+        ticketId: String(ticket.rows[0].id),
+        freeWaterTest: ticket.rows[0].free_water_test,
+        promoCode: ticket.rows[0].promo_code ?? "",
+      };
+      await client.query(
+        `UPDATE instant_water_idempotency
+            SET response = $2::jsonb, expires_at = now() + interval '30 days'
+          WHERE id = $1`,
+        [prior.rows[0].id, JSON.stringify(response)],
+      );
+      await client.query("COMMIT");
+      return response;
+    }
+    // Customers may supply details only before submission. A new key is not
+    // permission to edit a submitted request, even if a legacy/staff-managed
+    // ticket has no acknowledgement timestamp. Conversely, resetting the state
+    // does not reopen an acknowledged request. Use both values from the locked
+    // ticket, before media consumption, promotion redemption or any writes.
+    if (ticket.rows[0].service_state !== "instant_result_ready" ||
+        ticket.rows[0].physical_request_acknowledged_at !== null) {
       throw new Error("CONFLICT");
     }
     const mediaPaths = await verifyInstantMediaReferences(input.assessmentId, input.userId, media);
     const ticketId = String(ticket.rows[0].id);
+    const promoCode = input.promoCode?.trim().toUpperCase() ?? "";
+    if (promoCode) {
+      const customerId = Number(input.userId ?? row.customer_user_id);
+      if (!Number.isInteger(customerId) || customerId <= 0) throw Object.assign(new Error("Sign in to apply a free water test code"), { code: "INVALID_PROMOTION" });
+      if (serviceState !== "physical_test_requested") throw Object.assign(new Error("Physical tests are not available in this country"), { code: "INVALID_PROMOTION" });
+      const promotion = await quotePromotion(promoCode, "water_test", [], 0, undefined, customerId);
+      if (!promotion) throw Object.assign(new Error("Water test code is inactive, expired, exhausted, or ineligible"), { code: "INVALID_PROMOTION" });
+      await consumePromotionOnClient(client, { quote: promotion, userId: customerId, operation: "water_test",
+        actor: `customer:${customerId}`, idempotencyKey: `physical-test:${input.assessmentId}`, operationRef: ticketId });
+    }
     await client.query(
       `UPDATE instant_water_check_tickets
           SET service_state = $2, service_address = $3, preferred_contact_time = $4,
               physical_request_acknowledged_at = now(), media_references = $5::jsonb, updated_at = now()
+              , promo_code = $6, free_water_test = $7
         WHERE assessment_id = $1`,
-      [input.assessmentId, serviceState, input.serviceAddress.trim(), input.preferredContactTime.trim(), JSON.stringify(media)],
+      [input.assessmentId, serviceState, input.serviceAddress.trim(), input.preferredContactTime.trim(), JSON.stringify(media), promoCode || null, !!promoCode],
     );
     if (mediaPaths.length) {
       await client.query(
@@ -972,7 +1102,7 @@ export async function requestPhysicalTest(input: {
         WHERE id = $1`,
       [input.assessmentId, serviceState],
     );
-    const response = { assessmentId: input.assessmentId, reference: row.reference, serviceState, ticketId };
+    const response = { assessmentId: input.assessmentId, reference: row.reference, serviceState, ticketId, freeWaterTest: !!promoCode, promoCode };
     await client.query(
       `INSERT INTO instant_water_idempotency
        (id, endpoint, scope, idempotency_key, request_hash, assessment_id, response, expires_at)
@@ -980,6 +1110,11 @@ export async function requestPhysicalTest(input: {
       [randomUUID(), input.assessmentId, input.idempotencyKey, requestHash, input.assessmentId, response],
     );
     await client.query("COMMIT");
+    if (serviceState === "physical_test_requested") {
+      void notifyPhysicalTest({ ticketId, userId: input.userId ?? row.customer_user_id ?? undefined,
+        firstName: row.first_name, phone: row.normalized_phone, address: input.serviceAddress.trim(),
+        source: row.source, concerns: row.concern, freeWaterTest: !!promoCode, promoCode }).catch(() => {});
+    }
     return response;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -1009,10 +1144,15 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
   accountLinkState: string;
   serviceState: string;
   createdAt: Date;
+  answers: InstantWaterCheckAnswers;
+  freeWaterTest: boolean;
+  promoCode: string;
 }>> {
   const result = await pool.query(
-    `SELECT id, reference, result, country, account_link_state, physical_request_state, created_at
-       FROM instant_water_assessments
+    `SELECT id, reference, result, raw_answers, country, area, source, concern, setting, account_link_state, physical_request_state, created_at,
+       COALESCE((SELECT free_water_test FROM instant_water_check_tickets WHERE assessment_id=a.id),false) AS free_water_test,
+       (SELECT promo_code FROM instant_water_check_tickets WHERE assessment_id=a.id) AS promo_code
+       FROM instant_water_assessments a
       WHERE customer_user_id = $1 AND account_link_state = 'attached'
       ORDER BY created_at DESC`,
     [userId],
@@ -1021,22 +1161,25 @@ export async function listOwnedAssessments(userId: string): Promise<Array<{
     assessmentId: row.id,
     reference: row.reference,
     bands: (row.result as InstantWaterCheckResult).bands,
+    answers: storedWaterAnswers(row),
     accountLinkState: row.account_link_state,
     serviceState: row.physical_request_state,
+    freeWaterTest: row.free_water_test,
+    promoCode: row.promo_code ?? "",
     createdAt: row.created_at,
   }));
 }
 
 export async function getOwnedAssessment(assessmentId: string, userId: string): Promise<Record<string, unknown> | null> {
   const result = await pool.query(
-    `SELECT id, reference, result, country, physical_request_state, created_at
+    `SELECT id, reference, result, raw_answers, country, area, source, concern, setting, physical_request_state, created_at
        FROM instant_water_assessments
       WHERE id = $1 AND customer_user_id = $2 AND account_link_state = 'attached'
       LIMIT 1`,
     [assessmentId, userId],
   );
   const row = result.rows[0] as {
-    id: string; reference: string; result: InstantWaterCheckResult; country: string;
+    id: string; reference: string; result: InstantWaterCheckResult; raw_answers: InstantWaterCheckAnswers; country: string; area: string; source: string; concern: string; setting: string;
     physical_request_state: string; created_at: Date;
   } | undefined;
   if (!row) return null;
@@ -1044,6 +1187,7 @@ export async function getOwnedAssessment(assessmentId: string, userId: string): 
     assessmentId: row.id,
     reference: row.reference,
     bands: row.result.bands,
+    answers: storedWaterAnswers(row),
     accountLinkState: "attached",
     serviceState: row.physical_request_state,
     createdAt: row.created_at,
@@ -1052,14 +1196,14 @@ export async function getOwnedAssessment(assessmentId: string, userId: string): 
 
 export async function latestOwnedAssessmentSummary(userId: string): Promise<Record<string, unknown> | null> {
   const result = await pool.query(
-    `SELECT reference, result, country, area, source, physical_request_state, created_at
+    `SELECT reference, result, raw_answers, country, area, source, concern, setting, physical_request_state, created_at
        FROM instant_water_assessments
       WHERE customer_user_id = $1 AND account_link_state = 'attached'
       ORDER BY created_at DESC LIMIT 1`,
     [userId],
   );
   const row = result.rows[0] as {
-    reference: string; result: InstantWaterCheckResult; country: string; area: string; source: string;
+    reference: string; result: InstantWaterCheckResult; raw_answers: InstantWaterCheckAnswers; country: string; area: string; source: string; concern: string; setting: string;
     physical_request_state: string; created_at: Date;
   } | undefined;
   if (!row) return null;
@@ -1067,6 +1211,7 @@ export async function latestOwnedAssessmentSummary(userId: string): Promise<Reco
     reference: row.reference,
     createdAt: row.created_at,
     source: row.source,
+    answers: storedWaterAnswers(row),
     bands: row.result.bands,
     areaFlag: row.result.areaFlags.riftValleyFluoride ? "rift_valley_fluoride" : row.result.areaFlags.hardGroundwater ? "hard_groundwater" : "none",
     recommendation: row.result.recommendation,
@@ -1083,6 +1228,7 @@ export function buildInstantAssessmentAiContext(assessment: Record<string, unkno
     reference: assessment.reference,
     createdAt: assessment.createdAt,
     source: assessment.source,
+    answers: assessment.answers,
     area: assessment.area,
     bands: assessment.bands,
     areaFlag: assessment.areaFlag,
@@ -1094,7 +1240,7 @@ export function buildInstantAssessmentAiContext(assessment: Record<string, unkno
 export async function getAdminAssessment(assessmentId: string): Promise<Record<string, unknown> | null> {
   const result = await pool.query(
     `SELECT a.*, t.id AS ticket_id, t.service_state, t.service_address,
-            t.preferred_contact_time, t.media_references,
+            t.preferred_contact_time, t.media_references, t.promo_code, t.free_water_test,
             GREATEST(a.updated_at, COALESCE(t.updated_at, a.updated_at)) AS concurrency_updated_at
        FROM instant_water_assessments a
        LEFT JOIN instant_water_check_tickets t ON t.assessment_id = a.id
@@ -1113,6 +1259,7 @@ export async function getAdminAssessment(assessmentId: string): Promise<Record<s
     area: row.area,
     source: row.source,
     concern: row.concern,
+    answers: storedWaterAnswers(row),
     bands: row.result.bands,
     serviceState: row.service_state ?? row.physical_request_state,
     accountLinkState: row.account_link_state,
@@ -1121,6 +1268,8 @@ export async function getAdminAssessment(assessmentId: string): Promise<Record<s
     consentVersion: (row as Record<string, unknown>).consent_version,
     sourceAttribution: row.source_attribution,
     serviceAddress: row.service_address,
+    promoCode: row.promo_code,
+    freeWaterTest: row.free_water_test,
     preferredContactTime: row.preferred_contact_time,
     mediaReferences: projectHubMediaReferences(assessmentId, row.media_references),
   };

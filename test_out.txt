@@ -1,0 +1,142 @@
+
+> @workspace/uc-companion@0.0.0 test /home/runner/workspace/artifacts/uc-companion
+> TSX_TSCONFIG_PATH=$(pwd)/tsconfig.test.json node --import ./test-setup.mjs --import tsx/esm --test hooks/__tests__/**/*.test.mts lib/__tests__/**/*.test.mts scripts/__tests__/*.test.mjs
+
+node:internal/worker:355
+    this[kHandle].startThread();
+                  ^
+
+Error [TransformError]: EAGAIN
+    at new Worker (node:internal/worker:355:19)
+    at startWorkerThreadService (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2395:16)
+    at transformSync (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2196:53)
+    at file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3303
+    at applyTransformersSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:1081)
+    at transformEsmSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3261)
+    at load (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/register-D5KIhaFJ.mjs:2:6155)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:812:14) {
+  code: 'ERR_WORKER_INIT_FAILED'
+}
+
+Node.js v24.13.0
+✖ hooks/__tests__/cartClearMidSession.test.mts (219.310257ms)
+node:internal/worker:355
+    this[kHandle].startThread();
+                  ^
+
+Error [TransformError]: EAGAIN
+    at new Worker (node:internal/worker:355:19)
+    at startWorkerThreadService (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2395:16)
+    at transformSync (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2196:53)
+    at file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3303
+    at applyTransformersSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:1081)
+    at transformEsmSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3261)
+    at load (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/register-D5KIhaFJ.mjs:2:6155)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:812:14) {
+  code: 'ERR_WORKER_INIT_FAILED'
+}
+
+Node.js v24.13.0
+✖ hooks/__tests__/cartRapidStepper.test.mts (161.614875ms)
+node:internal/worker:355
+    this[kHandle].startThread();
+                  ^
+
+Error [TransformError]: EAGAIN
+    at new Worker (node:internal/worker:355:19)
+    at startWorkerThreadService (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2395:16)
+    at transformSync (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2196:53)
+    at file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3303
+    at applyTransformersSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:1081)
+    at transformEsmSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3261)
+    at load (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/register-D5KIhaFJ.mjs:2:6155)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:812:14) {
+  code: 'ERR_WORKER_INIT_FAILED'
+}
+
+Node.js v24.13.0
+✖ hooks/__tests__/cartRefresh.test.mts (175.647097ms)
+▶ background → active resume rehydrates the cart
+  ✔ reloads items written to storage while the app was backgrounded (6.558061ms)
+  ✔ rehydrates on inactive → active (iOS interruption path) (1.226031ms)
+  ✔ does not reload on active → background (only foreground transitions refresh) (1.000349ms)
+  ✔ repeated active events without leaving foreground do not duplicate listeners (0.862308ms)
+  ✔ cold-restart simulation: a fresh provider over existing storage hydrates then stays fresh on resume (2.355505ms)
+✔ background → active resume rehydrates the cart (13.333687ms)
+▶ refreshCart racing rapid updateQty (tab switch right after stepper taps)
+  ✔ refresh fired before the saves settle must not wipe the new quantities (12.035511ms)
+  ✔ stepper tap landing WHILE a refresh is already in flight still wins (1.388943ms)
+  ✔ interleaved taps on two items survive a mid-burst refresh (1.494236ms)
+✔ refreshCart racing rapid updateQty (tab switch right after stepper taps) (16.177517ms)
+▶ refreshCart still applies fresh storage when no mutation is pending
+  ✔ cross-screen change written to storage is loaded by a later refresh (1.696411ms)
+  ✔ refresh after taps have fully settled is a no-op, not a revert (1.15046ms)
+✔ refreshCart still applies fresh storage when no mutation is pending (3.517305ms)
+▶ deferred AsyncStorage writes (adversarial completion order)
+  ✔ refresh while writes are still blocked keeps the tapped quantities; only the newest snapshot commits (1.202512ms)
+  ✔ slow first write cannot settle after a fast second write (no out-of-order final value) (0.780398ms)
+  ✔ a FAILED save must not permanently disable refresh: later refresh still applies newer storage (0.75714ms)
+  ✔ a save that fails once but succeeds on retry still persists the snapshot (0.802467ms)
+  ✔ slow refresh read that completes after new taps must not clobber them (0.608794ms)
+✔ deferred AsyncStorage writes (adversarial completion order) (5.818057ms)
+node:internal/worker:355
+    this[kHandle].startThread();
+                  ^
+
+Error [TransformError]: EAGAIN
+    at new Worker (node:internal/worker:355:19)
+    at startWorkerThreadService (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2395:16)
+    at transformSync (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2196:53)
+    at file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3303
+    at applyTransformersSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:1081)
+    at transformEsmSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3261)
+    at load (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/register-D5KIhaFJ.mjs:2:6155)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:812:14) {
+  code: 'ERR_WORKER_INIT_FAILED'
+}
+
+Node.js v24.13.0
+✖ hooks/__tests__/catalogueRequests.test.mts (210.455957ms)
+▶ CartContext hydration flag (slow-device simulation)
+  ✔ A: cartHydrated stays false while the AsyncStorage read is in flight (8.809994ms)
+  ✔ B1: a transient read failure is retried once and hydrates with the saved cart (1.143548ms)
+  ✔ B2: a read that fails twice must NOT hydrate (no confident "basket is empty" lie) (1.000069ms)
+  ✔ C: refreshCart (tab-focus re-read) never flips cartHydrated back to false (0.971695ms)
+✔ CartContext hydration flag (slow-device simulation) (12.896322ms)
+▶ checkout.tsx hydration guard (source-level tripwire)
+  ✔ D: early-returns a spinner on !cartHydrated before any cart UI renders (0.672437ms)
+✔ checkout.tsx hydration guard (source-level tripwire) (0.777814ms)
+▶ other cart surfaces respect cartHydrated (source-level tripwires)
+  ✔ E: cart screen early-returns a spinner on !cartHydrated before the empty state (0.609902ms)
+  ✔ F: GlobalCartBar and tab badge gate visibility on cartHydrated (0.555093ms)
+  ✔ G: header cart badges (home, product detail) gate on cartHydrated (0.71914ms)
+  ✔ H: useCartBarInset returns 0 until cartHydrated (0.363835ms)
+✔ other cart surfaces respect cartHydrated (source-level tripwires) (2.576515ms)
+node:internal/worker:355
+    this[kHandle].startThread();
+                  ^
+
+Error [TransformError]: EAGAIN
+    at new Worker (node:internal/worker:355:19)
+    at startWorkerThreadService (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2395:16)
+    at transformSync (/home/runner/workspace/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild/lib/main.js:2196:53)
+    at file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3303
+    at applyTransformersSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:1081)
+    at transformEsmSync (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/index-XurvG3JN.mjs:14:3261)
+    at load (file:///home/runner/workspace/node_modules/.pnpm/tsx@4.23.0/node_modules/tsx/dist/register-D5KIhaFJ.mjs:2:6155)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:812:14) {
+  code: 'ERR_WORKER_INIT_FAILED'
+}
+
+Node.js v24.13.0
+✖ hooks/__tests__/companionLogin.test.mts (121.658169ms)

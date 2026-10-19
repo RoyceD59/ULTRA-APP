@@ -1,0 +1,687 @@
+--- parent/artifacts/api-server/src/lib/jwt.ts
++++ candidate/artifacts/api-server/src/lib/jwt.ts
+@@ -10,6 +10,9 @@
+ import { createHmac, timingSafeEqual } from "crypto";
+ 
+ const ALG_HEADER = Buffer.from('{"alg":"HS256","typ":"JWT"}').toString("base64url");
++
++/** Customer sessions use the same bounded lifetime as team sessions. */
++export const CUSTOMER_SESSION_TTL_SECONDS = 8 * 60 * 60;
+ 
+ function secret(): string {
+   const s = process.env["SESSION_SECRET"];
+@@ -25,9 +28,14 @@
+     .digest("base64url");
+ }
+ 
+-/** Issue a signed JWT containing `payload` as the claims. */
++/** Issue a signed JWT. All issuance paths, including social/Woo login and
++ * password changes, get a bounded session even when no expiry is supplied. */
+ export function issueToken(payload: Record<string, unknown>): string {
+-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
++  const claims = {
++    ...payload,
++    exp: payload.exp ?? Math.floor(Date.now() / 1000) + CUSTOMER_SESSION_TTL_SECONDS,
++  };
++  const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
+   const unsigned = `${ALG_HEADER}.${body}`;
+   return `${unsigned}.${sign(unsigned)}`;
+ }
+@@ -61,7 +69,8 @@
+ /**
+  * Verify a Bearer JWT issued by this server.
+  * Returns the decoded claims on success, or null if the signature is invalid,
+- * the token is malformed, the algorithm is `none`, or the token has expired.
++ * the token is malformed, the algorithm is `none`, or its expiry is missing,
++ * invalid, or reached. Legacy unbounded sessions must sign in again.
+  */
+ export function verifyToken(authHeader: string | undefined): JwtClaims | null {
+   if (!authHeader?.startsWith("Bearer ")) return null;
+@@ -99,8 +108,10 @@
+   try {
+     const claims = JSON.parse(Buffer.from(body, "base64url").toString()) as JwtClaims;
+ 
+-    // Enforce expiry claim: reject tokens past their exp timestamp
+-    if (claims.exp !== undefined && claims.exp < Math.floor(Date.now() / 1000)) {
++    // Fail closed for old unbounded tokens and malformed expiry claims.
++    // JWT exp is exclusive: the token is invalid at, not just after, exp.
++    if (typeof claims.exp !== "number" || !Number.isSafeInteger(claims.exp)
++      || claims.exp <= Math.floor(Date.now() / 1000)) {
+       return null;
+     }
+ 
+--- parent/artifacts/api-server/src/lib/objectStorage.ts
++++ candidate/artifacts/api-server/src/lib/objectStorage.ts
+@@ -40,7 +40,9 @@
+ 
+ /** Upload caps shared by the presign endpoint (routes/storage.ts) and the
+  *  attach-time metadata verification in routes/uc.ts. Presigned PUT URLs
+- *  cannot bind size/content-type, so both ends must enforce these. */
++ *  do not bind size/content-type with the sidecar signer. Declarations and stored
++ *  metadata are untrusted: public serving must restrict inline MIME types and
++ *  attachment verification must inspect bytes regardless of stored MIME. */
+ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+ export const MAX_VIDEO_BYTES = 60 * 1024 * 1024; // 60 MB
+ 
+--- parent/artifacts/api-server/src/lib/review-media-signature.ts
++++ candidate/artifacts/api-server/src/lib/review-media-signature.ts
+@@ -1,3 +1,12 @@
++import type { File } from "@google-cloud/storage";
++
++export const IMAGE_TYPES = new Set([
++  "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
++]);
++export const VIDEO_TYPES = new Set([
++  "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
++]);
++
+ const ASCII = (bytes: Buffer, start: number, length: number): string =>
+   bytes.subarray(start, start + length).toString("ascii");
+ 
+@@ -47,7 +56,27 @@
+ }
+ 
+ export function mediaMimeFamily(contentType: string): "photo" | "video" | null {
+-  if (contentType.startsWith("image/")) return "photo";
+-  if (contentType.startsWith("video/")) return "video";
++  if (IMAGE_TYPES.has(contentType)) return "photo";
++  if (VIDEO_TYPES.has(contentType)) return "video";
+   return null;
++}
++
++/** Stored MIME metadata is uploader-controlled, even after presigning.
++ * Read a bounded prefix for every attachment, not only unlabelled objects. */
++export async function verifyReviewMediaContent(
++  file: Pick<File, "createReadStream">,
++  contentType: string,
++  family: "photo" | "video",
++): Promise<string | null> {
++  if (contentType && contentType !== "application/octet-stream" &&
++      mediaMimeFamily(contentType) !== family) return null;
++  const header = await new Promise<Buffer>((resolve, reject) => {
++    const chunks: Buffer[] = [];
++    const stream = file.createReadStream({ start: 0, end: 63 });
++    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
++    stream.on("end", () => resolve(Buffer.concat(chunks)));
++    stream.on("error", reject);
++  });
++  const detectedType = detectReviewMediaMime(header);
++  return detectedType && mediaMimeFamily(detectedType) === family ? detectedType : null;
+ }
+\ No newline at end of file
+--- parent/artifacts/api-server/src/routes/storage.ts
++++ candidate/artifacts/api-server/src/routes/storage.ts
+@@ -5,6 +5,7 @@
+ import sharp from "sharp";
+ 
+ import { getOrCreateDerivative, snapWidth } from "../lib/image-derivatives";
++import { IMAGE_TYPES, VIDEO_TYPES, mediaMimeFamily } from "../lib/review-media-signature.js";
+ 
+ import { verifyToken } from "../lib/jwt.js";
+ import { pool } from "@workspace/db";
+@@ -17,34 +18,21 @@
+   ObjectStorageService,
+ } from "../lib/objectStorage";
+ 
+-const router: IRouter = Router();
+-const objectStorageService = new ObjectStorageService();
++type StorageAdapter = Pick<ObjectStorageService,
++  "getPrivateUploadURL" | "normalizeObjectEntityPath" | "getObjectEntityFile" | "downloadObject">;
+ 
+ /** Disposable per-instance cache of resized upload thumbnails (see image-derivatives). */
+ const STORAGE_THUMB_CACHE_DIR = path.join(os.tmpdir(), "uc-storage-thumb-cache");
+ 
+ // ─── Upload allowlist ─────────────────────────────────────────────────────────
+-// Only these MIME types may receive a presigned PUT URL. Everything else is
+-// rejected before a URL is minted so unsafe files (executables, HTML, SVG with
+-// XSS payloads, etc.) never land in the storage bucket.
+-const IMAGE_TYPES = new Set([
+-  "image/jpeg",
+-  "image/png",
+-  "image/webp",
+-  "image/gif",
+-  // iOS devices often produce HEIC/HEIF; safe to allow, rejected at serve time
+-  // if not image/* (forced to octet-stream attachment).
+-  "image/heic",
+-  "image/heif",
+-]);
+-const VIDEO_TYPES = new Set([
+-  "video/mp4",
+-  "video/quicktime",
+-  // Android devices commonly produce webm/3gpp; both are safe container formats.
+-  "video/webm",
+-  "video/3gpp",
+-]);
++// These types may receive a presigned PUT URL, but the signer does not bind
++// Content-Type. Serving and attachment verification must independently enforce
++// the safe-media allowlist; the declaration alone never proves stored content.
+ const PDF_TYPES = new Set(["application/pdf"]);
++
++/** Instance-local adapter keeps route tests independent of real object storage. */
++export function createStorageRouter(objectStorageService: StorageAdapter = new ObjectStorageService()): IRouter {
++const router: IRouter = Router();
+ 
+ /**
+  * POST /api/uc/uploads/request-url
+@@ -220,6 +208,7 @@
+         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+         res.setHeader("Content-Type", "image/webp");
+         res.setHeader("X-Content-Type-Options", "nosniff");
++        res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+         res.sendFile(cachePath);
+         return;
+       } catch (err) {
+@@ -234,16 +223,21 @@
+     res.status(response.status);
+     response.headers.forEach((value, key) => res.setHeader(key, value));
+     // These are user-uploaded bytes served from our origin: never let the
+-    // browser sniff HTML/JS out of them, and only render image/video inline.
++    // browser sniff HTML/JS out of them. Never treat arbitrary image/* (SVG)
++    // or video/* metadata as safe: it was supplied by the uploader.
+     res.setHeader("X-Content-Type-Options", "nosniff");
++    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+     // uploads/<uuid> content never changes once written — let devices and any
+     // intermediate cache keep it for a year instead of re-downloading review
+     // photos and product media on every visit.
+     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+-    const contentType = String(response.headers.get("content-type") ?? "");
+-    if (!contentType.startsWith("image/") && !contentType.startsWith("video/")) {
++    const contentType = String(response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
++    if (!mediaMimeFamily(contentType)) {
+       res.setHeader("Content-Type", "application/octet-stream");
+       res.setHeader("Content-Disposition", "attachment");
++    } else {
++      res.setHeader("Content-Type", contentType);
++      res.setHeader("Content-Disposition", "inline");
+     }
+ 
+     if (response.body) {
+@@ -322,4 +316,7 @@
+   }
+ });
+ 
+-export default router;
++return router;
++}
++
++export default createStorageRouter();
+--- parent/artifacts/api-server/src/routes/uc.ts
++++ candidate/artifacts/api-server/src/routes/uc.ts
+@@ -63,7 +63,7 @@
+   ObjectNotFoundError,
+   ObjectStorageService,
+ } from "../lib/objectStorage";
+-import { detectReviewMediaMime, mediaMimeFamily } from "../lib/review-media-signature.js";
++import { verifyReviewMediaContent, mediaMimeFamily } from "../lib/review-media-signature.js";
+ import { creditQualifyingProductPoints } from "../lib/reminder-dispatch.js";
+ import { sendPushToUser, getPushTokenRow, callExpoPushApi, removePushToken } from "../lib/push.js";
+ import {
+@@ -1586,8 +1586,12 @@
+     try {
+       const file = await objectStorage.getObjectEntityFile(objectPath);
+       const [metadata] = await file.getMetadata();
+-      let contentType = String(metadata.contentType ?? "").toLowerCase();
++      const contentType = String(metadata.contentType ?? "").split(";")[0].trim().toLowerCase();
+       const size = Number(metadata.size ?? 0);
++      const cap = item.type === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
++      if (!Number.isFinite(size) || size <= 0 || size > cap) {
++        return `Attachment exceeds the ${Math.round(cap / 1024 / 1024)} MB limit`;
++      }
+       if (!contentType || contentType === "application/octet-stream") {
+         const uploadResult = await pool.query(
+           `SELECT declared_type, declared_size
+@@ -1605,25 +1609,13 @@
+         if (mediaMimeFamily(declaredType) !== item.type || declaredSize !== size) {
+           return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
+         }
+-        const header = await new Promise<Buffer>((resolve, reject) => {
+-          const chunks: Buffer[] = [];
+-          const stream = file.createReadStream({ start: 0, end: 63 });
+-          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+-          stream.on("end", () => resolve(Buffer.concat(chunks)));
+-          stream.on("error", reject);
+-        });
+-        const detectedType = detectReviewMediaMime(header);
+-        if (!detectedType || mediaMimeFamily(detectedType) !== item.type) {
+-          return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
+-        }
+-        contentType = detectedType;
++      }
++      const detectedType = await verifyReviewMediaContent(file, contentType, item.type);
++      if (!detectedType) {
++        return `Attachment is not ${item.type === "photo" ? "an image" : "a video"}`;
++      }
++      if (!contentType || contentType === "application/octet-stream") {
+         await file.setMetadata({ contentType: detectedType });
+-      }
+-      if (item.type === "photo" && !contentType.startsWith("image/")) return "Attachment is not an image";
+-      if (item.type === "video" && !contentType.startsWith("video/")) return "Attachment is not a video";
+-      const cap = item.type === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+-      if (size <= 0 || size > cap) {
+-        return `Attachment exceeds the ${Math.round(cap / 1024 / 1024)} MB limit`;
+       }
+     } catch (err) {
+       if (err instanceof ObjectNotFoundError) return "Attachment upload not found — please re-attach it";
+@@ -9003,6 +8995,14 @@
+     return;
+   }
+   try {
++    // Identity claims alone cannot prove this is still an active team account.
++    // Keep member access, but reject deactivated/deleted and legacy principals.
++    const [teamUser] = await db.select({ isActive: teamUsersTable.isActive })
++      .from(teamUsersTable).where(eq(teamUsersTable.id, String(claims.id))).limit(1);
++    if (!teamUser?.isActive) {
++      res.status(401).json({ error: "Unauthorized" });
++      return;
++    }
+     const { rows } = await pool.query<{ count: number; new_this_week: number; new_this_month: number }>(
+       `SELECT
+          COUNT(*)::int                                                        AS count,
+--- parent/artifacts/api-server/src/tests/customer-count-auth.test.ts
++++ candidate/artifacts/api-server/src/tests/customer-count-auth.test.ts
+@@ -0,0 +1,69 @@
++import assert from "node:assert/strict";
++import { randomUUID } from "node:crypto";
++import http from "node:http";
++import { before, after, describe, it } from "node:test";
++import { pool } from "@workspace/db";
++import { issueToken } from "../lib/jwt.js";
++
++let server: http.Server;
++const teamId = randomUUID();
++const email = `count-auth-${teamId}@test.internal`;
++let bearer: string;
++
++before(async () => {
++  process.env["SESSION_SECRET"] ??= "customer-count-auth-test-only";
++  await pool.query(
++    `INSERT INTO team_users (id,email,name,password_hash,role,is_active)
++     VALUES ($1,$2,'Count auth','x','member',true)`, [teamId, email],
++  );
++  bearer = `Bearer ${issueToken({ id: teamId, email, type: "team-session", role: "member" })}`;
++  const { default: app } = await import("../app.js");
++  await new Promise<void>((resolve) => { server = app.listen(0, "127.0.0.1", resolve); });
++});
++
++after(async () => {
++  await pool.query("DELETE FROM team_users WHERE id=$1", [teamId]);
++  if (server) await new Promise<void>((resolve, reject) => server.close(err => err ? reject(err) : resolve()));
++});
++
++async function request(authorization?: string) {
++  const { port } = server.address() as { port: number };
++  return fetch(`http://127.0.0.1:${port}/api/uc/admin/customers/count`, {
++    headers: authorization ? { authorization } : {},
++  });
++}
++
++describe("customer count live team authentication", () => {
++  it("preserves access for active members and admins", async () => {
++    for (const role of ["member", "admin"]) {
++      await pool.query("UPDATE team_users SET role=$2 WHERE id=$1", [teamId, role]);
++      const response = await request(bearer);
++      assert.equal(response.status, 200);
++      const body = await response.json();
++      for (const key of ["count", "newThisWeek", "newThisMonth"]) {
++        assert.equal(typeof body[key], "number");
++      }
++    }
++  });
++
++  it("immediately rejects the same bearer after deactivation or deletion", async () => {
++    await pool.query("UPDATE team_users SET is_active=false WHERE id=$1", [teamId]);
++    assert.equal((await request(bearer)).status, 401);
++    await pool.query("UPDATE team_users SET is_active=true WHERE id=$1", [teamId]);
++    assert.equal((await request(bearer)).status, 200);
++    await pool.query("DELETE FROM team_users WHERE id=$1", [teamId]);
++    assert.equal((await request(bearer)).status, 401);
++  });
++
++  it("rejects missing, customer, expired, unknown and legacy passcode principals", async () => {
++    for (const authorization of [
++      undefined,
++      `Bearer ${issueToken({ id: 1, email })}`,
++      `Bearer ${issueToken({ id: teamId, email, type: "team-session", exp: 1 })}`,
++      `Bearer ${issueToken({ id: randomUUID(), email, type: "team-session" })}`,
++      `Bearer ${issueToken({ id: "team", email, type: "team-session", role: "admin" })}`,
++    ]) {
++      assert.equal((await request(authorization)).status, 401);
++    }
++  });
++});
+--- parent/artifacts/api-server/src/tests/jwt-session-expiry.test.ts
++++ candidate/artifacts/api-server/src/tests/jwt-session-expiry.test.ts
+@@ -0,0 +1,81 @@
++import assert from "node:assert/strict";
++import { createHmac } from "node:crypto";
++import { describe, it, before, after } from "node:test";
++import { CUSTOMER_SESSION_TTL_SECONDS, issueToken, verifyToken } from "../lib/jwt.js";
++
++const originalSecret = process.env["SESSION_SECRET"];
++before(() => { process.env["SESSION_SECRET"] = "session-expiry-test-only"; });
++after(() => {
++  if (originalSecret === undefined) delete process.env["SESSION_SECRET"];
++  else process.env["SESSION_SECRET"] = originalSecret;
++});
++
++// Sign legacy/malformed fixtures without the issuance helper repairing exp.
++function signedClaims(claims: Record<string, unknown>): string {
++  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
++  const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
++  const unsigned = `${header}.${body}`;
++  const signature = createHmac("sha256", process.env["SESSION_SECRET"]!).update(unsigned).digest("base64url");
++  return `Bearer ${unsigned}.${signature}`;
++}
++
++describe("bounded server-issued sessions", () => {
++  it("adds an eight-hour expiry while preserving customer identity/provenance", () => {
++    for (const payload of [
++      { id: 1, email: "password@example.invalid", credentialVersion: 2 },
++      { id: 2, email: "woo@example.invalid", src: "woo" },
++      { id: 3, email: "social@example.invalid" },
++      { id: 1_000_000_001, email: "mock@example.invalid" },
++      { id: 4, email: "temporary@example.invalid", mustChangePassword: true },
++    ]) {
++      const started = Math.floor(Date.now() / 1000);
++      const claims = verifyToken(`Bearer ${issueToken(payload)}`);
++      assert.ok(claims);
++      assert.ok(claims.exp! >= started + CUSTOMER_SESSION_TTL_SECONDS);
++      assert.ok(claims.exp! <= Math.floor(Date.now() / 1000) + CUSTOMER_SESSION_TTL_SECONDS);
++      const { exp, ...identity } = claims;
++      assert.deepEqual(identity, payload);
++    }
++  });
++
++  it("preserves an explicitly bounded team-session expiry", () => {
++    const exp = Math.floor(Date.now() / 1000) + 60;
++    const claims = verifyToken(`Bearer ${issueToken({ id: "team-user", email: "team@example.invalid", type: "team-session", exp })}`);
++    assert.equal(claims?.exp, exp);
++  });
++
++  it("rejects a normally issued customer token after its full lifetime", (t) => {
++    const issuedAt = 1_800_000_000;
++    const clock = t.mock.method(Date, "now", () => issuedAt * 1000);
++    const bearer = `Bearer ${issueToken({ id: 1, email: "customer@example.invalid" })}`;
++    assert.ok(verifyToken(bearer));
++    clock.mock.mockImplementation(() => (issuedAt + CUSTOMER_SESSION_TTL_SECONDS - 1) * 1000);
++    assert.ok(verifyToken(bearer));
++    clock.mock.mockImplementation(() => (issuedAt + CUSTOMER_SESSION_TTL_SECONDS) * 1000);
++    assert.equal(verifyToken(bearer), null);
++    clock.mock.restore();
++  });
++
++  it("rejects expired sessions and the exact expiry boundary", () => {
++    const now = Math.floor(Date.now() / 1000);
++    for (const exp of [now - 1, now]) {
++      assert.equal(verifyToken(signedClaims({ id: 1, email: "expired@example.invalid", exp })), null);
++    }
++    assert.ok(verifyToken(signedClaims({ id: 1, email: "valid@example.invalid", exp: now + 60 })));
++  });
++
++  it("rejects signed legacy tokens and malformed expiry claims", () => {
++    for (const exp of [undefined, null, "9999999999", false, {}, [], 9999999999.5]) {
++      assert.equal(verifyToken(signedClaims({ id: 1, email: "legacy@example.invalid", exp })), null);
++    }
++  });
++
++  it("still rejects tampered and malformed tokens", () => {
++    const token = issueToken({ id: 1, email: "signed@example.invalid" });
++    const [header, , signature] = token.split(".");
++    const body = Buffer.from(JSON.stringify({ id: 2, exp: 9999999999 })).toString("base64url");
++    assert.equal(verifyToken(`Bearer ${header}.${body}.${signature}`), null);
++    assert.equal(verifyToken("Bearer invalid"), null);
++    assert.equal(verifyToken(undefined), null);
++  });
++});
+--- parent/artifacts/api-server/src/tests/review-media-signature.test.ts
++++ candidate/artifacts/api-server/src/tests/review-media-signature.test.ts
+@@ -1,7 +1,9 @@
+ import assert from "node:assert/strict";
+ import test from "node:test";
++import { Readable } from "node:stream";
++import type { File } from "@google-cloud/storage";
+ 
+-import { detectReviewMediaMime, mediaMimeFamily } from "../lib/review-media-signature.js";
++import { detectReviewMediaMime, mediaMimeFamily, verifyReviewMediaContent } from "../lib/review-media-signature.js";
+ 
+ const isoBmff = (brand: string): Buffer => {
+   const bytes = Buffer.alloc(24);
+@@ -44,4 +46,53 @@
+   assert.equal(mediaMimeFamily("image/heic"), "photo");
+   assert.equal(mediaMimeFamily("video/quicktime"), "video");
+   assert.equal(mediaMimeFamily("application/octet-stream"), null);
++  assert.equal(mediaMimeFamily("image/svg+xml"), null);
++  assert.equal(mediaMimeFamily("image/x-unknown"), null);
++  assert.equal(mediaMimeFamily("video/x-unknown"), null);
++});
++
++function storedFile(bytes: Buffer): Pick<File, "createReadStream"> {
++  return {
++    createReadStream(options) {
++      assert.deepEqual(options, { start: 0, end: 63 });
++      return Readable.from([bytes.subarray(0, 64)]);
++    },
++  };
++}
++
++const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.cookie)</script></svg>');
++
++test("attachment verification rejects SVG even with allowlisted stored metadata", async () => {
++  for (const contentType of ["image/svg+xml", "image/jpeg", "image/png", "", "application/octet-stream"]) {
++    assert.equal(await verifyReviewMediaContent(storedFile(svg), contentType, "photo"), null, contentType);
++  }
++});
++
++test("attachment verification checks labelled media bytes and preserves legitimate formats", async () => {
++  const cases = [
++    ["image/jpeg", Buffer.from([0xff, 0xd8, 0xff, 0xe0]), "photo"],
++    ["image/png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "photo"],
++    ["image/gif", Buffer.from("GIF89a"), "photo"],
++    ["image/webp", Buffer.from("RIFFxxxxWEBP"), "photo"],
++    ["image/heic", isoBmff("heic"), "photo"],
++    ["video/mp4", isoBmff("isom"), "video"],
++    ["video/quicktime", isoBmff("qt  "), "video"],
++    ["video/3gpp", isoBmff("3gp6"), "video"],
++    ["video/webm", Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), "video"],
++  ] as const;
++  for (const [contentType, bytes, family] of cases) {
++    assert.equal(await verifyReviewMediaContent(storedFile(bytes), contentType, family), contentType);
++    assert.equal(await verifyReviewMediaContent(storedFile(bytes), "application/octet-stream", family), contentType);
++  }
++  assert.equal(await verifyReviewMediaContent(storedFile(isoBmff("isom")), "image/jpeg", "photo"), null);
++  assert.equal(await verifyReviewMediaContent(storedFile(Buffer.from("<html><script>alert(1)</script>")), "video/mp4", "video"), null);
++});
++
++test("attachment verification propagates storage read failures for the caller to reject", async () => {
++  const file: Pick<File, "createReadStream"> = {
++    createReadStream() {
++      return new Readable({ read() { this.destroy(new Error("storage read failed")); } });
++    },
++  };
++  await assert.rejects(verifyReviewMediaContent(file, "image/jpeg", "photo"), /storage read failed/);
+ });
+\ No newline at end of file
+--- parent/artifacts/api-server/src/tests/storage-public-media-security.test.ts
++++ candidate/artifacts/api-server/src/tests/storage-public-media-security.test.ts
+@@ -0,0 +1,76 @@
++import assert from "node:assert/strict";
++import { describe, it } from "node:test";
++import { randomUUID } from "node:crypto";
++import express from "express";
++import request from "supertest";
++import type { File } from "@google-cloud/storage";
++import { createStorageRouter } from "../routes/storage.js";
++
++const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.cookie)</script></svg>';
++
++function appWithUpload(contentType: string, bytes = svg) {
++  const app = express();
++  app.use("/api", createStorageRouter({
++    async getPrivateUploadURL() { throw new Error("Unexpected upload"); },
++    normalizeObjectEntityPath(url) { return url; },
++    async getObjectEntityFile() { return {} as File; },
++    async downloadObject() {
++      return new Response(bytes, { headers: {
++        "Content-Type": contentType,
++        // Prove object-supplied headers cannot override the route protections.
++        "Content-Disposition": "inline",
++        "Content-Security-Policy": "script-src 'unsafe-inline'",
++      } });
++    },
++  }));
++  return app;
++}
++
++describe("public uploaded media serving rejects active MIME types before attachment", () => {
++  const unsafeTypes = [
++    "image/svg+xml",
++    "image/svg+xml; charset=utf-8",
++    "IMAGE/SVG+XML",
++    "text/html",
++    "application/xhtml+xml",
++    "application/xml",
++    "image/x-unknown",
++    "video/x-unknown",
++    "application/pdf",
++    "application/octet-stream",
++  ];
++  for (const contentType of unsafeTypes) {
++    it(`forces ${contentType} to a sandboxed octet-stream download without authentication`, async () => {
++      const result = await request(appWithUpload(contentType))
++        .get(`/api/storage/objects/uploads/${randomUUID()}`)
++        .expect(200);
++      assert.equal(result.headers["content-type"], "application/octet-stream");
++      assert.equal(result.headers["content-disposition"], "attachment");
++      assert.equal(result.headers["x-content-type-options"], "nosniff");
++      assert.equal(result.headers["content-security-policy"],
++        "sandbox; default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
++      assert.equal(Buffer.from(result.body).toString(), svg);
++    });
++  }
++  it("thumbnail fallback cannot expose an SVG inline", async () => {
++    const result = await request(appWithUpload("image/svg+xml"))
++      .get(`/api/storage/objects/uploads/${randomUUID()}?w=320`)
++      .expect(200);
++    assert.equal(result.headers["content-type"], "application/octet-stream");
++    assert.equal(result.headers["content-disposition"], "attachment");
++  });
++  for (const contentType of [
++    "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
++    "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
++  ]) {
++    it(`preserves inline ${contentType} media`, async () => {
++      const result = await request(appWithUpload(contentType, "media"))
++        .get(`/api/storage/objects/uploads/${randomUUID()}`)
++        .expect(200);
++      assert.equal(result.headers["content-type"], contentType);
++      assert.equal(result.headers["content-disposition"], "inline");
++      assert.equal(result.headers["x-content-type-options"], "nosniff");
++      assert.match(result.headers["content-security-policy"], /^sandbox;/);
++    });
++  }
++});
+--- parent/artifacts/api-server/src/tests/storage-upload-allowlist.test.ts
++++ candidate/artifacts/api-server/src/tests/storage-upload-allowlist.test.ts
+@@ -0,0 +1,101 @@
++import { after, before, describe, it, mock } from "node:test";
++import assert from "node:assert/strict";
++import { randomUUID } from "node:crypto";
++import express from "express";
++import request from "supertest";
++import { pool } from "@workspace/db";
++import { issueToken } from "../lib/jwt.js";
++import { createStorageRouter } from "../routes/storage.js";
++
++describe("POST /api/uc/uploads/request-url MIME allowlist", () => {
++  const objectPaths: string[] = [];
++  const getPrivateUploadURL = mock.fn(async (namespace?: string) => {
++    assert.equal(namespace, "uploads");
++    const objectPath = `/objects/uploads/${randomUUID()}`;
++    objectPaths.push(objectPath);
++    return `https://storage.example.test${objectPath}?signature=test-only`;
++  });
++  const normalizeObjectEntityPath = mock.fn((url: string) => new URL(url).pathname);
++  const app = express();
++  app.use(express.json());
++  app.use("/api", createStorageRouter({
++    getPrivateUploadURL,
++    normalizeObjectEntityPath,
++    async getObjectEntityFile() { throw new Error("Unexpected storage read"); },
++    async downloadObject() { throw new Error("Unexpected storage download"); },
++  }));
++  const endpoint = "/api/uc/uploads/request-url";
++  let authorization: string;
++
++  before(() => {
++    authorization = `Bearer ${issueToken({ id: 1920000001, email: "upload-allowlist@example.test" })}`;
++  });
++
++  after(async () => {
++    await pool.query("DELETE FROM instant_water_media_uploads WHERE object_path = ANY($1::text[])", [objectPaths]);
++  });
++
++  const allowedTypes = [
++    ["image/jpeg", "jpg", "photo"],
++    ["image/png", "png", "photo"],
++    ["image/webp", "webp", "photo"],
++    ["image/gif", "gif", "photo"],
++    ["video/mp4", "mp4", "video"],
++    ["video/quicktime", "mov", "video"],
++    ["application/pdf", "pdf", "document"],
++    ["image/heic", "heic", "photo"],
++  ] as const;
++
++  for (const [contentType, extension, kind] of allowedTypes) {
++    it(`accepts ${contentType} and returns an uploadURL`, async () => {
++      const callsBefore = getPrivateUploadURL.mock.callCount();
++      const response = await request(app).post(endpoint)
++        .set("Authorization", authorization)
++        .send({ name: `safe.${extension}`, size: 1024, contentType })
++        .expect(200);
++
++      assert.equal(getPrivateUploadURL.mock.callCount(), callsBefore + 1);
++      assert.equal(response.body.uploadURL, await getPrivateUploadURL.mock.calls[callsBefore].result);
++      assert.match(response.body.uploadURL, /^https:\/\/storage\.example\.test\/objects\/uploads\//);
++      assert.equal(response.body.objectPath, new URL(response.body.uploadURL).pathname);
++      assert.equal(response.body.kind, kind);
++    });
++  }
++
++  const blockedTypes = [
++    ["application/octet-stream", "exe"],
++    ["image/svg+xml", "svg"],
++    ["text/html", "html"],
++  ] as const;
++
++  for (const [contentType, extension] of blockedTypes) {
++    it(`rejects ${contentType} before minting a storage URL`, async () => {
++      const callsBefore = getPrivateUploadURL.mock.callCount();
++      const normalizeCallsBefore = normalizeObjectEntityPath.mock.callCount();
++      const response = await request(app).post(endpoint)
++        .set("Authorization", authorization)
++        .send({ name: `unsafe.${extension}`, size: 1024, contentType })
++        .expect(400);
++
++      assert.equal(typeof response.body.error, "string");
++      assert.ok(response.body.error.includes(`File type not allowed: ${contentType}`));
++      assert.ok(response.body.error.includes("Accepted types"));
++      assert.equal(response.body.uploadURL, undefined);
++      assert.equal(getPrivateUploadURL.mock.callCount(), callsBefore);
++      assert.equal(normalizeObjectEntityPath.mock.callCount(), normalizeCallsBefore);
++    });
++  }
++
++  it("rejects an unauthenticated request before calling storage", async () => {
++    const callsBefore = getPrivateUploadURL.mock.callCount();
++    const normalizeCallsBefore = normalizeObjectEntityPath.mock.callCount();
++    const response = await request(app).post(endpoint)
++      .send({ name: "safe.jpg", size: 1024, contentType: "image/jpeg" })
++      .expect(401);
++
++    assert.equal(response.body.error, "Authentication required");
++    assert.equal(response.body.uploadURL, undefined);
++    assert.equal(getPrivateUploadURL.mock.callCount(), callsBefore);
++    assert.equal(normalizeObjectEntityPath.mock.callCount(), normalizeCallsBefore);
++  });
++});
+\ No newline at end of file

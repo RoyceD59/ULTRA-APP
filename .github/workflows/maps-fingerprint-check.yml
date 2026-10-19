@@ -63,14 +63,14 @@ jobs:
   record-health:
     if: github.event_name == 'push'
     name: Maps fingerprint record health
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: artifacts/uc-companion
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -103,15 +103,15 @@ jobs:
   build-and-submit:
     if: github.event_name == 'workflow_dispatch'
     name: Maps check → EAS build → EAS submit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: artifacts/uc-companion
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
 

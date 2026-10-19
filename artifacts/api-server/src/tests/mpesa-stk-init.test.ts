@@ -25,6 +25,7 @@
 
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { paymentCheckoutFixture } from "./helpers/payment-checkout.js";
 import http from "node:http";
 
 import app from "../app.js";
@@ -56,7 +57,7 @@ async function postMpesa(
   const res = await fetch(`${base}/payments/mpesa`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
+    body:    JSON.stringify({ checkout: paymentCheckoutFixture(), ...body as Record<string, unknown> }),
   });
   let parsed: Record<string, unknown> = {};
   try { parsed = (await res.json()) as Record<string, unknown>; } catch { /* empty */ }
@@ -69,6 +70,7 @@ before(
   () =>
     new Promise<void>((resolve, reject) => {
       process.env["SESSION_SECRET"] ??= "test-secret-mpesa-stk-init";
+      delete process.env.WC_CONSUMER_KEY; delete process.env.WC_CONSUMER_SECRET;
       server = http.createServer(app);
       server.listen(0, "127.0.0.1", () => {
         const addr = server.address();
@@ -127,14 +129,11 @@ describe("POST /payments/mpesa — validation", () => {
     );
   });
 
-  it("(b) rejects when amount is missing (400)", async () => {
+  it("(b) derives the payable amount from checkout, not a missing caller amount", async () => {
     // slot 2 of 5
     const { status, body } = await postMpesa({ phone: "+254712345678", orderId: "ORD-02" });
-    assert.equal(status, 400, `expected 400 for missing amount; got ${status}`);
-    assert.ok(
-      typeof body["error"] === "string" && body["error"].length > 0,
-      `error message must be present; got: ${JSON.stringify(body)}`,
-    );
+    assert.equal(status, 200, `expected authoritative checkout initialization; got ${status}`);
+    createdRefs.push(body["checkoutRequestId"] as string);
   });
 });
 
@@ -168,7 +167,7 @@ describe("POST /payments/mpesa — sandbox / demo mode", () => {
       .where(eq(mpesaStkInitiationsTable.checkoutRequestId, ref as string));
 
     assert.equal(rows.length, 1, "exactly one initiation record must be stored");
-    assert.equal(rows[0]!.expectedAmount, 8800, "stored amount must equal request amount");
+    assert.equal(rows[0]!.expectedAmount, 3499, "stored amount must equal the authoritative cart, not caller money");
     assert.ok(rows[0]!.expiresAt > new Date(), "expiresAt must be in the future");
     assert.ok(
       typeof rows[0]!.callbackToken === "string" && rows[0]!.callbackToken.length > 0,

@@ -4,6 +4,8 @@ import { getTeamToken } from './lib/team-auth';
 import { API_ORIGIN } from './lib/api-base';
 
 import App from './App';
+import { installProjecthubDiagnostics } from './lib/runtime-diagnostics';
+import { RuntimeErrorBoundary } from './components/RuntimeErrorBoundary';
 
 import './index.css';
 
@@ -14,7 +16,9 @@ setAuthTokenGetter(getTeamToken);
 // origin so they use the same centralized host as manual requests.
 setBaseUrl(API_ORIGIN || null);
 
-createRoot(document.getElementById('root')!).render(<App />);
+const removeDiagnostics = installProjecthubDiagnostics();
+if (import.meta.hot) import.meta.hot.dispose(removeDiagnostics);
+createRoot(document.getElementById('root')!).render(<RuntimeErrorBoundary><App /></RuntimeErrorBoundary>);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {

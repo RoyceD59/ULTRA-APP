@@ -7,6 +7,8 @@
  */
 
 export interface UcOfflineProduct {
+  /** Stable server-issued source line; retained on edits */
+  lineId?: string;
   productId?: number;
   productName: string;
   /** @minimum 1 */

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -10,15 +10,21 @@ import { useApi, type UCPromotion } from '@/hooks/useApi';
 import ProductCard from '@/components/ProductCard';
 import TrustBadges from '@/components/TrustBadges';
 import ImpactBubble from '@/components/ImpactBubble';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFilterActivation, filterLastChangedKey, effectiveLifespanDays } from '@/hooks/useNotifications';
+import ReleaseStatus from '@/components/ReleaseStatus';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import RegisterFilterPrompt from '@/components/RegisterFilterPrompt';
+import { useFilterStatus } from '@/hooks/useFilterStatus';
+import FilterLifeGauge from '@/components/FilterLifeGauge';
 import SwipeTabs from '@/components/SwipeTabs';
 import HorizontalCarousel from '@/components/HorizontalCarousel';
 import { catalogueQueryKey } from '@/lib/catalogueQuery';
-import { featuredState } from '@/lib/customerScreenState';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
+import { pageDataState } from '@/lib/pageLoading';
+import PageDataLoader from '@/components/PageDataLoader';
 import { fetchBlogPage } from '@/lib/blogContent';
+import PhotoHeader from '@/components/PhotoHeader';
+import { Image } from 'expo-image';
+import PageDataError from '@/components/PageDataError';
 
 const UC_SKY  = '#52b6dc';
 const UC_DEEP = '#005d8f';
@@ -66,22 +72,22 @@ export default function HomeScreen() {
 }
 
 function HomeScreenContent() {
+  const layout = useCompanionLayout();
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
   const { totalItems, cartHydrated } = useCart();
   const api = useApi();
-  const [filterDays, setFilterDays] = useState<number | null>(null);
-  const [filterAdjusted, setFilterAdjusted] = useState(false);
-  const topPad = Platform.OS === 'web' ? 67 : 0;
+  const filterStatus = useFilterStatus();
+  const topPad = 0;
 
-  const { data: products, isLoading, isError, refetch: retryProducts } = useQuery({
+  const { data: products, isLoading, isError, error: productError, refetch: retryProducts } = useQuery({
     queryKey: catalogueQueryKey(),
     queryFn: ({ signal }) => api.getProducts(undefined, signal),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
   });
 
-  const { data: promotions, isError: promotionsError, refetch: retryPromotions } = useQuery({
+  const { data: promotions, isLoading: promotionsLoading, isError: promotionsError, error: promotionFailure, refetch: retryPromotions } = useQuery({
     queryKey: ['promotions'],
     queryFn: ({ signal }) => api.getPromotions(signal),
     staleTime: 2 * 60 * 1000,
@@ -89,55 +95,23 @@ function HomeScreenContent() {
 
   // The editorial feed is an independent query: blog network delays or errors
   // never hold up the Home screen or any of its existing data.
-  const { data: latestBlog, isError: latestBlogError, refetch: retryBlog } = useQuery({
+  const { data: latestBlog, isLoading: latestBlogLoading, isError: latestBlogError, error: blogFailure, refetch: retryBlog } = useQuery({
     queryKey: ['companion', 'blog', { homeLatest: true, limit: 3 }],
     queryFn: ({ signal }) => fetchBlogPage(
       (requestSignal) => api.getBlogArticles({ limit: 3 }, requestSignal),
       { limit: 3 },
       signal,
     ),
-    staleTime: 3 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 
-  const refreshFilterStatus = useCallback(() => {
-    setFilterDays(null);
-    setFilterAdjusted(false);
-    if (!user) return;
-    // Primary: use the structured FilterActivation record (product-specific lifespan)
-    getFilterActivation(user.id).then(activation => {
-      if (activation) {
-        const elapsed   = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-        const effDays   = effectiveLifespanDays(activation);
-        const ratedDays = activation.lifespanDays;
-        setFilterDays(effDays - elapsed);
-        // Show "adjusted" note if a check-in has reduced the effective lifespan
-        setFilterAdjusted(activation.lastCheckIn != null && effDays < ratedDays);
-        return;
-      }
-      // Fallback: user-scoped last_changed timestamp, then legacy unscoped key
-      AsyncStorage.getItem(filterLastChangedKey(user.id)).then(v => {
-        if (v) {
-          const elapsed = Math.floor((Date.now() - parseInt(v)) / 86_400_000);
-          setFilterDays(180 - elapsed);
-          return;
-        }
-        // Legacy pre-migration key — only present on devices not yet migrated
-        AsyncStorage.getItem('uc_filter_last_changed').then(lv => {
-          if (lv) {
-            const elapsed = Math.floor((Date.now() - parseInt(lv)) / 86_400_000);
-            setFilterDays(180 - elapsed);
-          }
-        }).catch(() => {});
-      }).catch(() => {});
-    }).catch(() => {});
-  }, [user]);
-
-  useEffect(() => { refreshFilterStatus(); }, [refreshFilterStatus]);
+  const refreshFilterStatus = useCallback(() => { void filterStatus.refetch(); }, [filterStatus.refetch]);
 
   const cartBarInset = useCartBarInset();
   const featured = products?.slice(0, 6) ?? [];
-  const productState = featuredState(isLoading, isError, featured.length);
+  const productState = pageDataState(products !== undefined, isLoading, isError);
 
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]}
@@ -145,8 +119,9 @@ function HomeScreenContent() {
       showsVerticalScrollIndicator={false}>
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topPad + 16 }]}>
-        <View>
+      <PhotoHeader initialView source={require('@/assets/headers/home-water.jpg')} photoHeight={128} position="center">
+      <View style={[styles.header, { backgroundColor: UC_DEEP, paddingTop: topPad + 16 }]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.greeting}>{greeting()}{user ? `, ${user.firstName}` : ''}</Text>
           <Text style={styles.headerSub}>Your water, your health</Text>
         </View>
@@ -158,34 +133,22 @@ function HomeScreenContent() {
           )}
         </TouchableOpacity>
       </View>
+      </PhotoHeader>
 
-       <View style={styles.body}>
+       <View style={[styles.body, { padding: layout.gutter }]}>
         {/* Filter Health */}
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={filterDays !== null ? 'View filter status' : 'Register your filter'}
+        {filterStatus.life && <TouchableOpacity accessibilityRole="button" accessibilityLabel="View filter status"
           onPress={() => router.push('/(tabs)/account' as never)} activeOpacity={0.8}
-          style={[styles.filterCard, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warningLight : colors.primaryLight, borderColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
-          <View style={[styles.filterIcon, { backgroundColor: filterDays !== null && filterDays < 30 ? colors.warning : colors.primary }]}>
-            <Ionicons name="water" size={20} color="#fff" />
-          </View>
+          style={[styles.filterCard, { backgroundColor: colors.primaryLight, borderColor: colors.border }]}>
+          <FilterLifeGauge percent={filterStatus.life.percent}
+            color={filterStatus.life.status === 'green' ? '#22C55E' : filterStatus.life.status === 'amber' ? '#F59E0B' : filterStatus.life.status === 'red' ? '#EF4444' : colors.mutedForeground}
+            label={`${filterStatus.life.description} · ${filterStatus.life.basis}`} />
           <View style={{ flex: 1 }}>
-            {filterDays !== null ? (
-              <>
-                <Text style={[styles.filterTitle, { color: colors.text }]}>
-                  {filterDays > 0 ? `${filterDays} days until next filter change` : 'Filter replacement overdue!'}
-                </Text>
-                <Text style={[styles.filterSub, { color: colors.mutedForeground }]}>
-                  {filterAdjusted ? 'Adjusted for your water quality · Tap to order' : 'Tap to order replacement parts'}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={[styles.filterTitle, { color: colors.text }]}>Register your filter</Text>
-                <Text style={[styles.filterSub, { color: colors.mutedForeground }]}>Track replacement reminders</Text>
-              </>
-            )}
+            <Text style={[styles.filterTitle, { color: colors.text }]}>{filterStatus.life.description}</Text>
+            <Text style={[styles.filterSub, { color: colors.mutedForeground }]}>{filterStatus.life.basis}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        </TouchableOpacity>}
 
         {/* Nudge: bought a trackable filter but never registered it */}
         <RegisterFilterPrompt onRegistered={refreshFilterStatus} />
@@ -210,11 +173,8 @@ function HomeScreenContent() {
             />
           </View>
         )}
-        {promotionsError && (
-          <TouchableOpacity onPress={() => retryPromotions()} accessibilityRole="button" style={styles.statusAction}>
-            <Text style={{ color: colors.mutedForeground }}>Promotions unavailable. Tap to retry.</Text>
-          </TouchableOpacity>
-        )}
+        {promotionsLoading && promotions === undefined ? <PageDataLoader label="Loading promotions…" /> : null}
+        {promotionsError && <PageDataError title="Promotions unavailable" error={promotionFailure} onRetry={retryPromotions} />}
 
         {/* Latest Blog reads — this request is intentionally separate from
             Home's primary catalogue and account content. */}
@@ -244,10 +204,10 @@ function HomeScreenContent() {
                 <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
             ))
-          ) : latestBlogError ? (
-            <TouchableOpacity accessibilityRole="button" onPress={() => { void retryBlog(); }} style={styles.statusAction}>
-              <Text style={{ color: colors.mutedForeground }}>Blog articles unavailable. Tap to retry.</Text>
-            </TouchableOpacity>
+          ) : latestBlog === undefined && latestBlogLoading ? (
+            <PageDataLoader label="Loading articles…" />
+          ) : latestBlog === undefined && latestBlogError ? (
+            <PageDataError title="Blog articles unavailable" error={blogFailure} onRetry={retryBlog} />
           ) : latestBlog ? (
             <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/(tabs)/blog' as never)} style={styles.statusAction}>
               <Text style={{ color: colors.mutedForeground }}>No articles yet. Explore the blog.</Text>
@@ -265,9 +225,9 @@ function HomeScreenContent() {
             {QUICK_ACTIONS.map(a => (
               <TouchableOpacity key={a.id} activeOpacity={0.8}
                 onPress={() => router.push(a.route as never)}
-                style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                style={[styles.actionCard, { minWidth: layout.size === 'compact' ? '45%' : '20%', backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.actionIcon, { backgroundColor: a.color + '18' }]}>
-                  <Ionicons name={a.icon} size={24} color={a.color} />
+                  {a.id === 'test' ? <Image source={require('@/assets/images/water-test.png')} contentFit="contain" style={{ width: 48, height: 48 }} /> : <Ionicons name={a.icon} size={24} color={a.color} />}
                 </View>
                 <Text style={[styles.actionLabel, { color: colors.text }]}>{a.label}</Text>
               </TouchableOpacity>
@@ -282,14 +242,15 @@ function HomeScreenContent() {
             <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
           </TouchableOpacity>
         </View>
+        {products !== undefined && isError && (
+          <PageDataError title="Products could not refresh" message="Your saved products are shown below." onRetry={retryProducts} />
+        )}
 
         {productState === 'loading' ? (
-          <View style={styles.statusAction}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.mutedForeground }}>Loading products…</Text></View>
+          <PageDataLoader label="Loading products…" />
         ) : productState === 'error' ? (
-          <TouchableOpacity onPress={() => retryProducts()} accessibilityRole="button" style={styles.statusAction}>
-            <Text style={{ color: colors.text }}>Products couldn't load. Tap to retry.</Text>
-          </TouchableOpacity>
-        ) : productState === 'empty' ? (
+          <PageDataError title="Products couldn’t load" error={productError} onRetry={retryProducts} />
+        ) : featured.length === 0 ? (
           <TouchableOpacity onPress={() => router.push('/(tabs)/products')} accessibilityRole="button" style={styles.statusAction}>
             <Text style={{ color: colors.mutedForeground }}>No featured products yet. Browse the shop.</Text>
           </TouchableOpacity>
@@ -300,7 +261,7 @@ function HomeScreenContent() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 12, paddingHorizontal: 2, paddingVertical: 4 }}
             renderItem={({ item }) => (
-              <View style={{ width: 180 }}>
+              <View style={{ width: Math.max(156, Math.min(240, layout.cardWidth)) }}>
                 <ProductCard product={item} onPress={() => router.push(`/product/${item.id}` as never)} />
               </View>
             )}
@@ -309,6 +270,11 @@ function HomeScreenContent() {
 
         {/* UC Impact */}
         <ImpactBubble />
+        <ReleaseStatus />
+        <TouchableOpacity accessibilityRole="link" testID="home-about-us"
+          onPress={() => router.push('/about' as never)} style={styles.statusAction}>
+          <Text style={{ color: colors.primary, fontSize: 13, textDecorationLine: 'underline' }}>About Ultra Clear</Text>
+        </TouchableOpacity>
 
         {/* Trust Badges */}
         <View style={[styles.trustSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -334,7 +300,7 @@ const styles = StyleSheet.create({
   filterTitle: { fontSize: 14, fontWeight: '600' as const },
   filterSub: { fontSize: 12, marginTop: 2 },
   section: {},
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionHeader: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '700' as const },
   seeAll: { fontSize: 14, fontWeight: '500' as const },
   statusAction: { minHeight: 44, justifyContent: 'center', alignItems: 'center', gap: 8 },

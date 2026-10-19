@@ -1,4 +1,5 @@
 import path from 'path';
+import { execFileSync } from 'node:child_process';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
@@ -28,6 +29,13 @@ if (!basePath) {
 }
 
 export default defineConfig({
+  define: {
+    // Build-time source identity; never an API-fetched "latest" release.
+    'import.meta.env.VITE_RUNTIME_RELEASE': JSON.stringify((() => {
+      try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); }
+      catch { return 'unknown'; }
+    })()),
+  },
   base: basePath,
   plugins: [
     react(),
@@ -60,9 +68,17 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   root: path.resolve(import.meta.dirname),
+  // Linked workspace packages are not prebundled automatically. This shared
+  // parser uses CommonJS for Metro compatibility, so Vite must convert it.
+  optimizeDeps: {
+    include: ['@workspace/api-zod/blog-inline-links'],
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
+    commonjsOptions: {
+      include: [/node_modules/, /lib\/api-zod\/src\/blog-inline-links-core\.cjs$/],
+    },
   },
   server: {
     port,

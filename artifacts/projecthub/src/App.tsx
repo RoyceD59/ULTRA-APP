@@ -37,16 +37,20 @@ import AdminNotificationSettingsPage from '@/pages/admin/notification-settings';
 import AdminInventoryPage from '@/pages/admin/inventory';
 import AdminIntegrationsPage from '@/pages/admin/integrations';
 import AdminRewardsPage from '@/pages/admin/rewards';
+import RefillReadinessPage from '@/pages/admin/refill-readiness';
 import AdminCustomersPage from '@/pages/admin/customers';
 import AdminUnsyncedRegistrationsPage from '@/pages/admin/unsynced-registrations';
 import AdminReferralsPage from '@/pages/admin/referrals';
 import AdminPromotionsPage from '@/pages/admin/promotions';
 import AdminProductsPage from '@/pages/admin/products/index';
 import AdminProductEditorPage from '@/pages/admin/products/editor';
+import AdminRecordOnlyEditorPage from '@/pages/admin/products/record-editor';
 import AdminLocationsPage from '@/pages/admin/locations';
 import AgentOperationsPage from '@/pages/admin/agent-operations';
 import AdminGuidesPage from '@/pages/admin/guides';
+import CustomerReviewsPage from '@/pages/admin/customer-reviews';
 import CompanionBlogPage from '@/pages/blog';
+import RefillGovernancePage from '@/pages/admin/refill-governance';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,12 +71,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onUnauthorized = () => {
       clearTeamAuth();
-      navigate(`/login?next=${encodeURIComponent(location)}`, { replace: true });
+      navigate(`/login?next=${encodeURIComponent(location + window.location.search)}`, { replace: true });
     };
     window.addEventListener('projecthub:unauthorized', onUnauthorized);
     return () => window.removeEventListener('projecthub:unauthorized', onUnauthorized);
   }, [location, navigate]);
-  if (!isTeamAuthenticated()) return <Redirect to={`/login?next=${encodeURIComponent(location)}`} />;
+  if (!isTeamAuthenticated()) return <Redirect to={`/login?next=${encodeURIComponent(location + window.location.search)}`} />;
   return <>{children}</>;
 }
 
@@ -128,14 +132,18 @@ function Router() {
               <Route path="/admin/inventory"><AdminGuard><AdminInventoryPage /></AdminGuard></Route>
               <Route path="/admin/integrations"><AdminGuard><AdminIntegrationsPage /></AdminGuard></Route>
               <Route path="/admin/rewards"><AdminGuard><AdminRewardsPage /></AdminGuard></Route>
+              <Route path="/admin/refill-readiness"><AdminGuard><RefillReadinessPage /></AdminGuard></Route>
+              <Route path="/admin/refill-governance"><AdminGuard><RefillGovernancePage /></AdminGuard></Route>
               <Route path="/admin/customers"><AdminGuard><AdminCustomersPage /></AdminGuard></Route>
               <Route path="/admin/unsynced-registrations"><AdminGuard><AdminUnsyncedRegistrationsPage /></AdminGuard></Route>
               <Route path="/admin/referrals"><AdminGuard><AdminReferralsPage /></AdminGuard></Route>
               <Route path="/admin/promotions"><AdminGuard><AdminPromotionsPage /></AdminGuard></Route>
               <Route path="/admin/products"><AdminGuard><AdminProductsPage /></AdminGuard></Route>
+              <Route path="/admin/products/record/:slug"><AdminGuard><AdminRecordOnlyEditorPage /></AdminGuard></Route>
               <Route path="/admin/products/:id"><AdminGuard><AdminProductEditorPage /></AdminGuard></Route>
               <Route path="/admin/locations"><AdminGuard><AdminLocationsPage /></AdminGuard></Route>
               <Route path="/admin/agent-operations"><AdminGuard><AgentOperationsPage /></AdminGuard></Route>
+              <Route path="/customer-reviews"><AdminGuard><CustomerReviewsPage /></AdminGuard></Route>
               <Route path="/admin/guides"><AdminGuard><AdminGuidesPage /></AdminGuard></Route>
               <Route component={NotFound} />
             </Switch>

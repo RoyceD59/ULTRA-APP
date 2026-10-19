@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Platform, Alert, Modal, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,17 +23,15 @@ import {
   useRequestInstantWaterPhysicalTest,
   useListAuthenticatedInstantWaterAssessments,
   useConsumeInstantWaterAssessmentHandoff,
-  InstantWaterSource,
-  InstantWaterConcern,
-  InstantWaterSetting,
-  InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType
-} from '@workspace/api-client-react';
-import type {
-  InstantWaterAssessmentCreated,
-  AuthenticatedInstantWaterAssessmentCreated,
-  InstantWaterAssessment,
-  PublicInstantWaterAssessmentResult
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react/companion/water-check';
+import { InstantWaterSource } from '@workspace/api-client-react/companion/models/instantWaterSource';
+import { InstantWaterConcern } from '@workspace/api-client-react/companion/models/instantWaterConcern';
+import { InstantWaterSetting } from '@workspace/api-client-react/companion/models/instantWaterSetting';
+import { InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType } from '@workspace/api-client-react/companion/models/instantWaterPhysicalTestRequestInputMediaReferencesItemMediaType';
+import type { InstantWaterAssessmentCreated } from '@workspace/api-client-react/companion/models/instantWaterAssessmentCreated';
+import type { AuthenticatedInstantWaterAssessmentCreated } from '@workspace/api-client-react/companion/models/authenticatedInstantWaterAssessmentCreated';
+import type { InstantWaterAssessment } from '@workspace/api-client-react/companion/models/instantWaterAssessment';
+import type { PublicInstantWaterAssessmentResult } from '@workspace/api-client-react/companion/models/publicInstantWaterAssessmentResult';
 import { useQueryClient } from '@tanstack/react-query';
 import { HANDOFF_STORAGE_KEY, useConsumeHandoff } from '@/hooks/useWaterTestHandoff';
 import { ApiError } from '@/hooks/apiError';
@@ -46,8 +44,13 @@ import {
 import { countryCodeFromValue, type SupportedCountryCode } from '@workspace/api-zod/phone';
 import { trackEvent } from '@/lib/analytics';
 import { CountryPicker } from '@/components/CountryPicker';
+import { Image } from 'expo-image';
+import RecommendationLink from '@/components/RecommendationLink';
+import ContactCompletion from '@/components/ContactCompletion';
+import { validateCustomerContact } from '@workspace/api-zod/customer-contact';
 
 type ViewState = 'form' | 'result' | 'history' | 'booking';
+type SelectionSummary = { sources: InstantWaterSource[]; concerns: InstantWaterConcern[]; settings: InstantWaterSetting[] };
 
 const SOURCES = [
   { label: 'Piped / municipal tap', value: InstantWaterSource.municipal },
@@ -74,6 +77,9 @@ const SETTINGS = [
   { label: 'A school, clinic or NGO', value: InstantWaterSetting.school },
   { label: 'I want to resell or distribute', value: InstantWaterSetting.resell },
 ];
+function restoreChoices<T extends string>(values: T[] | undefined, scalar: T | undefined, allowed: T[]): T[] {
+  return [...new Set(Array.isArray(values) ? values : scalar ? [scalar] : [])].filter(v => allowed.includes(v)).slice(0, 3);
+}
 
 export default function WaterTestScreen() {
   const colors = useColors();
@@ -84,6 +90,7 @@ export default function WaterTestScreen() {
 
   const [view, setView] = useState<ViewState>('form');
   const [assessment, setAssessment] = useState<InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated | null>(null);
+  const [selections, setSelections] = useState<SelectionSummary | undefined>();
   const [actionToken, setActionToken] = useState<string>('');
 
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -143,13 +150,13 @@ export default function WaterTestScreen() {
           retryHandoff={retryHandoff}
           attachError={attachError} pendingAttach={pendingAttach} attemptAttach={attemptAttach}
           clearAttachError={() => { setAttachError(null); AsyncStorage.removeItem('pending_water_test_attach'); }}
-          onResult={(ass) => { setAssessment(ass); setView('result'); }}
+          onResult={(ass, selected) => { setAssessment(ass); setSelections(selected); setView('result'); }}
           onHistory={() => setView('history')}
         />
       ) : null}
       {view === 'result' && assessment ? (
         <ResultView
-          colors={colors} token={token} assessment={assessment}
+          colors={colors} token={token} assessment={assessment} selections={selections}
           actionToken={actionToken} setActionToken={setActionToken}
           onBook={() => setView('booking')} onBack={() => setView('form')}
           onHistory={() => setView('history')} router={router}
@@ -180,9 +187,9 @@ interface Draft {
   phone: string;
   country: string;
   area: string;
-  source: InstantWaterSource | '';
-  concern: InstantWaterConcern | '';
-  setting: InstantWaterSetting | '';
+  sources: InstantWaterSource[];
+  concerns: InstantWaterConcern[];
+  settings: InstantWaterSetting[];
   consent: boolean;
 }
 
@@ -190,7 +197,7 @@ interface FormViewProps {
   colors: any;
   user: any;
   token: string | null;
-  onResult: (ass: InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated) => void;
+  onResult: (ass: InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated, selections?: SelectionSummary) => void;
   onHistory: () => void;
   router: any;
   handoffPending?: boolean;
@@ -209,20 +216,25 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
   const [draft, setDraft] = useState<Draft>({
     firstName: user?.firstName || '',
     phone: user?.phone || '',
-    country: 'KE', area: '', source: '', concern: '', setting: '', consent: false
+    country: 'KE', area: '', sources: [], concerns: [], settings: [], consent: false
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const draftReady = useRef(false);
+  const [selectionLimit, setSelectionLimit] = useState<'sources' | 'concerns' | 'settings' | null>(null);
 
   const publicMut = useCreatePublicInstantWaterAssessment();
-  const authMut = useCreateAuthenticatedInstantWaterAssessment();
+  const authMut = useCreateAuthenticatedInstantWaterAssessment({ request: { headers: { Authorization: `Bearer ${token}` } } });
 
   const idempKeyRef = useRef(Crypto.randomUUID());
 
   useEffect(() => {
-    loadDraft<Draft>('water-test').then(d => {
-      if (d) setDraft(prev => ({ ...prev, ...d, country: countryCodeFromValue(d.country) ?? 'KE' }));
+    loadDraft<Draft & { source?: InstantWaterSource; concern?: InstantWaterConcern; setting?: InstantWaterSetting }>('water-test').then(d => {
+      if (d) setDraft(prev => ({ ...prev, ...d, country: countryCodeFromValue(d.country) ?? 'KE',
+        sources: restoreChoices(d.sources, d.source, SOURCES.map(s => s.value)),
+        concerns: restoreChoices(d.concerns, d.concern, CONCERNS.map(s => s.value)),
+        settings: restoreChoices(d.settings, d.setting, SETTINGS.map(s => s.value)),
+      }));
       draftReady.current = true;
     });
   }, []);
@@ -236,9 +248,21 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
     setDraft(prev => ({ ...prev, [k]: v }));
     setError('');
   };
+  const toggle = (key: 'sources' | 'concerns' | 'settings', value: string) => {
+    const choices = draft[key] as string[];
+    if (!choices.includes(value) && choices.length >= 3) {
+      setSelectionLimit(key);
+      setError('Choose no more than three options per question. Deselect one to choose another.');
+      Alert.alert('Three choices per question', 'Deselect one option before choosing another.');
+      return;
+    }
+    setDraft(prev => ({ ...prev, [key]: choices.includes(value) ? choices.filter(v => v !== value) : [...choices, value] }));
+    setSelectionLimit(null);
+    setError('');
+  };
 
   const submit = async () => {
-    if (!draft.firstName.trim() || !draft.phone.trim() || !draft.country || !draft.area.trim() || !draft.source || !draft.concern || !draft.setting) {
+    if (!draft.firstName.trim() || !draft.phone.trim() || !draft.country || !draft.area.trim() || !draft.sources.length || !draft.concerns.length || !draft.settings.length) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -273,9 +297,9 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
             answers: {
               country: draft.country,
               area: draft.area.trim(),
-              source: draft.source,
-              concern: draft.concern,
-              setting: draft.setting
+              sources: draft.sources,
+              concerns: draft.concerns,
+              settings: draft.settings
             }
           }
         });
@@ -289,9 +313,9 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
             answers: {
               country: draft.country,
               area: draft.area.trim(),
-              source: draft.source,
-              concern: draft.concern,
-              setting: draft.setting
+              sources: draft.sources,
+              concerns: draft.concerns,
+              settings: draft.settings
             }
           }
         });
@@ -299,7 +323,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
       await clearDraft('water-test');
       idempKeyRef.current = Crypto.randomUUID(); // reset on success
       trackEvent('water_check_completed', { countryCode: country });
-      onResult(res);
+      onResult(res, { sources: draft.sources, concerns: draft.concerns, settings: draft.settings });
     } catch (err: any) {
       const status = err instanceof ApiError ? err.status : 0;
       if (status === 400) {
@@ -378,6 +402,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
              </TouchableOpacity>
            ) : null}
         </View>
+        <Image source={require('@/assets/images/water-test.png')} contentFit="contain" style={{ width: '100%', height: 160 }} accessibilityLabel="Glass of water with a water-test strip" />
         <Text style={styles.heroTitle}>What is actually in your water?</Text>
         <Text style={styles.heroLede}>
           Six questions. You get an indicative read on hardness, taste, sediment and microbial risk for your area and your water source — on this screen, straight away.
@@ -390,6 +415,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>First name *</Text>
             <TextInput
+              accessibilityLabel="First name *"
               value={draft.firstName} onChangeText={v => setField('firstName', v)}
               placeholder="Amara" placeholderTextColor={colors.border}
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -398,6 +424,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
           <View style={[styles.field, styles.rowField]}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>WhatsApp *</Text>
             <TextInput
+              accessibilityLabel="WhatsApp *"
               value={draft.phone} onChangeText={v => setField('phone', v)}
               placeholder="+254 700 000000" placeholderTextColor={colors.border} keyboardType="phone-pad"
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -419,6 +446,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Town / area *</Text>
           <TextInput
+            accessibilityLabel="Town / area *"
             value={draft.area} onChangeText={v => setField('area', v)}
             placeholder="Nairobi – Westlands" placeholderTextColor={colors.border}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -427,11 +455,13 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Where does your water come from? *</Text>
+          <Text style={{ color: colors.mutedForeground }}>Choose 1–3 · {draft.sources.length}/3 selected</Text>
+          {selectionLimit === 'sources' && <Text accessibilityLiveRegion="polite" style={{ color: colors.text }}>Limit reached. Deselect one source before choosing another.</Text>}
           <View style={styles.colChips}>
             {SOURCES.map(s => (
-              <TouchableOpacity key={s.value} onPress={() => setField('source', s.value)}
-                style={[styles.fullChip, { backgroundColor: draft.source === s.value ? colors.primary : colors.surface, borderColor: draft.source === s.value ? colors.primary : colors.border }]}>
-                <Text style={{ flexShrink: 1, fontSize: 14, fontWeight: '500', color: draft.source === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+              <TouchableOpacity key={s.value} onPress={() => toggle('sources', s.value)} accessibilityRole="checkbox" accessibilityState={{ checked: draft.sources.includes(s.value) }}
+                style={[styles.fullChip, { backgroundColor: draft.sources.includes(s.value) ? colors.primary : colors.surface, borderColor: draft.sources.includes(s.value) ? colors.primary : colors.border }]}>
+                <Text style={{ flexShrink: 1, fontSize: 14, fontWeight: '500', color: draft.sources.includes(s.value) ? '#fff' : colors.text }}>{draft.sources.includes(s.value) ? '✓ ' : ''}{s.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -439,11 +469,13 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>What bothers you most? *</Text>
+          <Text style={{ color: colors.mutedForeground }}>Choose 1–3 · {draft.concerns.length}/3 selected</Text>
+          {selectionLimit === 'concerns' && <Text accessibilityLiveRegion="polite" style={{ color: colors.text }}>Limit reached. Deselect one concern before choosing another.</Text>}
           <View style={styles.colChips}>
             {CONCERNS.map(s => (
-              <TouchableOpacity key={s.value} onPress={() => setField('concern', s.value)}
-                style={[styles.fullChip, { backgroundColor: draft.concern === s.value ? colors.primary : colors.surface, borderColor: draft.concern === s.value ? colors.primary : colors.border }]}>
-                <Text style={{ flexShrink: 1, fontSize: 14, fontWeight: '500', color: draft.concern === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+              <TouchableOpacity key={s.value} onPress={() => toggle('concerns', s.value)} accessibilityRole="checkbox" accessibilityState={{ checked: draft.concerns.includes(s.value) }}
+                style={[styles.fullChip, { backgroundColor: draft.concerns.includes(s.value) ? colors.primary : colors.surface, borderColor: draft.concerns.includes(s.value) ? colors.primary : colors.border }]}>
+                <Text style={{ flexShrink: 1, fontSize: 14, fontWeight: '500', color: draft.concerns.includes(s.value) ? '#fff' : colors.text }}>{draft.concerns.includes(s.value) ? '✓ ' : ''}{s.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -451,11 +483,13 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>This is for *</Text>
+          <Text style={{ color: colors.mutedForeground }}>Choose 1–3 · {draft.settings.length}/3 selected</Text>
+          {selectionLimit === 'settings' && <Text accessibilityLiveRegion="polite" style={{ color: colors.text }}>Limit reached. Deselect one setting before choosing another.</Text>}
           <View style={styles.chipsWrap}>
             {SETTINGS.map(s => (
-              <TouchableOpacity key={s.value} onPress={() => setField('setting', s.value)}
-                style={[styles.chip, { backgroundColor: draft.setting === s.value ? colors.primary : colors.surface, borderColor: draft.setting === s.value ? colors.primary : colors.border }]}>
-                <Text style={{ fontSize: 13, fontWeight: '500', color: draft.setting === s.value ? '#fff' : colors.text }}>{s.label}</Text>
+              <TouchableOpacity key={s.value} onPress={() => toggle('settings', s.value)} accessibilityRole="checkbox" accessibilityState={{ checked: draft.settings.includes(s.value) }}
+                style={[styles.chip, { backgroundColor: draft.settings.includes(s.value) ? colors.primary : colors.surface, borderColor: draft.settings.includes(s.value) ? colors.primary : colors.border }]}>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: draft.settings.includes(s.value) ? '#fff' : colors.text }}>{draft.settings.includes(s.value) ? '✓ ' : ''}{s.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -492,6 +526,7 @@ function FormView({ colors, user, token, handoffPending, handoffSuccess, handoff
 // RESULT VIEW
 // ----------------------------------------------------------------------------
 interface ResultViewProps {
+  selections?: SelectionSummary;
   colors: any;
   token: string | null;
   assessment: InstantWaterAssessmentCreated | AuthenticatedInstantWaterAssessmentCreated;
@@ -503,15 +538,17 @@ interface ResultViewProps {
   router: any;
 }
 
-function ResultView({ colors, token, assessment, actionToken, setActionToken, onBook, onBack, onHistory, router }: ResultViewProps) {
+function ResultView({ colors, token, assessment, selections, actionToken, setActionToken, onBook, onBack, onHistory, router }: ResultViewProps) {
   const result = assessment.result;
   const isPublic = !token && 'resultToken' in assessment && assessment.resultToken;
   const [verifyVisible, setVerifyVisible] = useState(false);
   const insets = useSafeAreaInsets();
 
   const handleWhatsApp = () => {
-    const text = `Hello Ultra Clear, here is my water check result.\nReference: ${assessment.reference}\nResult: Hardness ${result.bands?.hardness || 'Unknown'}, Taste ${result.bands?.taste || 'Unknown'}, Sediment ${result.bands?.sediment || 'Unknown'}, Microbial ${result.bands?.microbial || 'Unknown'}\nRecommendation: ${result.recommendation?.name || 'Please contact us'}`;
-    openWhatsApp(text);
+      const selected = selections;
+      const choices = selected ? `\nSources: ${selected.sources.join(', ')}\nConcerns: ${selected.concerns.join(', ')}\nSettings: ${selected.settings.join(', ')}` : '';
+      const text = `Hello Ultra Clear, here is my water check result.\nReference: ${assessment.reference}${choices}\nResult: Hardness ${result.bands?.hardness || 'Unknown'}, Taste ${result.bands?.taste || 'Unknown'}, Sediment ${result.bands?.sediment || 'Unknown'}, Microbial ${result.bands?.microbial || 'Unknown'}\nRecommendation: ${result.recommendation?.name || 'Please contact us'}`;
+      openWhatsApp(text);
   };
 
   const handleBookClick = () => {
@@ -553,7 +590,7 @@ function ResultView({ colors, token, assessment, actionToken, setActionToken, on
       {result.recommendation ? (
         <View style={[styles.recBox, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
           <Text style={[styles.eyebrow, { color: colors.primary }]}>BEST MATCH</Text>
-          <Text style={[styles.recName, { color: colors.text }]}>{result.recommendation.name}</Text>
+          <RecommendationLink recommendation={result.recommendation} />
           <Text style={[styles.recWhy, { color: colors.mutedForeground }]}>{result.recommendation.explanation}</Text>
         </View>
       ) : null}
@@ -640,7 +677,10 @@ interface HistoryViewProps {
 }
 
 function HistoryView({ colors, onBack, token }: HistoryViewProps) {
-  const { data, isLoading, error, refetch } = useListAuthenticatedInstantWaterAssessments();
+  const { user } = useAuth();
+  const { data, isLoading, error, refetch } = useListAuthenticatedInstantWaterAssessments({ query: {
+    queryKey: ['customer', user?.id, 'instant-water-history'], enabled: !!token && !!user,
+  }, request: { headers: { Authorization: `Bearer ${token}` } } });
   const insets = useSafeAreaInsets();
 
   return (
@@ -690,9 +730,15 @@ function HistoryView({ colors, onBack, token }: HistoryViewProps) {
                 <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Microbial: <Text style={{ fontWeight: '600', color: colors.text }}>{item.bands?.microbial || 'N/A'}</Text></Text>
               </View>
               <View style={[styles.statusPill, { backgroundColor: colors.surface, marginTop: 10 }]}>
+                {item.answers ? <Text style={{ color: colors.text, fontSize: 12 }}>
+                  Sources: {(item.answers.sources ?? [item.answers.source]).filter(Boolean).join(', ')}
+                  {'\n'}Concerns: {(item.answers.concerns ?? [item.answers.concern]).filter(Boolean).join(', ')}
+                  {'\n'}Settings: {(item.answers.settings ?? [item.answers.setting]).filter(Boolean).join(', ')}
+                </Text> : null}
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.mutedForeground, textTransform: 'uppercase' }}>
                   {item.serviceState ? item.serviceState.replace(/_/g, ' ') : 'UNKNOWN'}
                 </Text>
+                {!!item.freeWaterTest && <Text style={{fontSize:12,fontWeight:'600',color:colors.primary,marginTop:6}}>Verified free water test · {item.promoCode}</Text>}
               </View>
             </View>
           ))}
@@ -716,7 +762,11 @@ interface BookingViewProps {
 }
 
 function BookingView({ colors, api, assessment, actionToken, onBack, onComplete }: BookingViewProps) {
-  const [address, setAddress] = useState('');
+  const { user } = useAuth();
+  const [promoCode, setPromoCode] = useState('');
+  const [promoChecked, setPromoChecked] = useState(false);
+  const [address, setAddress] = useState(user?.address ?? '');
+  useEffect(() => { setAddress(current => current || user?.address || ''); }, [user?.address]);
   const [time, setTime] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -727,6 +777,10 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
   const idempKeyRef = useRef(Crypto.randomUUID());
 
   const submit = async () => {
+    if (user && !validateCustomerContact(user).ok) {
+      setError('Save your contact phone and address before requesting a physical test.');
+      return;
+    }
     if (!address.trim() || !time.trim()) {
       setError("Please provide address and preferred time.");
       return;
@@ -752,7 +806,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
           : InstantWaterPhysicalTestRequestInputMediaReferencesItemMediaType.mp4
       }));
 
-      await bookMut.mutateAsync({
+      const booking = await bookMut.mutateAsync({
         assessmentId: assessment.assessmentId,
         data: {
           idempotencyKey: idempKeyRef.current,
@@ -760,17 +814,19 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
           serviceAddress: address.trim(),
           preferredContactTime: time.trim(),
           acknowledgement: true,
-          mediaReferences
+          mediaReferences,
+          promoCode: promoCode.trim() || undefined,
         }
       });
       idempKeyRef.current = Crypto.randomUUID(); // reset on success
+      if (booking.freeWaterTest) Alert.alert('Free water test confirmed', `Your request includes the verified benefit from ${booking.promoCode}. No payment or refund was processed.`);
       onComplete();
     } catch (err: any) {
       const status = err instanceof ApiError ? err.status : 0;
       if (status === 400) {
         setError('Please check your booking details and try again.');
       } else {
-        setError('Booking failed to submit securely. Please try again.');
+        setError(err?.body?.error || err?.message || 'Booking failed to submit securely. Please try again.');
       }
     } finally {
       setSubmitting(false);
@@ -784,14 +840,28 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
       </TouchableOpacity>
 
       <Text style={[styles.rTitle, { color: colors.text, marginBottom: 8 }]}>Book Physical Test</Text>
+      <ContactCompletion />
       <Text style={{ fontSize: 14, color: colors.mutedForeground, marginBottom: 24, lineHeight: 20 }}>
         A certified technician will visit your location to perform precise measurements.
       </Text>
 
       <View style={styles.formContainer}>
         <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>Free water test code (optional)</Text>
+          <TextInput accessibilityLabel="Free water test code" autoCapitalize="characters" value={promoCode}
+            onChangeText={value => { setPromoCode(value); setPromoChecked(false); }}
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]} />
+          <TouchableOpacity disabled={!promoCode.trim() || submitting} onPress={async () => {
+            try { await api.quoteWaterTestPromotion(promoCode); setPromoChecked(true); setError(''); }
+            catch (err: any) { setError(err.message); setPromoChecked(false); }
+          }}><Text style={{ color: colors.primary, paddingVertical: 12 }}>Check code</Text></TouchableOpacity>
+          {promoChecked && <Text style={{ color: colors.text }}>Free physical test eligible. The code is verified again when you submit.</Text>}
+          <Text style={{ color: colors.mutedForeground }}>Sign in to apply a code. This booking flow does not take a payment.</Text>
+        </View>
+        <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Service Address *</Text>
           <TextInput
+            accessibilityLabel="Service Address *"
             value={address} onChangeText={setAddress}
             placeholder="House/Apt, Street, Estate" placeholderTextColor={colors.border}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -801,6 +871,7 @@ function BookingView({ colors, api, assessment, actionToken, onBack, onComplete 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Preferred Contact Time *</Text>
           <TextInput
+            accessibilityLabel="Preferred Contact Time *"
             value={time} onChangeText={setTime}
             placeholder="e.g. Tomorrow morning, Weekdays after 4PM" placeholderTextColor={colors.border}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -933,7 +1004,9 @@ function VerificationModal({ visible, assessmentId, onClose, onSuccess, colors }
                </View>
             ) : (
                <View style={{ gap: 16 }}>
+                 <Text style={[styles.label, { color: colors.mutedForeground }]}>6-digit code</Text>
                  <TextInput
+                   accessibilityLabel="6-digit code"
                    value={code} onChangeText={setCode} placeholder="6-digit code"
                    keyboardType="number-pad" placeholderTextColor={colors.border}
                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card, fontSize: 24, textAlign: 'center', letterSpacing: 4 }]}

@@ -80,11 +80,13 @@ describe("Companion guide API", () => {
     const list = await supertest(app).get("/api/uc/guides");
     assert.equal(list.status, 200);
     assert.ok(list.headers.etag);
+    assert.equal(list.headers["cache-control"], "public, max-age=30, must-revalidate");
     assert.ok(list.headers["last-modified"]);
     assert.ok(list.body.guides.some((guide: { slug: string }) => guide.slug === "focused-guide"));
 
     const unchanged = await supertest(app).get("/api/uc/guides").set("If-None-Match", list.headers.etag);
     assert.equal(unchanged.status, 304);
+    assert.equal(unchanged.headers["cache-control"], "public, max-age=30, must-revalidate");
   });
 
   it("rejects unsafe media URLs before writing a guide", async () => {

@@ -1,0 +1,1 @@
+ALTER TABLE uc_orders ADD COLUMN IF NOT EXISTS fulfillment_payment_status text;

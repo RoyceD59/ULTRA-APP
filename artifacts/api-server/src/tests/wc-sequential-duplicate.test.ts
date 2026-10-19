@@ -73,6 +73,7 @@ async function createTestUser(): Promise<{ id: number; jwt: string }> {
       firstName: "Test",
       lastName: "Duper",
       phone: "+254711000043",
+      address: "Test building, Nairobi",
     })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;
@@ -166,6 +167,7 @@ describe("WooCommerce path — sequential duplicate Paystack delivery", () => {
     const savedFetch = globalThis.fetch;
     globalThis.fetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
       const u = String(url);
+      if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
 
       // Resend email dispatch — count and absorb.
       if (u.includes("resend.com") && u.includes("/emails")) {

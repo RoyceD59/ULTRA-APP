@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -8,16 +7,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import RewardsQrDisplay from '@/components/RewardsQrDisplay';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import { useColors } from '@/hooks/useColors';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
-import { buildRewardsQrPayload } from '@/lib/rewardsQr';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 
 type LedgerEntry = CustomerRewards['ledger'][number];
 
@@ -79,30 +80,35 @@ export default function RewardsScreen() {
   const insets = useSafeAreaInsets();
   const { user, isLoading: authLoading } = useAuth();
   const api = useApi();
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(useCallback(() => {
+    setFocused(true);
+    return () => setFocused(false);
+  }, []));
   const {
     data: rewards,
     isLoading,
     isError,
+    error,
     isRefetching,
     refetch,
   } = useQuery({
-    queryKey: ['customer-rewards'],
-    queryFn: () => api.getRewards(),
-    enabled: !!user,
+    queryKey: customerQueryKeys.rewards(user?.id),
+    queryFn: ({ signal }) => api.getRewards(signal),
+    enabled: !!user && focused,
     staleTime: 0,
     refetchOnMount: 'always',
   });
-  const { token: qrToken, loading: qrLoading, error: qrError, retry: retryQr } =
-    useRewardsQrToken(user?.id, rewards);
-  const qrBadge = rewards?.snapshot?.qrBadge
-    ?? (qrError ? 'refresh_required' : qrToken ? 'ready' : undefined);
+  const qr = useRewardsQrToken(user?.id, focused);
+  const qrBadge = qr.token ? 'ready' : qr.loading ? undefined : 'refresh_required';
+  const refreshRewards = async () => { await Promise.all([refetch(), qr.retry()]); };
 
   const webBottomInset = Platform.OS === 'web' ? 34 : 0;
 
   if (authLoading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <PageDataLoader label="Loading your account…" />
       </View>
     );
   }
@@ -128,30 +134,18 @@ export default function RewardsScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !rewards) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading your rewards…</Text>
+        <PageDataLoader label="Loading your rewards…" />
       </View>
     );
   }
 
-  if (isError || !rewards) {
+  if (!rewards) {
     return (
       <View style={[styles.centered, styles.gate, { backgroundColor: colors.background }]}>
-        <Ionicons name="cloud-offline-outline" size={36} color={colors.mutedForeground} />
-        <Text style={[styles.gateTitle, { color: colors.text }]}>Rewards are unavailable</Text>
-        <Text style={[styles.gateCopy, { color: colors.mutedForeground }]}>
-          Check your connection and try again.
-        </Text>
-        <TouchableOpacity
-          testID="retry-rewards"
-          onPress={() => refetch()}
-          style={[styles.retryButton, { borderColor: colors.primary }]}
-        >
-          <Text style={[styles.retryText, { color: colors.primary }]}>Try Again</Text>
-        </TouchableOpacity>
+        <PageDataError title="Rewards are unavailable" error={error} onRetry={refetch} testID="retry-rewards" />
       </View>
     );
   }
@@ -167,9 +161,10 @@ export default function RewardsScreen() {
       data={rewards.ledger}
       keyExtractor={(entry) => String(entry.id)}
       refreshing={isRefetching}
-      onRefresh={refetch}
+      onRefresh={refreshRewards}
       ListHeaderComponent={(
         <>
+          {isError ? <PageDataError title="Rewards could not refresh" message="Your last loaded balance is shown below. Refresh before using rewards." onRetry={refetch} /> : null}
           <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
             <View style={styles.balanceHeading}>
               <Ionicons name="star" size={18} color={colors.primaryForeground} />
@@ -208,17 +203,7 @@ export default function RewardsScreen() {
               )}
             </View>
             <View style={[styles.qrWrap, { borderColor: colors.border }]}>
-              {qrLoading ? <ActivityIndicator testID="rewards-qr-loading" color={colors.primary} /> : qrError || !qrToken ? (
-                <View style={styles.qrFallback}>
-                  <Ionicons name="alert-circle-outline" size={24} color={colors.destructive} />
-                  <Text style={[styles.qrError, { color: colors.destructive }]}>QR unavailable</Text>
-                  <TouchableOpacity testID="retry-rewards-qr" onPress={retryQr}>
-                    <Text style={[styles.retryText, { color: colors.primary }]}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <QRCode testID="rewards-qr" value={buildRewardsQrPayload(qrToken)} size={150} color="#1a1a1a" backgroundColor="#fff" />
-              )}
+              <RewardsQrDisplay state={qr} size={150} testID="rewards-qr" />
             </View>
           </View>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent activity</Text>

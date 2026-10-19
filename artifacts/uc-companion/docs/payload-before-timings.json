@@ -1,0 +1,1282 @@
+[
+  {
+    "slow": false,
+    "run": 0,
+    "homeUsableMs": 1186,
+    "homeProductsMs": 1192,
+    "shopMs": 864,
+    "blogMs": 849,
+    "warmHomeMs": 66,
+    "requests": 28,
+    "startupJsWork": {
+      "ScriptDuration": 0.296833,
+      "TaskDuration": 0.606441
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "raw": 3079546,
+        "gzip": 718457,
+        "brotli": 620909
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "raw": 1092359,
+        "gzip": 287598,
+        "brotli": 247415
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "raw": 8118,
+        "gzip": 3317,
+        "brotli": 3104
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "raw": 27451,
+        "gzip": 8320,
+        "brotli": 7830
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "raw": 26281,
+        "gzip": 9000,
+        "brotli": 8417
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.555635,
+      "TaskDuration": 1.044382,
+      "JSHeapUsedSize": 20161572
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 51,
+        "bytes": 4262
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "duration": 78,
+        "bytes": 3079846
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "duration": 76,
+        "bytes": 1092659
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "duration": 10,
+        "bytes": 8418
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "duration": 11,
+        "bytes": 27751
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "duration": 7,
+        "bytes": 26581
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 48,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 14,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 13,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 13,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 12,
+        "bytes": 473
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 43,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 43,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 47,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 56,
+        "bytes": 344372
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 43,
+        "bytes": 72759
+      },
+      {
+        "name": "products?",
+        "duration": 17,
+        "bytes": 485
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 38,
+        "bytes": 390024
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 22,
+        "bytes": 117503
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 9,
+        "bytes": 5613
+      },
+      {
+        "name": "products-40d98bf6127744cf6c37a62117e8ff07.js",
+        "duration": 21,
+        "bytes": 22019
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 6,
+        "bytes": 17508
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 6,
+        "bytes": 36011
+      },
+      {
+        "name": "blog-e2152c233831acc5874a03c1bb2da531.js",
+        "duration": 12,
+        "bytes": 14823
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 3,
+        "bytes": 473
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 7,
+        "bytes": 67645
+      },
+      {
+        "name": "impact",
+        "duration": 13,
+        "bytes": 334
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 4,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": false,
+    "run": 1,
+    "homeUsableMs": 1100,
+    "homeProductsMs": 1106,
+    "shopMs": 410,
+    "blogMs": 853,
+    "warmHomeMs": 63,
+    "requests": 28,
+    "startupJsWork": {
+      "ScriptDuration": 0.274831,
+      "TaskDuration": 0.539173
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "raw": 3079546,
+        "gzip": 718457,
+        "brotli": 620909
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "raw": 1092359,
+        "gzip": 287598,
+        "brotli": 247415
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "raw": 8118,
+        "gzip": 3317,
+        "brotli": 3104
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "raw": 27451,
+        "gzip": 8320,
+        "brotli": 7830
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "raw": 26281,
+        "gzip": 9000,
+        "brotli": 8417
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.532678,
+      "TaskDuration": 1.00757,
+      "JSHeapUsedSize": 17611520
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 10,
+        "bytes": 4262
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "duration": 27,
+        "bytes": 3079846
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "duration": 22,
+        "bytes": 1092659
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "duration": 10,
+        "bytes": 8418
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "duration": 11,
+        "bytes": 27751
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "duration": 6,
+        "bytes": 26581
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 9,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 8,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 8,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 9,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 8,
+        "bytes": 473
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 38,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 37,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 57,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 73,
+        "bytes": 344372
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 63,
+        "bytes": 72759
+      },
+      {
+        "name": "products?",
+        "duration": 10,
+        "bytes": 485
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 55,
+        "bytes": 390024
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 51,
+        "bytes": 117503
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 41,
+        "bytes": 5613
+      },
+      {
+        "name": "products-40d98bf6127744cf6c37a62117e8ff07.js",
+        "duration": 47,
+        "bytes": 22019
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 7,
+        "bytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 12,
+        "bytes": 17508
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 7,
+        "bytes": 36011
+      },
+      {
+        "name": "blog-e2152c233831acc5874a03c1bb2da531.js",
+        "duration": 20,
+        "bytes": 14823
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 6,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 5,
+        "bytes": 473
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 11,
+        "bytes": 67645
+      },
+      {
+        "name": "impact",
+        "duration": 12,
+        "bytes": 334
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": false,
+    "run": 2,
+    "homeUsableMs": 1158,
+    "homeProductsMs": 1165,
+    "shopMs": 845,
+    "blogMs": 845,
+    "warmHomeMs": 65,
+    "requests": 29,
+    "startupJsWork": {
+      "ScriptDuration": 0.260234,
+      "TaskDuration": 0.557421
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "raw": 3079546,
+        "gzip": 718457,
+        "brotli": 620909
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "raw": 1092359,
+        "gzip": 287598,
+        "brotli": 247415
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "raw": 8118,
+        "gzip": 3317,
+        "brotli": 3104
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "raw": 27451,
+        "gzip": 8320,
+        "brotli": 7830
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "raw": 26281,
+        "gzip": 9000,
+        "brotli": 8417
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.48178,
+      "TaskDuration": 0.961721,
+      "JSHeapUsedSize": 20147868
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 16,
+        "bytes": 4262
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "duration": 31,
+        "bytes": 3079846
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "duration": 30,
+        "bytes": 1092659
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "duration": 10,
+        "bytes": 8418
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "duration": 11,
+        "bytes": 27751
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "duration": 8,
+        "bytes": 26581
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 12,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 9,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 9,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 9,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 8,
+        "bytes": 473
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 34,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 35,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 47,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 47,
+        "bytes": 344372
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 33,
+        "bytes": 72759
+      },
+      {
+        "name": "products?",
+        "duration": 6,
+        "bytes": 485
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 28,
+        "bytes": 390024
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 20,
+        "bytes": 117503
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 14,
+        "bytes": 5613
+      },
+      {
+        "name": "products-40d98bf6127744cf6c37a62117e8ff07.js",
+        "duration": 19,
+        "bytes": 22019
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 6,
+        "bytes": 17508
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 9,
+        "bytes": 36011
+      },
+      {
+        "name": "blog-e2152c233831acc5874a03c1bb2da531.js",
+        "duration": 15,
+        "bytes": 14823
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 11,
+        "bytes": 473
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 14,
+        "bytes": 67645
+      },
+      {
+        "name": "water-still.25fb8fa34a3d5c0bbc26e14c559f4173.png",
+        "duration": 23,
+        "bytes": 1674
+      },
+      {
+        "name": "impact",
+        "duration": 10,
+        "bytes": 334
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 0,
+    "homeUsableMs": 1083,
+    "homeProductsMs": 2887,
+    "shopMs": 424,
+    "blogMs": 2358,
+    "warmHomeMs": 61,
+    "requests": 28,
+    "startupJsWork": {
+      "ScriptDuration": 0.199669,
+      "TaskDuration": 0.397667
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "raw": 3079546,
+        "gzip": 718457,
+        "brotli": 620909
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "raw": 1092359,
+        "gzip": 287598,
+        "brotli": 247415
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "raw": 8118,
+        "gzip": 3317,
+        "brotli": 3104
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "raw": 27451,
+        "gzip": 8320,
+        "brotli": 7830
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "raw": 26281,
+        "gzip": 9000,
+        "brotli": 8417
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.528191,
+      "TaskDuration": 1.074424,
+      "JSHeapUsedSize": 21423188
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 12,
+        "bytes": 4262
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "duration": 48,
+        "bytes": 3079846
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "duration": 38,
+        "bytes": 1092659
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "duration": 12,
+        "bytes": 8418
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "duration": 12,
+        "bytes": 27751
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "duration": 5,
+        "bytes": 26581
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2019,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 1810,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 1811,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 1811,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1810,
+        "bytes": 473
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 2039,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 2039,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 2039,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 2039,
+        "bytes": 344372
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 9,
+        "bytes": 72759
+      },
+      {
+        "name": "products?",
+        "duration": 1811,
+        "bytes": 485
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 5,
+        "bytes": 117503
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 6,
+        "bytes": 5613
+      },
+      {
+        "name": "products-40d98bf6127744cf6c37a62117e8ff07.js",
+        "duration": 54,
+        "bytes": 22019
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 8,
+        "bytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 7,
+        "bytes": 17508
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 5,
+        "bytes": 36011
+      },
+      {
+        "name": "blog-e2152c233831acc5874a03c1bb2da531.js",
+        "duration": 13,
+        "bytes": 14823
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 9,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1806,
+        "bytes": 473
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 7,
+        "bytes": 67645
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 7,
+        "bytes": 5613
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 1,
+    "homeUsableMs": 1111,
+    "homeProductsMs": 2902,
+    "shopMs": 834,
+    "blogMs": 2340,
+    "warmHomeMs": 59,
+    "requests": 28,
+    "startupJsWork": {
+      "ScriptDuration": 0.222688,
+      "TaskDuration": 0.424092
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "raw": 3079546,
+        "gzip": 718457,
+        "brotli": 620909
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "raw": 1092359,
+        "gzip": 287598,
+        "brotli": 247415
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "raw": 8118,
+        "gzip": 3317,
+        "brotli": 3104
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "raw": 27451,
+        "gzip": 8320,
+        "brotli": 7830
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "raw": 26281,
+        "gzip": 9000,
+        "brotli": 8417
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.530253,
+      "TaskDuration": 0.985559,
+      "JSHeapUsedSize": 22747200
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 10,
+        "bytes": 4262
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "duration": 26,
+        "bytes": 1092659
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "duration": 35,
+        "bytes": 3079846
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "duration": 12,
+        "bytes": 8418
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "duration": 13,
+        "bytes": 27751
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "duration": 5,
+        "bytes": 26581
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2010,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 1810,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 1810,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 1809,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1807,
+        "bytes": 473
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 2030,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 2030,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 2030,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 2033,
+        "bytes": 344372
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 10,
+        "bytes": 72759
+      },
+      {
+        "name": "products?",
+        "duration": 1806,
+        "bytes": 485
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 5,
+        "bytes": 117503
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 7,
+        "bytes": 5613
+      },
+      {
+        "name": "products-40d98bf6127744cf6c37a62117e8ff07.js",
+        "duration": 12,
+        "bytes": 22019
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 5,
+        "bytes": 17508
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 5,
+        "bytes": 36011
+      },
+      {
+        "name": "blog-e2152c233831acc5874a03c1bb2da531.js",
+        "duration": 11,
+        "bytes": 14823
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1803,
+        "bytes": 473
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 5,
+        "bytes": 67645
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 5,
+        "bytes": 5613
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 2,
+    "homeUsableMs": 1072,
+    "homeProductsMs": 2865,
+    "shopMs": 844,
+    "blogMs": 2366,
+    "warmHomeMs": 62,
+    "requests": 28,
+    "startupJsWork": {
+      "ScriptDuration": 0.186615,
+      "TaskDuration": 0.38361
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "raw": 3079546,
+        "gzip": 718457,
+        "brotli": 620909
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "raw": 1092359,
+        "gzip": 287598,
+        "brotli": 247415
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "raw": 8118,
+        "gzip": 3317,
+        "brotli": 3104
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "raw": 27451,
+        "gzip": 8320,
+        "brotli": 7830
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "raw": 26281,
+        "gzip": 9000,
+        "brotli": 8417
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.468118,
+      "TaskDuration": 0.921147,
+      "JSHeapUsedSize": 23038044
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 10,
+        "bytes": 4262
+      },
+      {
+        "name": "__common-4ea3fbb6b2627578edec520593f2b9fc.js",
+        "duration": 34,
+        "bytes": 3079846
+      },
+      {
+        "name": "entry-4b9c38bdbf45892961df6c6c2ad11a9f.js",
+        "duration": 29,
+        "bytes": 1092659
+      },
+      {
+        "name": "_layout-3ffeb2f97ae2b69ffd22007ddd15b3bb.js",
+        "duration": 8,
+        "bytes": 8418
+      },
+      {
+        "name": "_layout-cc02b296497268fed7fde0e6a96a08ed.js",
+        "duration": 9,
+        "bytes": 27751
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "index-c11c57bde1325b456cc8f25219bd055a.js",
+        "duration": 4,
+        "bytes": 26581
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2010,
+        "bytes": 390024
+      },
+      {
+        "name": "impact",
+        "duration": 1810,
+        "bytes": 334
+      },
+      {
+        "name": "products?",
+        "duration": 1809,
+        "bytes": 485
+      },
+      {
+        "name": "promotions",
+        "duration": 1808,
+        "bytes": 302
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1808,
+        "bytes": 473
+      },
+      {
+        "name": "Inter_400Regular.51b6ad87261f18b6433ec52871ddfabc.ttf",
+        "duration": 2030,
+        "bytes": 342708
+      },
+      {
+        "name": "Inter_500Medium.137ab18bace28dd0bd83eb3b8ed2bc54.ttf",
+        "duration": 2030,
+        "bytes": 343192
+      },
+      {
+        "name": "Inter_600SemiBold.a5f35888d2da465de352e0dcfaf33324.ttf",
+        "duration": 2030,
+        "bytes": 343932
+      },
+      {
+        "name": "Inter_700Bold.6e237de4f1f413afa2fcc45c77ac343a.ttf",
+        "duration": 2033,
+        "bytes": 344372
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 9,
+        "bytes": 72759
+      },
+      {
+        "name": "products?",
+        "duration": 1804,
+        "bytes": 485
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 5,
+        "bytes": 117503
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 5,
+        "bytes": 5613
+      },
+      {
+        "name": "products-40d98bf6127744cf6c37a62117e8ff07.js",
+        "duration": 12,
+        "bytes": 22019
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 5,
+        "bytes": 17508
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 4,
+        "bytes": 36011
+      },
+      {
+        "name": "blog-e2152c233831acc5874a03c1bb2da531.js",
+        "duration": 12,
+        "bytes": 14823
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1803,
+        "bytes": 473
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 5,
+        "bytes": 67645
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 9,
+        "bytes": 5613
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0
+      }
+    ],
+    "errors": []
+  }
+]

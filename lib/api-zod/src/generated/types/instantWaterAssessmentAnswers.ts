@@ -22,9 +22,24 @@ export interface InstantWaterAssessmentAnswers {
      * @maxLength 160
      */
   area: string;
-  source: InstantWaterSource;
-  concern: InstantWaterConcern;
+  source?: InstantWaterSource;
+  concern?: InstantWaterConcern;
   symptom?: InstantWaterAssessmentAnswersSymptom;
   useContext?: InstantWaterAssessmentAnswersUseContext;
-  setting: InstantWaterSetting;
+  setting?: InstantWaterSetting;
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  sources?: InstantWaterSource[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  concerns?: InstantWaterConcern[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  settings?: InstantWaterSetting[];
 }

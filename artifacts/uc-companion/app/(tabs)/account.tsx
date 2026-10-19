@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Share, Alert,
   Modal, TextInput, ActivityIndicator, KeyboardAvoidingView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,19 +11,22 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi, type CustomerRewards } from '@/hooks/useApi';
 import OrderCard from '@/components/OrderCard';
 import FilterTrackerSection from '@/components/FilterTrackerSection';
+import MyFiltersSection from '@/components/MyFiltersSection';
+import { useFilterStatus } from '@/hooks/useFilterStatus';
+import CareOverviewEntry from '@/components/CareOverviewEntry';
 import * as Haptics from 'expo-haptics';
-import QRCode from 'react-native-qrcode-svg';
+import RewardsQrDisplay from '@/components/RewardsQrDisplay';
 import {
   getNotificationPermissionStatus,
   requestNotificationPermission,
   getFilterActivation,
+  hydrateAssignedFilter,
   type FilterActivation,
 } from '@/hooks/useNotifications';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
 import SwipeTabs from '@/components/SwipeTabs';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
-import { buildRewardsQrPayload } from '@/lib/rewardsQr';
 import PersonalImpactSection from '@/components/PersonalImpactSection';
 import {
   clearProfileDraft,
@@ -35,13 +38,15 @@ import {
   type ProfileDraftFields,
 } from '@/lib/profileDraft';
 import { customerQueryKeys } from '@/lib/customerQueryKeys';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useRewardsQrToken } from '@/hooks/useRewardsQrToken';
 import ImpactShareModal from '@/components/ImpactShareModal';
 import { CountryPicker } from '@/components/CountryPicker';
 import { normalizeInstantPhone, isValidInstantPhone } from '@workspace/api-zod/instant-water-identity';
 import type { SupportedCountryCode } from '@workspace/api-zod/phone';
 
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 const MENU_ITEMS = [
   { label: 'My Orders',                icon: 'bag-outline'           as const, route: '/account' },
@@ -144,6 +149,10 @@ function EditProfileModal({
     const normalizedPhone = normalizeInstantPhone(phoneInput, phoneCountry);
     if (!normalizedPhone || !isValidInstantPhone(phoneInput, phoneCountry)) {
       setError('Enter a valid phone number for the selected country');
+      return;
+    }
+    if (!form.address.trim()) {
+      setError('Enter your contact address');
       return;
     }
     if (form.address.trim().length > 500) {
@@ -278,7 +287,7 @@ function EditProfileModal({
 
               {/* Delivery Address */}
               <View style={editStyles.fieldGroup}>
-                <Text style={[editStyles.label, { color: colors.mutedForeground }]}>Delivery Address</Text>
+                <Text style={[editStyles.label, { color: colors.mutedForeground }]}>Contact Address *</Text>
                 <View style={[editStyles.inputRow, editStyles.inputRowMultiline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Ionicons name="location-outline" size={15} color={colors.mutedForeground} style={{ marginTop: 2 }} />
                   <TextInput
@@ -562,10 +571,17 @@ function AccountScreenContent() {
   const api         = useApi();
   const queryClient = useQueryClient();
 
-  const { editProfile } = useLocalSearchParams<{ editProfile?: string }>();
+  const { editProfile, section } = useLocalSearchParams<{ editProfile?: string; section?: string }>();
+  const accountScroll = useRef<ScrollView>(null);
+  const filtersY = useRef(0);
+  const bodyY = useRef(0);
+  const filterJumpPending = useRef(false);
 
   const [notifStatus,       setNotifStatus]       = useState<string>('undetermined');
   const [filterActivation,  setFilterActivation]  = useState<FilterActivation | null>(null);
+  const [filterActivationOwner, setFilterActivationOwner] = useState<number | undefined>();
+  const currentAccountId = useRef(user?.id);
+  currentAccountId.current = user?.id;
   const [editModalVisible,  setEditModalVisible]   = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [exporting,          setExporting]          = useState(false);
@@ -574,6 +590,21 @@ function AccountScreenContent() {
   const [redeemVisible,      setRedeemVisible]         = useState(false);
   const [impactShareVisible, setImpactShareVisible]    = useState(false);
   const [accountFocused,     setAccountFocused]       = useState(false);
+  useEffect(() => {
+    if (section === 'my-filters' && accountFocused) {
+      filterJumpPending.current = true;
+      const timer = setTimeout(() => {
+        accountScroll.current?.scrollTo({ y: bodyY.current + filtersY.current, animated: true });
+        filterJumpPending.current = false;
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [section, accountFocused]);
+  const cycleStatus = useFilterStatus();
+  useEffect(() => {
+    setFilterActivation(cycleStatus.activation);
+    setFilterActivationOwner(user?.id);
+  }, [cycleStatus.activation, user?.id]);
 
   // Delay authenticated account payloads until this tab is actually focused.
   // This keeps cold-start navigation from mounting four network observers.
@@ -652,9 +683,11 @@ function AccountScreenContent() {
     // Never leave the previous account's filter visible while the newly
     // authenticated account's scoped record is loading.
     setFilterActivation(null);
+    setFilterActivationOwner(undefined);
     if (user) {
-      getFilterActivation(user.id).then(activation => {
-        if (active) setFilterActivation(activation);
+      const ownerId = user.id;
+      getFilterActivation(ownerId).then(activation => {
+        if (active && currentAccountId.current === ownerId) { setFilterActivation(activation); setFilterActivationOwner(ownerId); }
       });
     }
     return () => { active = false; };
@@ -672,18 +705,41 @@ function AccountScreenContent() {
     enabled: !!user && accountFocused,
     staleTime: 2 * 60 * 1000,
   });
+  const assignmentsQuery = useQuery({
+    queryKey: ['customer-filter-assignments', user?.id],
+    queryFn: ({ signal }) => api.getAssignments(signal),
+    enabled: !!user && accountFocused,
+    staleTime: 15000,
+    refetchInterval: accountFocused ? 30000 : false,
+  });
+  useEffect(() => {
+    if (!user || !assignmentsQuery.data) return;
+    const accountId = user.id;
+    let active = true;
+    void hydrateAssignedFilter(accountId, assignmentsQuery.data,
+      () => active && currentAccountId.current === accountId)
+      .then(activation => { if (active && currentAccountId.current === accountId && activation) { setFilterActivation(activation); setFilterActivationOwner(accountId); } })
+      .catch(() => { /* Keep the server list visible; next focused refresh retries local hydration. */ });
+    return () => { active = false; };
+  }, [user?.id, assignmentsQuery.data]);
 
   const {
     data: rewards,
     isLoading: rewardsLoading,
     isError: rewardsError,
+    isFetching: rewardsFetching,
     refetch: refetchRewards,
   } = useQuery({
     queryKey: customerQueryKeys.rewards(user?.id),
-    queryFn: () => api.getRewards(),
+    queryFn: ({ signal }) => api.getRewards(signal),
     enabled: !!user && accountFocused,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchInterval: accountFocused ? 60_000 : false,
   });
+  const refreshFilterUsage = useCallback(() => {
+    void refetchRewards();
+  }, [refetchRewards]);
 
   const {
     data: waterTests,
@@ -704,12 +760,7 @@ function AccountScreenContent() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const {
-    token: rewardsQrToken,
-    loading: qrLoading,
-    error: qrError,
-    retry: retryQr
-  } = useRewardsQrToken(user?.id, rewards);
+  const qr = useRewardsQrToken(user?.id, accountFocused);
 
   async function shareCompanionApp() {
     await Share.share({
@@ -749,8 +800,7 @@ function AccountScreenContent() {
 
   const initials     = `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() || '?';
   const recentOrders = orders?.slice(0, 3) ?? [];
-  const rewardsQrBadge = rewards?.snapshot?.qrBadge
-    ?? (qrError ? 'refresh_required' : rewardsQrToken ? 'ready' : undefined);
+  const rewardsQrBadge = qr.token ? 'ready' : qr.loading ? undefined : 'refresh_required';
 
   const editInitial: EditProfileForm = {
     firstName: user.firstName,
@@ -762,6 +812,7 @@ function AccountScreenContent() {
   return (
     <>
       <ScrollView
+        ref={accountScroll}
         style={[styles.screen, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: cartBarInset || (Platform.OS === 'web' ? 34 : 80) }}>
 
@@ -808,7 +859,7 @@ function AccountScreenContent() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.body}>
+        <View style={styles.body} onLayout={event => { bodyY.current = event.nativeEvent.layout.y; }}>
           {/* Account owner details stay private until explicitly expanded. */}
           <View style={styles.section}>
             <View style={styles.sectionRow}>
@@ -913,21 +964,13 @@ function AccountScreenContent() {
                 </TouchableOpacity>
               </View>
               <View style={[rewardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {rewardsLoading ? (
-                  <View style={styles.historyState}>
-                    <ActivityIndicator color={colors.primary} />
-                    <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Loading your rewards…</Text>
-                  </View>
-                ) : rewardsError || !rewards ? (
-                  <View style={styles.historyState}>
-                    <Ionicons name="cloud-offline-outline" size={24} color={colors.mutedForeground} />
-                    <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Rewards are unavailable.</Text>
-                    <TouchableOpacity onPress={() => refetchRewards()} style={[styles.historyRetry, { borderColor: colors.primary }]}>
-                      <Text style={[styles.historyRetryText, { color: colors.primary }]}>Try Again</Text>
-                    </TouchableOpacity>
-                  </View>
+                {rewardsLoading && !rewards ? (
+                  <PageDataLoader label="Loading your rewards…" />
+                ) : !rewards ? (
+                  <PageDataError title="Rewards unavailable" onRetry={refetchRewards} />
                 ) : (
                 <>
+                {rewardsError ? <PageDataError title="Rewards could not refresh" message="Your saved balance is shown below. Refresh before using rewards." onRetry={refetchRewards} /> : null}
                 {/* Balance */}
                 <View style={[rewardStyles.balanceRow, { borderBottomColor: colors.border }]}>
                   <View style={[rewardStyles.balanceIcon, { backgroundColor: colors.primaryLight }]}>
@@ -965,25 +1008,7 @@ function AccountScreenContent() {
                     )}
                   </View>
                   <View style={[rewardStyles.qrWrap, { backgroundColor: '#fff', borderColor: colors.border }]}>
-                    {qrLoading ? (
-                      <ActivityIndicator testID="account-rewards-qr-loading" color={colors.primary} size="large" />
-                    ) : qrError || !rewardsQrToken ? (
-                      <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="alert-circle-outline" size={32} color={colors.destructive} />
-                        <Text style={{ fontSize: 12, color: colors.destructive, marginTop: 4, textAlign: 'center' }}>Failed to load QR</Text>
-                        <TouchableOpacity onPress={retryQr} style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primaryLight, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Retry</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <QRCode
-                        testID="account-rewards-qr"
-                        value={buildRewardsQrPayload(rewardsQrToken)}
-                        size={120}
-                        color="#1a1a1a"
-                        backgroundColor="#ffffff"
-                      />
-                    )}
+                    <RewardsQrDisplay state={qr} size={120} testID="account-rewards-qr" />
                   </View>
                   {rewards?.impact.hasRefilled ? <View style={[rewardStyles.refilledBadge, { backgroundColor: colors.primaryLight }]}><Ionicons name="water" size={13} color={colors.primary} /><Text style={[rewardStyles.refilledText, { color: colors.primary }]}>I refilled</Text></View> : null}
                   {rewards ? <Text style={[rewardStyles.impactSummary, { color: colors.mutedForeground }]}>{rewards.impact.totalLitres} L refilled · {rewards.impact.starLevel} ★ private level</Text> : null}
@@ -1019,9 +1044,23 @@ function AccountScreenContent() {
             </View>
           )}
 
-          {rewards ? <PersonalImpactSection impact={rewards.impact} onUpdated={impact => {
+          {rewards ? <PersonalImpactSection key={`personal-impact:${user.id}`} impact={rewards.impact} onUpdated={impact => {
             queryClient.setQueryData<CustomerRewards>(customerQueryKeys.rewards(user.id), current => current ? { ...current, impact } : current);
-          }} /> : null}
+          }} /> : <View style={styles.section} testID="personal-impact-unavailable">
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Ultra Clear Impact</Text>
+            <Text style={{ color: colors.mutedForeground }}>
+              {rewardsLoading ? 'Loading your impact card…' : 'Your impact card is unavailable right now.'}
+            </Text>
+            {!rewardsLoading && <TouchableOpacity accessibilityRole="button" onPress={() => refetchRewards()}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: colors.primary }}>Try again</Text>
+            </TouchableOpacity>}
+          </View>}
+
+          <TouchableOpacity accessibilityRole="link" testID="account-about-us"
+            onPress={() => router.push('/about' as never)} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ color: colors.primary, textDecorationLine: 'underline' }}>About Ultra Clear and our global impact</Text>
+          </TouchableOpacity>
 
           {rewards ? <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Share Ultra-Clear</Text>
@@ -1031,15 +1070,39 @@ function AccountScreenContent() {
             </View>
           </View> : null}
 
-          {/* Filter tracker */}
+          <View onLayout={event => {
+            filtersY.current = event.nativeEvent.layout.y;
+            if (filterJumpPending.current) accountScroll.current?.scrollTo({ y: bodyY.current + filtersY.current, animated: true });
+          }}>
+          <MyFiltersSection key={`my-filters:${user.id}`} activation={filterActivationOwner === user.id ? filterActivation : null}
+            onRegistered={a => {
+              setFilterActivation(a); setFilterActivationOwner(user.id); refreshNotifStatus();
+              void queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) });
+              void queryClient.invalidateQueries({ queryKey: ['filter-cycle', user.id] });
+            }}>
           <FilterTrackerSection
-            activation={filterActivation}
+            unified
+            key={`water-tests:${user.id}`}
+            activation={filterActivationOwner === user.id ? filterActivation : null}
+            impact={rewards?.impact}
+            usageLoading={rewardsFetching}
+            usageUnavailable={rewardsError || (!rewards && !rewardsLoading)}
+            onUsageRefresh={refreshFilterUsage}
             onActivationChange={a => {
               setFilterActivation(a);
+              setFilterActivationOwner(user.id);
               refreshNotifStatus();
+              void queryClient.invalidateQueries({ queryKey: ['filter-cycle', user.id] });
             }}
-            onRegistrationCommitted={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
+            onRegistrationCommitted={() => {
+              for (const key of [
+                customerQueryKeys.rewards(user.id), ['activation-purchases', user.id],
+                ['offline-purchases', user.id], ['customer-filter-assignments', user.id], ['filter-cycle', user.id],
+              ]) void queryClient.invalidateQueries({ queryKey: key });
+            }}
           />
+          </MyFiltersSection>
+          </View>
 
           {/* Water-test history is intentionally inline so a signed-in
               customer can see every request without starting a new request. */}
@@ -1055,19 +1118,10 @@ function AccountScreenContent() {
               </TouchableOpacity>
             </View>
             <View testID="water-test-history" style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {waterTestsLoading ? (
-                <View style={styles.historyState}>
-                  <ActivityIndicator color={colors.primary} />
-                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Loading your requests…</Text>
-                </View>
-              ) : waterTestsError ? (
-                <View style={styles.historyState}>
-                  <Ionicons name="cloud-offline-outline" size={24} color={colors.mutedForeground} />
-                  <Text style={[styles.historyStateText, { color: colors.mutedForeground }]}>Request history is unavailable.</Text>
-                  <TouchableOpacity onPress={() => refetchWaterTests()} style={[styles.historyRetry, { borderColor: colors.primary }]}>
-                    <Text style={[styles.historyRetryText, { color: colors.primary }]}>Try Again</Text>
-                  </TouchableOpacity>
-                </View>
+              {waterTestsLoading && waterTests === undefined ? (
+                <PageDataLoader label="Loading your requests…" />
+              ) : waterTestsError && waterTests === undefined ? (
+                <PageDataError title="Request history unavailable" onRetry={refetchWaterTests} />
               ) : !waterTests?.length ? (
                 <View style={styles.historyState}>
                   <Ionicons name="flask-outline" size={24} color={colors.mutedForeground} />
@@ -1112,6 +1166,7 @@ function AccountScreenContent() {
           )}
 
           {/* Menu */}
+          <CareOverviewEntry />
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>My Account</Text>
             <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1193,7 +1248,7 @@ function AccountScreenContent() {
         visible={redeemVisible}
         balance={rewards?.balance ?? 0}
         onClose={() => setRedeemVisible(false)}
-        onRedeemed={() => queryClient.invalidateQueries({ queryKey: ['customer-rewards'] })}
+        onRedeemed={() => queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(user.id) })}
       />
       {rewards && (
         <ImpactShareModal
@@ -1209,7 +1264,7 @@ function AccountScreenContent() {
 
 const styles = StyleSheet.create({
   screen:           { flex: 1 },
-  guestContainer:   { flex: 1, alignItems: 'center', padding: 40, gap: 16 },
+  guestContainer:   { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', alignItems: 'center', padding: 40, gap: 16 },
   avatarPlaceholder:{ width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
   guestTitle:       { fontSize: 22, fontWeight: '700' as const, textAlign: 'center' },
   guestSub:         { fontSize: 14, textAlign: 'center', lineHeight: 22 },
@@ -1227,7 +1282,7 @@ const styles = StyleSheet.create({
   profilePhone:     { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
   editHeaderBtn:    { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
 
-  body:             { padding: 16, gap: 20 },
+  body:             { padding: 16, gap: 20, width: '100%', maxWidth: 900, alignSelf: 'center' },
   section:          { gap: 12 },
   sectionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailActions:    { flexDirection: 'row', alignItems: 'center', gap: 8 },

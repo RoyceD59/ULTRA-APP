@@ -98,5 +98,13 @@ export async function scheduleNotificationAsync(
 export async function cancelScheduledNotificationAsync(id: string): Promise<void> {
   _cancelled.push(id);
 }
+export async function getAllScheduledNotificationsAsync() {
+  return _requests.filter(r => !_cancelled.includes(r.id)).map(r => ({
+    identifier: r.id,
+    content: r.content as { data?: Record<string, unknown> },
+    trigger: r.trigger,
+  }));
+}
+export const SchedulableTriggerInputTypes = { DAILY: 'daily', DATE: 'date' } as const;
 
 export const AndroidImportance = { DEFAULT: 3 } as const;

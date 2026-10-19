@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+
+<defs>
+<linearGradient id="cw-wave" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#166687" stop-opacity=".65"/><stop offset=".38" stop-color="#65b8d0" stop-opacity=".15"/><stop offset=".7" stop-color="#bce8ee" stop-opacity=".9"/><stop offset="1" stop-color="#398cac" stop-opacity=".65"/></linearGradient>
+<radialGradient id="cw-surface"><stop stop-color="#45a8c6" stop-opacity=".18"/><stop offset=".65" stop-color="#65bbcf" stop-opacity=".08"/><stop offset="1" stop-color="#85c7d7" stop-opacity="0"/></radialGradient>
+<g id="cw-wave-ring"><ellipse cx="12" cy="21" rx="9" ry="2" fill="none" stroke="#216c8d" stroke-opacity=".16" stroke-width=".65"/><ellipse cx="12" cy="20.92" rx="9" ry="2" fill="none" stroke="url(#cw-wave)" stroke-width=".28"/><ellipse cx="12" cy="21.13" rx="8.5" ry="1.68" fill="none" stroke="#7ac8dc" stroke-opacity=".35" stroke-width=".16"/></g>
+<radialGradient id="cw-glass" cx=".38" cy=".72" r=".72" gradientTransform="translate(0 .08) scale(1 .9)"><stop stop-color="#b5e7ee" stop-opacity=".88"/><stop offset=".28" stop-color="#76c8dd" stop-opacity=".8"/><stop offset=".6" stop-color="#3195b5" stop-opacity=".87"/><stop offset=".84" stop-color="#126888" stop-opacity=".94"/><stop offset="1" stop-color="#08475f"/></radialGradient>
+<radialGradient id="cw-reflection" cx=".34" cy=".4" r=".54" gradientTransform="translate(.16 0) scale(.55 1)"><stop stop-color="#d4f2f5" stop-opacity=".65"/><stop offset=".45" stop-color="#a4dce8" stop-opacity=".22"/><stop offset="1" stop-color="#7bc1d4" stop-opacity="0"/></radialGradient>
+</defs>
+<g>
+<path d="M12 1c-.5 2.2-2.85 4.25-2.85 6.2a2.85 2.85 0 0 0 5.7 0C14.85 5.25 12.5 3.2 12 1Z" fill="url(#cw-glass)"/>
+<path d="M12 1c-.5 2.2-2.85 4.25-2.85 6.2a2.85 2.85 0 0 0 5.7 0C14.85 5.25 12.5 3.2 12 1Z" fill="url(#cw-reflection)"/>
+</g>
+<ellipse cx="12" cy="21" rx="11" ry="2.8" fill="url(#cw-surface)"/>
+
+
+
+</svg>

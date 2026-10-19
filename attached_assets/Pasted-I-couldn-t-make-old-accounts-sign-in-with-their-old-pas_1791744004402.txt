@@ -1,0 +1,24 @@
+I couldn't make old accounts sign in with their old password, and I didn't try to. The only change so far is a clearer sign-in error in the Companion.
+
+**What I found**
+- **Accounts that already work:** Production has 15 accounts with working passwords and 1 Google-style sign-in account. A password sign-in succeeded in the production logs, so these are fine.
+- **Accounts that fail:** The failures are customers from the old website login. The API now has no way to check their old WooCommerce passwords, because the WooCommerce disconnection removed that check.
+- **Why they can't just be allowed in:** Letting them in by matching their email alone would let anyone claim another person's account, so I didn't do that.
+- **What the logs show:** The failed sign-ins in the production log took about 1 to 25 seconds. The successful one took 0.15 seconds. That points to the live API still trying the website login, but the production logs don't confirm why it fails.
+- **Phone numbers:** Sign-in only accepts international phone numbers, such as +254712345678. A local number like 0712… is rejected, and the app only shows its generic "Unable to sign in" message.
+
+**What I changed**
+- The sign-in failure message now says: "If you used your old website account, choose Forgot password to set an app password, or create an account." It is the same for every failure, so it doesn't reveal whether an account exists.
+- I added a note to `docs/development-change-log.md`.
+- The Companion typecheck passes. I did not run the Companion app or the API tests. The API tests were already failing before this change, in unrelated areas such as inventory, order status and payments.
+- Nothing is published. No passwords or account data were changed.
+
+**What this fixes and what it doesn't**
+- **Old customers who already have an app account:** Forgot password emails them a link to set a new password.
+- **Old customers with no app account:** Forgot password does nothing for them, so they have to create an account. Their website order history isn't linked until the reviewed import of the old customer export is run. I'd need that export from you to do it.
+
+**Before the next publish**
+- The next publish will fail unless I first capture the currently served build `1791737829836-806` into `rollback-static/`. I can do that if you say so.
+- Publishing also signs everyone out once, because of the eight-hour session rule.
+
+I haven't started any other queued tasks. Tell me which ones to run next.

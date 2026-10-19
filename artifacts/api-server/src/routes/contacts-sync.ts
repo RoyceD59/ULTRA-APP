@@ -15,7 +15,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import {
   db,
   sheetSyncsTable,
@@ -24,6 +24,7 @@ import {
 } from "@workspace/db";
 import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
+import { needsGoogleReconnect } from "../lib/google-reconnect.js";
 import {
   fetchSheetRows,
   type RawRow,
@@ -316,6 +317,7 @@ router.get("/contacts/sync/sheets", async (_req, res): Promise<void> => {
     lastSyncedAt: sync.lastSyncedAt,
     lastError: sync.lastError ?? null,
     lastErrorAt: sync.lastErrorAt ?? null,
+    reconnectRequired: needsGoogleReconnect(sync.lastError),
   });
 });
 
@@ -391,6 +393,7 @@ router.post("/contacts/sync/sheets/run", async (req, res): Promise<void> => {
     try {
       accessToken = await getValidAccessToken();
     } catch (tokenErr) {
+      if (needsGoogleReconnect(tokenErr)) throw tokenErr;
       logger.warn({ err: tokenErr }, "Sheet sync: could not get OAuth token, trying public access");
     }
 
@@ -439,7 +442,11 @@ router.get("/contacts/sync/sheets/preview", async (req, res): Promise<void> => {
   let accessToken: string | null = null;
   try {
     accessToken = await getValidAccessToken();
-  } catch {
+  } catch (err) {
+    if (needsGoogleReconnect(err)) {
+      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     // no token — try public access below
   }
 
@@ -512,6 +519,15 @@ router.get("/contacts/sync/google/callback", async (req, res): Promise<void> => 
 
   try {
     const googleEmail = await exchangeCodeAndStore(code);
+    // Clear only authorization failures; other sheet problems still need fixing.
+    const syncs = await db.select().from(sheetSyncsTable);
+    for (const sync of syncs) {
+      if (sync.lastError && needsGoogleReconnect(sync.lastError)) {
+        await db.update(sheetSyncsTable)
+          .set({ lastError: null, lastErrorAt: null })
+          .where(and(eq(sheetSyncsTable.id, sync.id), eq(sheetSyncsTable.lastError, sync.lastError)));
+      }
+    }
     logger.info({ googleEmail }, "Google OAuth: account connected");
     res.send(buildCallbackHtml({ success: true, googleEmail }));
   } catch (err) {

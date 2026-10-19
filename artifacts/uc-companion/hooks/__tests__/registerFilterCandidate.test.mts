@@ -26,7 +26,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computeRegisterCandidate } from '../filterCandidateUtils.js';
+import { computeRegisterCandidate as computeCandidate } from '../filterCandidateUtils.js';
+// These original fixtures model accepted purchases. Unconfirmed evidence has
+// a separate regression below instead of silently assuming every order is paid.
+const computeRegisterCandidate = (options: Parameters<typeof computeCandidate>[0]) =>
+  computeCandidate({ ...options, orders: options.orders.map(order => ({ ...order, activationEligible: order.activationEligible ?? true })) });
 import type { FilterActivation } from '../useNotifications.js';
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -56,6 +60,11 @@ function makeActivation(override?: Partial<FilterActivation>): FilterActivation 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('computeRegisterCandidate — replace-mode sourceOrderId guard', () => {
+  it('never nudges an order without explicit server eligibility', () => {
+    const result = computeCandidate({ eligibleForRegister: true, eligibleForReplace: false, activation: null,
+      filterProducts: [PRODUCT], orders: [{ id: 901, dateCreated: NEWER_DATE, lineItems: [{ productId: PRODUCT.id }] }] });
+    assert.equal(result, null);
+  });
 
   // A. The same order that registered the current cycle must be skipped.
   it('A: sourceOrderId === order.id → null (nudge stays hidden)', () => {
@@ -333,6 +342,34 @@ describe('computeRegisterCandidate — products removed from the catalogue', () 
 
     assert.equal(result, null,
       'replace mode must not nudge for a product that is no longer in the filter catalogue');
+  });
+
+  it('replace mode: skips a newer unknown-product order and returns a post-activation known-product order', () => {
+    const KNOWN_ORDER_DATE = '2026-05-01T00:00:00.000Z';
+    const result = computeRegisterCandidate({
+      eligibleForRegister: false,
+      eligibleForReplace:  true,
+      activation: makeActivation({ sourceOrderId: 100 }),
+      orders: [
+        {
+          id:          305,
+          dateCreated: NEWER_DATE,
+          lineItems:   [{ productId: REMOVED_PRODUCT_ID }],
+        },
+        {
+          id:          306,
+          dateCreated: KNOWN_ORDER_DATE,
+          lineItems:   [{ productId: PRODUCT.id }],
+        },
+      ],
+      filterProducts: [PRODUCT],
+      now: ms(NEWER_DATE) + 86_400_000,
+    });
+
+    assert.ok(result, 'a removed product must not hide a valid post-activation replacement order');
+    assert.equal(result.mode, 'replace', 'the candidate must trigger the replacement nudge');
+    assert.equal(result.orderId, 306, 'the separate known-product order must be selected');
+    assert.deepEqual(result.product, PRODUCT, 'the candidate must use the known catalogue product');
   });
 
   it('skips an unknown product order and returns the known product order', () => {

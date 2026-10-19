@@ -6,13 +6,13 @@
  *   • Litres of water filtered
  *   • 500 ml plastic bottles avoided
  *
- * Data auto-updates every 5 minutes and counts up from zero on each fresh load.
+ * Shared ProjectHub-managed totals refresh on return and once per minute.
  */
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useColors } from '@/hooks/useColors';
-import { useApi } from '@/hooks/useApi';
+import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useGlobalImpact } from '@/hooks/useGlobalImpact';
+import ForestLink from '@/components/ForestLink';
 
 // ── Count-up hook ─────────────────────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ function useCountUp(target: number, duration = 1600): number {
   const prevTarget = useRef(0);
 
   useEffect(() => {
-    if (target === 0) { setValue(0); return; }
+    if (target === 0) { prevTarget.current = 0; setValue(0); return; }
     const from  = prevTarget.current;
     prevTarget.current = target;
 
@@ -34,9 +34,10 @@ function useCountUp(target: number, duration = 1600): number {
       // ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(from + delta * eased));
-      if (progress < 1) requestAnimationFrame(tick);
+      if (progress < 1) frame = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
+    let frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
   }, [target, duration]);
 
   return value;
@@ -55,21 +56,19 @@ function fmt(n: number): string {
 interface StatBubbleProps {
   icon:    keyof typeof Ionicons.glyphMap;
   color:   string;
-  value:   number;
+  value:   number | null;
   label:   string;
   unit?:   string;
 }
 
 function StatBubble({ icon, color, value, label, unit }: StatBubbleProps) {
-  const animated = useCountUp(value);
-
   return (
     <View style={styles.statBubble}>
       <View style={[styles.statIcon, { backgroundColor: color + '22' }]}>
         <Ionicons name={icon} size={22} color={color} />
       </View>
       <Text style={styles.statValue}>
-        {fmt(animated)}
+        {value === null ? '—' : fmt(value)}
         {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
       </Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -83,12 +82,14 @@ function PulseDot() {
   const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(scale, { toValue: 1.5, duration: 700, easing: Easing.out(Easing.ease), useNativeDriver: true }),
         Animated.timing(scale, { toValue: 1,   duration: 700, easing: Easing.in(Easing.ease),  useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulse.start();
+    return () => pulse.stop();
   }, [scale]);
 
   return (
@@ -99,41 +100,16 @@ function PulseDot() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ImpactBubble() {
-  const colors = useColors();
-  const api    = useApi();
-
-  const [stats, setStats] = useState({ totalUsers: 0, litresFiltered: 0, plasticsAvoided: 0, cleanWaterDays: 0 });
-
-  async function load() {
-    try {
-      const data = await api.getImpact();
-      setStats({
-        totalUsers:      data.totalUsers,
-        litresFiltered:  data.litresFiltered,
-        plasticsAvoided: data.plasticsAvoided,
-        cleanWaterDays:  data.cleanWaterDays ?? 0,
-      });
-    } catch {
-      // silent — widget stays at zeros or last values
-    }
-  }
-
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { data: stats, isPending, isFetching, refetch, freshness, dataUpdatedAt } = useGlobalImpact();
 
   return (
-    <View style={[styles.card, { backgroundColor: '#003F6E', borderColor: '#005d8f' }]}>
+    <View testID="global-uc-impact" style={[styles.card, { backgroundColor: '#003F6E', borderColor: '#005d8f' }]}>
       {/* Header */}
       <View style={styles.header}>
         <Ionicons name="leaf" size={16} color="#4ade80" />
         <Text style={styles.headerText}>Ultra-Clear Impact</Text>
         <View style={styles.liveChip}>
-          <PulseDot />
-          <Text style={styles.liveText}>LIVE</Text>
+          <Text style={styles.liveText}>{freshness}</Text>
         </View>
       </View>
 
@@ -141,8 +117,29 @@ export default function ImpactBubble() {
         Together, we're replacing single-use plastic with clean, filtered water.
       </Text>
 
+      {isPending && <View style={{ gap: 8, alignItems: 'center' }}>
+        <ActivityIndicator color="#B5E9FA" />
+        <Text style={styles.subText}>Loading global impact…</Text>
+      </View>}
+      {(freshness === 'STALE' || freshness === 'UNAVAILABLE') && <View style={{ gap: 4, alignItems: 'center' }}>
+        <Text accessibilityRole="alert" style={styles.subText}>
+          {stats ? 'Last-known figures — not current. Refresh or reconnect to check the latest totals.' : 'Global impact is unavailable right now.'}
+        </Text>
+        <TouchableOpacity accessibilityRole="button" testID="global-impact-retry" disabled={isFetching}
+          onPress={() => refetch()} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={{ color: '#B5E9FA', textDecorationLine: 'underline' }}>Try again</Text>
+        </TouchableOpacity>
+      </View>}
+      {!!stats && <View style={{ gap: 4 }}>
+        <Text style={styles.subText}>Last successful refresh: {new Date(dataUpdatedAt).toLocaleString()}</Text>
+        <Text selectable style={styles.footnote}>Snapshot {stats.snapshotId.slice(0, 12)} · calculated {new Date(stats.calculatedAt).toLocaleString()}</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={isFetching} onPress={() => refetch()}>
+          <Text style={[styles.subText, { textDecorationLine: 'underline', minHeight: 44 }]}>{isFetching ? 'Refreshing…' : 'Refresh global figures'}</Text>
+        </TouchableOpacity>
+      </View>}
+
       {/* Stats row */}
-      <View style={styles.statsRow}>
+      {!!stats && <View style={styles.statsRow}>
         <StatBubble
           icon="people"
           color="#60a5fa"
@@ -168,14 +165,21 @@ export default function ImpactBubble() {
         <StatBubble
           icon="sunny-outline"
           color="#facc15"
-          value={stats.cleanWaterDays}
-          label="Days of clean water"
+          value={stats.lifespanAvailable ? stats.cleanWaterDays : null}
+          label={stats.lifespanAvailable ? "Days of clean water" : "Days unavailable"}
         />
-      </View>
+      </View>}
 
       <Text style={styles.footnote}>
-        Each 500 ml plastic bottle replaced by one litre of filtered UC water.
+        Shared global totals managed through ProjectHub. One litre of filtered water replaces two 500 ml bottles.
       </Text>
+      <View testID="global-impact-programme" style={styles.programme}>
+        <Text style={styles.programmeHeading}>Programme policy</Text>
+        <Text testID="global-impact-programme-brief" style={styles.programmeText}>
+          Hydrate the Future™ receives 3% of eligible paid purchases, split equally between tree growing in our community and clean-water access. Logged refills do not add funding.
+        </Text>
+        <ForestLink light label="Explore the global forest" />
+      </View>
     </View>
   );
 }
@@ -207,4 +211,7 @@ const styles = StyleSheet.create({
   statLabel:  { fontSize: 10, color: 'rgba(255,255,255,0.6)', textAlign: 'center', fontWeight: '500' as const },
 
   footnote: { fontSize: 10, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 14 },
+  programme: { gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.16)', paddingTop: 12 },
+  programmeHeading: { fontSize: 12, fontWeight: '700', color: '#B5E9FA' },
+  programmeText: { fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.9)' },
 });

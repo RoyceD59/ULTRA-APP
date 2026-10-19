@@ -4,6 +4,8 @@
  * Categories: Installation | Filter Replacement | Troubleshooting | FAQ
  */
 
+import { GUIDES_SW } from './guides.sw';
+
 export type GuideStep = string; // plain text step
 
 export interface GuideMedia {
@@ -44,6 +46,9 @@ export interface Guide {
   icon: string;            // Ionicons name
   readTime: string;
   sections: GuideSection[];
+  titleSw?: string;
+  summarySw?: string;
+  sectionsSw?: GuideSection[];
   version?: number;
   updatedAt?: string;
 }
@@ -54,6 +59,7 @@ export const GUIDES: Guide[] = [
 
   {
     id: 'bottle-setup',
+    ...GUIDES_SW['bottle-setup'],
     title: 'Getting started with your filter bottle',
     summary: 'Unbox, prime, and start drinking certified clean water in under 5 minutes.',
     products: 'Hydra Flux · Truva Go · Viva Drop · Flex · Timbo · Gym Buddy · Breeze',
@@ -105,6 +111,7 @@ export const GUIDES: Guide[] = [
 
   {
     id: 'sweet-home-install',
+    ...GUIDES_SW['sweet-home-install'],
     title: 'Sweet Home Faucet Filter — installation guide',
     summary: 'Clip your kitchen tap filter on in under 5 minutes — no tools, no plumber.',
     products: 'Sweet Home',
@@ -151,6 +158,7 @@ export const GUIDES: Guide[] = [
 
   {
     id: 'shower-filter-install',
+    ...GUIDES_SW['shower-filter-install'],
     title: 'Shower filter installation & cartridge swap',
     summary: 'Fit your shower filter in minutes and enjoy SGS-certified chlorine-free water every shower.',
     products: "J'adore · Derma Care · Pure Drop",
@@ -293,6 +301,7 @@ export const GUIDES: Guide[] = [
 
   {
     id: 'bottle-cartridge-swap',
+    ...GUIDES_SW['bottle-cartridge-swap'],
     title: 'How to replace your bottle filter cartridge',
     summary: 'Keep your certification active — swap the Ahlstrom Disruptor® cartridge every 150L or 3 months.',
     products: 'Hydra Flux · Truva Go · Viva Drop · Flex · Timbo · Gym Buddy · Breeze',

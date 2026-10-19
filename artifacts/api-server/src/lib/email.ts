@@ -16,6 +16,11 @@
 
 import { db, ucNotificationLogTable } from "@workspace/db";
 import { storeUrlWithUtm } from "./utm.js";
+import {
+  orderReceiptSerial, COD_PAYMENT_DETAILS, receiptMoney, receiptPaymentLabel,
+  receiptPaymentState, receiptEscapeHtml,
+} from "@workspace/api-zod/order-receipt";
+export { orderReceiptSerial, COD_PAYMENT_DETAILS } from "@workspace/api-zod/order-receipt";
 
 const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send";
 
@@ -312,6 +317,7 @@ export function buildWaterTestConfirmationEmail(params: {
   address:   string;
   waterSource: string;
   concerns:  string;
+  freeWaterTest?: boolean;
 }): { subject: string; html: string; text: string } {
   const { testId, firstName, address, waterSource, concerns } = params;
   const html = `<!DOCTYPE html>
@@ -326,8 +332,8 @@ export function buildWaterTestConfirmationEmail(params: {
           <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Certified clean water for every Kenyan</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">Free Water Test Booked 💧</h2>
-          <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">Hi ${firstName}, your free water quality test is booked! We'll call you to confirm the appointment time.</p>
+          <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">${params.freeWaterTest ? "Free " : ""}Water Test Booked 💧</h2>
+          <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">Hi ${firstName}, your ${params.freeWaterTest ? "free " : ""}water quality test is booked! We'll call you to confirm the appointment time.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
             <tr style="background:#f3f4f6;"><td colspan="2" style="padding:12px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;">Booking Details</td></tr>
             <tr><td style="padding:10px 12px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px;width:40%;">Reference</td><td style="padding:10px 12px;border-top:1px solid #e5e7eb;color:#111827;font-size:13px;font-weight:700;">${testId}</td></tr>
@@ -344,8 +350,8 @@ export function buildWaterTestConfirmationEmail(params: {
 </body>
 </html>`;
   const text = [
-    `Ultra Clear Free Water Test — ${testId}`,
-    `Hi ${firstName}, your free water quality test is booked!`,
+    `Ultra Clear ${params.freeWaterTest ? "Free " : ""}Water Test — ${testId}`,
+    `Hi ${firstName}, your ${params.freeWaterTest ? "free " : ""}water quality test is booked!`,
     "",
     `Reference: ${testId}`,
     `Address: ${address}`,
@@ -366,29 +372,6 @@ export function buildWaterTestConfirmationEmail(params: {
  * zero-padded order id). Derived, never stored, so the same order always
  * produces the same serial and both local-DB and WooCommerce orders get one.
  */
-export function orderReceiptSerial(
-  orderId: string | number,
-  dateCreated?: string | Date,
-): string {
-  const d = dateCreated ? new Date(dateCreated) : new Date();
-  const valid = !isNaN(d.getTime()) ? d : new Date();
-  const ymd = [
-    valid.getFullYear(),
-    String(valid.getMonth() + 1).padStart(2, "0"),
-    String(valid.getDate()).padStart(2, "0"),
-  ].join("");
-  const idPart = String(orderId).replace(/\D/g, "").padStart(6, "0");
-  return `UC-${ymd}-${idPart}`;
-}
-
-/** Payment details shown on cash-on-delivery receipts. */
-export const COD_PAYMENT_DETAILS = {
-  mpesaTill:     "568 0516",
-  paybill:       "542 542",
-  paybillAccount: "071908000",
-  phone:         "0717774049",
-} as const;
-
 export function buildOrderReceiptEmail(params: {
   orderId:   string | number;
   firstName: string;
@@ -397,10 +380,14 @@ export function buildOrderReceiptEmail(params: {
   total:     string;
   currency:  string;
   paymentMethod: string;
+  paymentStatus?: string;
   shippingAddress?: {
+    fulfillment?: string;
+    shippingAmount?: string;
     firstName?: string;
     lastName?:  string;
     address1?:  string;
+    address2?:  string;
     city?:      string;
     country?:   string;
     phone?:     string;
@@ -419,8 +406,10 @@ export function buildOrderReceiptEmail(params: {
   const {
     orderId, firstName, lineItems, total, currency,
     paymentMethod, shippingAddress, discountAmount, promoCode, dateCreated,
-    paymentReference,
+    paymentReference: rawPaymentReference,
   } = params;
+  // COD's idempotency reference is an internal retry key, not payment evidence.
+  const paymentReference = paymentMethod === "cod" ? undefined : rawPaymentReference;
 
   const serial = orderReceiptSerial(orderId, dateCreated);
 
@@ -436,16 +425,10 @@ export function buildOrderReceiptEmail(params: {
     return valid.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
   })();
 
-  const fmt = (n: string | number) =>
-    `${currency} ${Number(n).toLocaleString("en-KE")}`;
-
-  const payLabels: Record<string, string> = {
-    mpesa:       "M-Pesa",
-    stripe:      "Card (Stripe)",
-    paystack:    "Card (Paystack)",
-    cod:         "Cash on Delivery",
-  };
-  const payLabel = payLabels[paymentMethod] ?? paymentMethod;
+  const fmt = (n: string | number) => receiptMoney(n, currency);
+  const payLabel = receiptPaymentLabel(paymentMethod);
+  const paymentState = receiptPaymentState(params.paymentStatus);
+  const esc = receiptEscapeHtml;
 
   // Payment trace row — only when a reference exists (COD has none).
   // The reference originates from gateway/callback payloads, so HTML-escape it
@@ -462,8 +445,9 @@ export function buildOrderReceiptEmail(params: {
     : "";
 
   const addr = shippingAddress;
-  const addrText = addr
-    ? [addr.address1, addr.city, addr.country].filter(Boolean).join(", ")
+  const collection = addr?.fulfillment === "collection";
+  const addrText = collection ? "Free collection" : addr
+    ? [addr.address1, addr.address2, addr.city, addr.country].filter(Boolean).join(", ") || "To be confirmed"
     : "To be confirmed";
 
   const itemsHtml = lineItems.length === 0
@@ -477,9 +461,9 @@ export function buildOrderReceiptEmail(params: {
           const safeQty   = i.quantity != null                      ? String(i.quantity)   : "—";
           const safeTotal = i.total    != null && i.total    !== "" ? fmt(i.total)         : "—";
           return `<tr>
-          <td class="uc-item-name" style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${safeName}</td>
+          <td class="uc-item-name" style="padding:8px 8px;border-bottom:1px solid #e5e7eb;word-break:break-word;overflow-wrap:anywhere;">${esc(safeName)}</td>
           <td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;text-align:center;white-space:nowrap;">${safeQty}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${safeTotal}</td>
+          <td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;text-align:right;word-break:break-word;">${esc(safeTotal)}</td>
         </tr>`;
         }
       )
@@ -489,7 +473,7 @@ export function buildOrderReceiptEmail(params: {
     discountAmount && discountAmount > 0
       ? `<tr>
           <td colspan="2" style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">
-            Discount${promoCode ? ` (${promoCode})` : ""}
+            Discount${promoCode ? ` (${esc(promoCode)})` : ""}
           </td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#16a34a;">
             -${fmt(discountAmount)}
@@ -498,23 +482,22 @@ export function buildOrderReceiptEmail(params: {
       : "";
 
   // Cash-on-delivery receipts include how-to-pay instructions.
-  const isCod = paymentMethod === "cod";
+  const isCod = paymentMethod === "cod" && paymentState === "Payment pending";
   const codHtml = isCod
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fde68a;background:#fffbeb;border-radius:8px;margin-bottom:24px;">
               <tr><td style="padding:16px 20px;">
-                <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:700;">💵 How to pay — Cash on Delivery</p>
+                <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:700;">How to pay — Cash on Delivery</p>
+                <p style="margin:0 0 12px;color:#78350f;font-size:14px;">Payment is due on delivery. This receipt is not proof of payment.</p>
                 <p style="margin:0 0 12px;color:#78350f;font-size:13px;line-height:1.6;">
                   Pay in cash when your order arrives, or pay now via M-Pesa using either option below.
                   Please quote your receipt serial <strong>${serial}</strong> as the reference.
                 </p>
-                <table cellpadding="0" cellspacing="0" style="font-size:13px;color:#78350f;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;color:#78350f;table-layout:fixed;">
                   <tr>
-                    <td style="padding:4px 16px 4px 0;white-space:nowrap;">M-Pesa Till Number</td>
-                    <td style="padding:4px 0;font-weight:700;white-space:nowrap;">${COD_PAYMENT_DETAILS.mpesaTill}</td>
+                    <td style="padding:4px 0;">M-Pesa Till Number<br><strong>${COD_PAYMENT_DETAILS.mpesaTill}</strong></td>
                   </tr>
                   <tr>
-                    <td style="padding:4px 16px 4px 0;white-space:nowrap;">Paybill</td>
-                    <td style="padding:4px 0;font-weight:700;white-space:nowrap;">${COD_PAYMENT_DETAILS.paybill} &nbsp;·&nbsp; Account: ${COD_PAYMENT_DETAILS.paybillAccount}</td>
+                    <td style="padding:4px 0;">Paybill: <strong>${COD_PAYMENT_DETAILS.paybill}</strong><br>Account: <strong>${COD_PAYMENT_DETAILS.paybillAccount}</strong></td>
                   </tr>
                 </table>
                 <p style="margin:12px 0 0;color:#78350f;font-size:13px;line-height:1.6;">
@@ -530,7 +513,7 @@ export function buildOrderReceiptEmail(params: {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Your Ultra Clear Order #${orderId}</title>
+  <title>Your Ultra Clear Order #${esc(String(orderId))}</title>
   <style>
     @media only screen and (max-width: 620px) {
       .uc-outer { padding: 0 !important; }
@@ -546,11 +529,11 @@ export function buildOrderReceiptEmail(params: {
 <body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" class="uc-outer" style="background:#f9fafb;padding:32px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" class="uc-card" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">
+      <table width="100%" cellpadding="0" cellspacing="0" class="uc-card" style="background:#ffffff;border-radius:12px;max-width:600px;width:100%;table-layout:fixed;">
 
         <!-- Header -->
         <tr>
-          <td class="uc-hd" style="background:#0D4FA8;padding:28px 32px;">
+          <td class="uc-hd" style="background:#0D4FA8;padding:24px 16px;">
             <h1 style="margin:0;color:#ffffff;font-size:22px;">Ultra Clear Filters</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Certified clean water for every Kenyan</p>
           </td>
@@ -558,21 +541,21 @@ export function buildOrderReceiptEmail(params: {
 
         <!-- Body -->
         <tr>
-          <td class="uc-body" style="padding:32px;">
-            <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">Order Confirmed ✅</h2>
+          <td class="uc-body" style="padding:24px 16px;word-break:break-word;overflow-wrap:anywhere;font-size:14px;line-height:1.6;">
+            <h2 style="margin:0 0 8px;color:#111827;font-size:18px;">Order receipt</h2>
             <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">
-              Hi ${firstName}, thank you for your order! Here's your receipt.
+              Hi ${esc(firstName)}, thank you for your order! Here's your receipt.
             </p>
 
             <!-- Order meta -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;table-layout:fixed;">
               <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Order number</td>
-                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">#${orderId}</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;word-break:break-all;">#${esc(String(orderId))}</td>
               </tr>
               <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Receipt serial</td>
-                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;">${serial}</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;font-weight:bold;text-align:right;word-break:break-all;">${serial}</td>
               </tr>
               <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Order date</td>
@@ -580,37 +563,42 @@ export function buildOrderReceiptEmail(params: {
               </tr>
               <tr>
                 <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;">Payment</td>
-                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${payLabel}</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${esc(payLabel)}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;">Payment status</td>
+                <td style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${paymentState}</td>
               </tr>
               ${payRefRow}
               <tr>
-                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top;">Delivery to</td>
-                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;">${addrText}</td>
+                <td style="padding:6px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top;">${collection ? "Fulfillment" : "Delivery to"}</td>
+                <td class="uc-meta-right" style="padding:6px 0;color:#111827;font-size:13px;text-align:right;word-break:break-word;overflow-wrap:anywhere;">${esc(addrText)}</td>
               </tr>
             </table>
 
             <!-- Items table -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;table-layout:fixed;font-size:14px;">
               <thead>
                 <tr style="background:#f3f4f6;">
-                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;min-width:0;">ITEM</th>
-                  <th style="padding:10px 8px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap;width:36px;">QTY</th>
-                  <th style="padding:10px 12px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap;">TOTAL</th>
+                  <th style="padding:10px 8px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;width:45%;">ITEM</th>
+                  <th style="padding:10px 4px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;width:15%;">QTY</th>
+                  <th style="padding:10px 8px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;width:40%;">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 ${itemsHtml}
                 ${discountRow}
+                ${addr?.shippingAmount != null ? `<tr><td colspan="2" style="padding:8px 12px;">Shipping</td><td style="padding:8px 12px;text-align:right;">${esc(fmt(addr.shippingAmount))}</td></tr>` : ""}
                 <tr style="background:#f9fafb;">
                   <td colspan="2" style="padding:12px;font-weight:700;color:#111827;">Total</td>
-                  <td style="padding:12px;font-weight:700;color:#0D4FA8;text-align:right;font-size:16px;white-space:nowrap;">${fmt(total)}</td>
+                  <td style="padding:12px 8px;font-weight:700;color:#0D4FA8;text-align:right;font-size:16px;word-break:break-word;">${esc(fmt(total))}</td>
                 </tr>
               </tbody>
             </table>
 
             ${codHtml}
             <p style="margin:0 0 16px;color:#0D4FA8;font-size:14px;font-weight:600;background:#eff6ff;border-left:3px solid #0D4FA8;padding:12px 16px;border-radius:4px;">
-              📦 We'll notify you as soon as your order has shipped. Quote your receipt serial <strong>${serial}</strong> to track this order.
+              We'll notify you as soon as your order has shipped. Quote your receipt serial <strong>${serial}</strong> to track this order.
             </p>
             <p style="margin:0 0 24px;color:#6b7280;font-size:13px;line-height:1.6;">
               Questions about your order? Contact us at
@@ -622,10 +610,10 @@ export function buildOrderReceiptEmail(params: {
 
         <!-- Footer -->
         <tr>
-          <td class="uc-ft" style="background:#f3f4f6;padding:20px 32px;text-align:center;">
+          <td class="uc-ft" style="background:#f3f4f6;padding:20px 16px;text-align:center;">
             <p style="margin:0;color:#9ca3af;font-size:12px;">
               © 2026 UCFilters Ltd · Nairobi, Kenya ·
-              <a href="${storeUrl}" style="color:#6b7280;">ucfilters.co.ke</a>
+              <a href="${esc(storeUrl)}" style="color:#6b7280;">ucfilters.co.ke</a>
             </p>
           </td>
         </tr>
@@ -643,8 +631,10 @@ export function buildOrderReceiptEmail(params: {
     `Receipt serial: ${serial}`,
     `Order date: ${orderDate}`,
     `Payment: ${payLabel}`,
+    `Payment status: ${paymentState}`,
     ...(paymentReference ? [`${payRefLabel}: ${paymentReference}`] : []),
-    `Delivery to: ${addrText}`,
+    `${collection ? "Fulfillment" : "Delivery to"}: ${addrText}`,
+    ...(addr?.shippingAmount != null ? [`Shipping: ${fmt(addr.shippingAmount)}`] : []),
     "",
     "Items:",
     ...(lineItems.length === 0
@@ -663,6 +653,7 @@ export function buildOrderReceiptEmail(params: {
     ...(isCod
       ? [
           "How to pay — Cash on Delivery:",
+          "  Payment is due on delivery. This receipt is not proof of payment.",
           "  Pay in cash when your order arrives, or pay now via M-Pesa:",
           `  M-Pesa Till Number: ${COD_PAYMENT_DETAILS.mpesaTill}`,
           `  Paybill: ${COD_PAYMENT_DETAILS.paybill}  Account: ${COD_PAYMENT_DETAILS.paybillAccount}`,

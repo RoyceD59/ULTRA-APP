@@ -22,6 +22,7 @@ import { authLimiter } from "../lib/rate-limiters";
 import { logger } from "../lib/logger";
 import { recordAccountRegistration } from "../lib/account-records";
 import { sendViaResend } from "../lib/resend";
+import { reconcileAssignmentsForAccount } from "../lib/customer-assignments.js";
 
 const router: IRouter = Router();
 
@@ -209,6 +210,7 @@ router.post(
         emailVerified: dbUser.emailVerified,
         phoneVerified: dbUser.phoneVerified,
       };
+      void reconcileAssignmentsForAccount(dbUser.id);
       res.json({ token: issueToken(user), user });
       const subject = createdSocialAccount
         ? "Welcome to Ultra-Clear"

@@ -25,6 +25,7 @@ import {
   type UnsyncedRegistrationRecoveryInput, type UcCustomerSummary,
 } from "@workspace/api-client-react";
 import { API_ORIGIN } from "@/lib/api-base";
+import { CustomerAssignmentsSection } from "@/components/customer-assignments";
 
 type RecordRow = {
   id?: number | null; firstName?: string; lastName?: string; email: string; phone: string;
@@ -218,6 +219,7 @@ export default function AdminUnsyncedRegistrationsPage() {
           </TableRow>;
         })}
       </TableBody></Table><div className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">{records.length} registration{records.length === 1 ? "" : "s"}</div></div>}
+      <CustomerAssignmentsSection />
     </div>
   );
 }

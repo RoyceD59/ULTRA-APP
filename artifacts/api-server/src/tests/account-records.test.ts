@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { randomInt, randomUUID } from "node:crypto";
 import bcryptjs from "bcryptjs";
+import request from "supertest";
 
 const dataDir = await mkdtemp(join(tmpdir(), "uc-account-records-"));
 process.env.UC_ACCOUNTS_DATA_DIR = dataDir;
@@ -16,6 +18,7 @@ const {
 } = await import("../lib/account-records.js");
 const { db, ucUsersTable } = await import("@workspace/db");
 const { eq } = await import("drizzle-orm");
+const { default: app } = await import("../app.js");
 
 const now = () => new Date().toISOString();
 const ledger = () => join(dataDir, "accounts.jsonl");
@@ -30,6 +33,66 @@ async function lines() {
   return (await readFile(ledger(), "utf8")).split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 after(async () => rm(dataDir, { recursive: true, force: true }));
+
+describe("registration conflict recovery responses", () => {
+  async function withActiveAccount(
+    check: (account: { email: string; phone: string }) => Promise<void>,
+  ) {
+    const email = `registration-conflict-${randomUUID()}@test.internal`;
+    const phone = `+2547${String(randomInt(100_000_000)).padStart(8, "0")}`;
+    const [account] = await db.insert(ucUsersTable).values({
+      email,
+      phone,
+      passwordHash: await bcryptjs.hash("OriginalPassword1!", 4),
+      firstName: "Conflict",
+      lastName: "Test",
+      deletedAt: null,
+    }).returning({ id: ucUsersTable.id });
+    try {
+      await check({ email, phone });
+    } finally {
+      await db.delete(ucUsersTable).where(eq(ucUsersTable.id, account!.id));
+    }
+  }
+
+  it("returns 409 with the duplicate-email message and forgot-password hint for an active email", async () => {
+    await withActiveAccount(async ({ email, phone }) => {
+      const response = await request(app).post("/api/uc/auth/register").send({
+        email,
+        phone: `${phone.slice(0, -1)}${(Number(phone.at(-1)) + 1) % 10}`,
+        password: "DifferentPassword1!",
+        firstName: "Duplicate",
+        address: "Test building, Nairobi",
+      });
+
+      assert.equal(response.status, 409);
+      assert.equal(
+        response.body.error,
+        "An account with this email already exists. If you recently tried to register and hit an error, your account was created — please use 'Forgot password' to set a new password and log in.",
+      );
+      assert.equal(response.body.hint, "forgot_password");
+    });
+  });
+
+  it("returns 409 for a phone-only conflict without a forgot-password hint", async () => {
+    await withActiveAccount(async ({ phone }) => {
+      const response = await request(app).post("/api/uc/auth/register").send({
+        email: `phone-conflict-${randomUUID()}@test.internal`,
+        phone,
+        password: "DifferentPassword1!",
+        firstName: "Duplicate",
+        address: "Test building, Nairobi",
+      });
+
+      assert.equal(response.status, 409);
+      assert.equal(
+        response.body.error,
+        "An active account already uses this phone number. Sign in to that account or use a different number.",
+      );
+      assert.equal(Object.hasOwn(response.body, "hint"), false);
+    });
+  });
+});
 
 describe("folder-only registration recovery", () => {
   it("lists only records needing recovery, including orphaned sync markers", async () => {

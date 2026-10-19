@@ -1,0 +1,1988 @@
+[
+  {
+    "slow": false,
+    "run": 0,
+    "homeUsableMs": 1126,
+    "homeProductsMs": 1131,
+    "shopMs": 859,
+    "blogMs": 851,
+    "warmHomeMs": 62,
+    "requests": 23,
+    "startupJsWork": {
+      "ScriptDuration": 0.243883,
+      "TaskDuration": 0.475159
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "raw": 2657350,
+        "gzip": 588367,
+        "brotli": 509032
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "raw": 1092359,
+        "gzip": 287605,
+        "brotli": 247438
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "raw": 8122,
+        "gzip": 3315,
+        "brotli": 3100
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "raw": 23001,
+        "gzip": 8442,
+        "brotli": 7940
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "raw": 26279,
+        "gzip": 9002,
+        "brotli": 8414
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.450242,
+      "TaskDuration": 0.839633,
+      "JSHeapUsedSize": 27668972
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 35,
+        "bytes": 4262,
+        "bodyBytes": 3962
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "duration": 64,
+        "bytes": 2657650,
+        "bodyBytes": 2657350
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "duration": 63,
+        "bytes": 1092659,
+        "bodyBytes": 1092359
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "duration": 13,
+        "bytes": 8422,
+        "bodyBytes": 8122
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "duration": 14,
+        "bytes": 23301,
+        "bodyBytes": 23001
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "duration": 4,
+        "bytes": 26579,
+        "bodyBytes": 26279
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 8,
+        "bytes": 390024,
+        "bodyBytes": 389724
+      },
+      {
+        "name": "impact",
+        "duration": 9,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "products?",
+        "duration": 9,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "promotions",
+        "duration": 9,
+        "bytes": 302,
+        "bodyBytes": 2
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 8,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 12,
+        "bytes": 72759,
+        "bodyBytes": 72459
+      },
+      {
+        "name": "products?",
+        "duration": 7,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 15,
+        "bytes": 117503,
+        "bodyBytes": 117203
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 8,
+        "bytes": 5613,
+        "bodyBytes": 5313
+      },
+      {
+        "name": "products-38d4874740257974b2fb8d77a7cd6486.js",
+        "duration": 14,
+        "bytes": 22012,
+        "bodyBytes": 21712
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 5,
+        "bytes": 17508,
+        "bodyBytes": 17208
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 8,
+        "bytes": 36011,
+        "bodyBytes": 35711
+      },
+      {
+        "name": "blog-db750926f9d806e7c1685cabd22614c7.js",
+        "duration": 15,
+        "bytes": 14820,
+        "bodyBytes": 14520
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 4,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 3,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 5,
+        "bytes": 67645,
+        "bodyBytes": 67345
+      },
+      {
+        "name": "impact",
+        "duration": 10,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 4,
+        "bytes": 0,
+        "bodyBytes": 0
+      }
+    ],
+    "typography": {
+      "home": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "shop": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "blog": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Read article",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "12px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "slow": false,
+    "run": 1,
+    "homeUsableMs": 1180,
+    "homeProductsMs": 1185,
+    "shopMs": 843,
+    "blogMs": 860,
+    "warmHomeMs": 74,
+    "requests": 23,
+    "startupJsWork": {
+      "ScriptDuration": 0.241658,
+      "TaskDuration": 0.565327
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "raw": 2657350,
+        "gzip": 588367,
+        "brotli": 509032
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "raw": 1092359,
+        "gzip": 287605,
+        "brotli": 247438
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "raw": 8122,
+        "gzip": 3315,
+        "brotli": 3100
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "raw": 23001,
+        "gzip": 8442,
+        "brotli": 7940
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "raw": 26279,
+        "gzip": 9002,
+        "brotli": 8414
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.498149,
+      "TaskDuration": 0.997897,
+      "JSHeapUsedSize": 27275344
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 8,
+        "bytes": 4262,
+        "bodyBytes": 3962
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "duration": 36,
+        "bytes": 2657650,
+        "bodyBytes": 2657350
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "duration": 33,
+        "bytes": 1092659,
+        "bodyBytes": 1092359
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "duration": 8,
+        "bytes": 8422,
+        "bodyBytes": 8122
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "duration": 9,
+        "bytes": 23301,
+        "bodyBytes": 23001
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "duration": 7,
+        "bytes": 26579,
+        "bodyBytes": 26279
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 15,
+        "bytes": 390024,
+        "bodyBytes": 389724
+      },
+      {
+        "name": "impact",
+        "duration": 8,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "products?",
+        "duration": 8,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "promotions",
+        "duration": 8,
+        "bytes": 302,
+        "bodyBytes": 2
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 8,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 10,
+        "bytes": 72759,
+        "bodyBytes": 72459
+      },
+      {
+        "name": "products?",
+        "duration": 4,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 9,
+        "bytes": 117503,
+        "bodyBytes": 117203
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 18,
+        "bytes": 5613,
+        "bodyBytes": 5313
+      },
+      {
+        "name": "products-38d4874740257974b2fb8d77a7cd6486.js",
+        "duration": 13,
+        "bytes": 22012,
+        "bodyBytes": 21712
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 5,
+        "bytes": 17508,
+        "bodyBytes": 17208
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 12,
+        "bytes": 36011,
+        "bodyBytes": 35711
+      },
+      {
+        "name": "blog-db750926f9d806e7c1685cabd22614c7.js",
+        "duration": 14,
+        "bytes": 14820,
+        "bodyBytes": 14520
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 4,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 13,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 20,
+        "bytes": 67645,
+        "bodyBytes": 67345
+      },
+      {
+        "name": "impact",
+        "duration": 13,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 5,
+        "bytes": 0,
+        "bodyBytes": 0
+      }
+    ],
+    "typography": {
+      "home": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "shop": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "blog": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Read article",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "12px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "slow": false,
+    "run": 2,
+    "homeUsableMs": 691,
+    "homeProductsMs": 825,
+    "shopMs": 851,
+    "blogMs": 851,
+    "warmHomeMs": 52,
+    "requests": 23,
+    "startupJsWork": {
+      "ScriptDuration": 0.22584,
+      "TaskDuration": 0.430365
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "raw": 2657350,
+        "gzip": 588367,
+        "brotli": 509032
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "raw": 1092359,
+        "gzip": 287605,
+        "brotli": 247438
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "raw": 8122,
+        "gzip": 3315,
+        "brotli": 3100
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "raw": 23001,
+        "gzip": 8442,
+        "brotli": 7940
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "raw": 26279,
+        "gzip": 9002,
+        "brotli": 8414
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.564056,
+      "TaskDuration": 0.959681,
+      "JSHeapUsedSize": 23411356
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 16,
+        "bytes": 4262,
+        "bodyBytes": 3962
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "duration": 32,
+        "bytes": 2657650,
+        "bodyBytes": 2657350
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "duration": 25,
+        "bytes": 1092659,
+        "bodyBytes": 1092359
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "duration": 12,
+        "bytes": 8422,
+        "bodyBytes": 8122
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "duration": 17,
+        "bytes": 23301,
+        "bodyBytes": 23001
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 6,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "duration": 9,
+        "bytes": 26579,
+        "bodyBytes": 26279
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 10,
+        "bytes": 390024,
+        "bodyBytes": 389724
+      },
+      {
+        "name": "impact",
+        "duration": 9,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "products?",
+        "duration": 9,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "promotions",
+        "duration": 8,
+        "bytes": 302,
+        "bodyBytes": 2
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 8,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 9,
+        "bytes": 72759,
+        "bodyBytes": 72459
+      },
+      {
+        "name": "products?",
+        "duration": 4,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 20,
+        "bytes": 117503,
+        "bodyBytes": 117203
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 15,
+        "bytes": 5613,
+        "bodyBytes": 5313
+      },
+      {
+        "name": "products-38d4874740257974b2fb8d77a7cd6486.js",
+        "duration": 20,
+        "bytes": 22012,
+        "bodyBytes": 21712
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 5,
+        "bytes": 17508,
+        "bodyBytes": 17208
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 8,
+        "bytes": 36011,
+        "bodyBytes": 35711
+      },
+      {
+        "name": "blog-db750926f9d806e7c1685cabd22614c7.js",
+        "duration": 17,
+        "bytes": 14820,
+        "bodyBytes": 14520
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 3,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 8,
+        "bytes": 67645,
+        "bodyBytes": 67345
+      },
+      {
+        "name": "impact",
+        "duration": 9,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0,
+        "bodyBytes": 0
+      }
+    ],
+    "typography": {
+      "home": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "shop": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "blog": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Read article",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "12px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 0,
+    "homeUsableMs": 607,
+    "homeProductsMs": 2429,
+    "shopMs": 377,
+    "blogMs": 2369,
+    "warmHomeMs": 62,
+    "requests": 23,
+    "startupJsWork": {
+      "ScriptDuration": 0.19019,
+      "TaskDuration": 0.380891
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "raw": 2657350,
+        "gzip": 588367,
+        "brotli": 509032
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "raw": 1092359,
+        "gzip": 287605,
+        "brotli": 247438
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "raw": 8122,
+        "gzip": 3315,
+        "brotli": 3100
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "raw": 23001,
+        "gzip": 8442,
+        "brotli": 7940
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "raw": 26279,
+        "gzip": 9002,
+        "brotli": 8414
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.488456,
+      "TaskDuration": 0.938355,
+      "JSHeapUsedSize": 17569044
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 12,
+        "bytes": 4262,
+        "bodyBytes": 3962
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "duration": 48,
+        "bytes": 2657650,
+        "bodyBytes": 2657350
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "duration": 46,
+        "bytes": 1092659,
+        "bodyBytes": 1092359
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "duration": 12,
+        "bytes": 8422,
+        "bodyBytes": 8122
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "duration": 17,
+        "bytes": 23301,
+        "bodyBytes": 23001
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 6,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "duration": 5,
+        "bytes": 26579,
+        "bodyBytes": 26279
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2016,
+        "bytes": 390024,
+        "bodyBytes": 389724
+      },
+      {
+        "name": "impact",
+        "duration": 1810,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "products?",
+        "duration": 1810,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "promotions",
+        "duration": 1809,
+        "bytes": 302,
+        "bodyBytes": 2
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1809,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 11,
+        "bytes": 72759,
+        "bodyBytes": 72459
+      },
+      {
+        "name": "products?",
+        "duration": 1804,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 15,
+        "bytes": 117503,
+        "bodyBytes": 117203
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 7,
+        "bytes": 5613,
+        "bodyBytes": 5313
+      },
+      {
+        "name": "products-38d4874740257974b2fb8d77a7cd6486.js",
+        "duration": 22,
+        "bytes": 22012,
+        "bodyBytes": 21712
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 6,
+        "bytes": 17508,
+        "bodyBytes": 17208
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 7,
+        "bytes": 36011,
+        "bodyBytes": 35711
+      },
+      {
+        "name": "blog-db750926f9d806e7c1685cabd22614c7.js",
+        "duration": 10,
+        "bytes": 14820,
+        "bodyBytes": 14520
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1808,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 8,
+        "bytes": 67645,
+        "bodyBytes": 67345
+      },
+      {
+        "name": "impact",
+        "duration": 1807,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 4,
+        "bytes": 0,
+        "bodyBytes": 0
+      }
+    ],
+    "typography": {
+      "home": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "shop": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "blog": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Read article",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "12px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 1,
+    "homeUsableMs": 1066,
+    "homeProductsMs": 2858,
+    "shopMs": 838,
+    "blogMs": 2351,
+    "warmHomeMs": 63,
+    "requests": 23,
+    "startupJsWork": {
+      "ScriptDuration": 0.201022,
+      "TaskDuration": 0.385393
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "raw": 2657350,
+        "gzip": 588367,
+        "brotli": 509032
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "raw": 1092359,
+        "gzip": 287605,
+        "brotli": 247438
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "raw": 8122,
+        "gzip": 3315,
+        "brotli": 3100
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "raw": 23001,
+        "gzip": 8442,
+        "brotli": 7940
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "raw": 26279,
+        "gzip": 9002,
+        "brotli": 8414
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.506736,
+      "TaskDuration": 0.941526,
+      "JSHeapUsedSize": 19649860
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 12,
+        "bytes": 4262,
+        "bodyBytes": 3962
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "duration": 35,
+        "bytes": 2657650,
+        "bodyBytes": 2657350
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "duration": 34,
+        "bytes": 1092659,
+        "bodyBytes": 1092359
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "duration": 9,
+        "bytes": 8422,
+        "bodyBytes": 8122
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "duration": 10,
+        "bytes": 23301,
+        "bodyBytes": 23001
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "duration": 4,
+        "bytes": 26579,
+        "bodyBytes": 26279
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2009,
+        "bytes": 390024,
+        "bodyBytes": 389724
+      },
+      {
+        "name": "impact",
+        "duration": 1810,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "products?",
+        "duration": 1809,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "promotions",
+        "duration": 1808,
+        "bytes": 302,
+        "bodyBytes": 2
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1808,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 9,
+        "bytes": 72759,
+        "bodyBytes": 72459
+      },
+      {
+        "name": "products?",
+        "duration": 1806,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 5,
+        "bytes": 117503,
+        "bodyBytes": 117203
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 25,
+        "bytes": 5613,
+        "bodyBytes": 5313
+      },
+      {
+        "name": "products-38d4874740257974b2fb8d77a7cd6486.js",
+        "duration": 12,
+        "bytes": 22012,
+        "bodyBytes": 21712
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 2,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 7,
+        "bytes": 17508,
+        "bodyBytes": 17208
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 5,
+        "bytes": 36011,
+        "bodyBytes": 35711
+      },
+      {
+        "name": "blog-db750926f9d806e7c1685cabd22614c7.js",
+        "duration": 12,
+        "bytes": 14820,
+        "bodyBytes": 14520
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1804,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 7,
+        "bytes": 67645,
+        "bodyBytes": 67345
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 3,
+        "bytes": 0,
+        "bodyBytes": 0
+      }
+    ],
+    "typography": {
+      "home": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "shop": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "blog": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Read article",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "12px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "slow": true,
+    "run": 2,
+    "homeUsableMs": 1323,
+    "homeProductsMs": 3119,
+    "shopMs": 858,
+    "blogMs": 2370,
+    "warmHomeMs": 86,
+    "requests": 24,
+    "startupJsWork": {
+      "ScriptDuration": 0.284071,
+      "TaskDuration": 0.73166
+    },
+    "initialScripts": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "raw": 3962,
+        "gzip": 1708,
+        "brotli": 1624
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "raw": 2657350,
+        "gzip": 588367,
+        "brotli": 509032
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "raw": 1092359,
+        "gzip": 287605,
+        "brotli": 247438
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "raw": 8122,
+        "gzip": 3315,
+        "brotli": 3100
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "raw": 23001,
+        "gzip": 8442,
+        "brotli": 7940
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "raw": 26279,
+        "gzip": 9002,
+        "brotli": 8414
+      }
+    ],
+    "jsWork": {
+      "ScriptDuration": 0.654599,
+      "TaskDuration": 1.422953,
+      "JSHeapUsedSize": 17550812
+    },
+    "resources": [
+      {
+        "name": "__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js",
+        "duration": 13,
+        "bytes": 4262,
+        "bodyBytes": 3962
+      },
+      {
+        "name": "__common-7154f15b47ba4c6fffdd4579ce1315d1.js",
+        "duration": 41,
+        "bytes": 2657650,
+        "bodyBytes": 2657350
+      },
+      {
+        "name": "entry-33f876c34e74fc523f378334017b7cf6.js",
+        "duration": 24,
+        "bytes": 1092659,
+        "bodyBytes": 1092359
+      },
+      {
+        "name": "_layout-f5a852c71bcb425da7a1a762aeb28a0a.js",
+        "duration": 19,
+        "bytes": 8422,
+        "bodyBytes": 8122
+      },
+      {
+        "name": "_layout-a93a7c7b572edaed368630f21938126c.js",
+        "duration": 54,
+        "bytes": 23301,
+        "bodyBytes": 23001
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 7,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "index-5cf8a7336092f10c07ec00f72a70b48d.js",
+        "duration": 18,
+        "bytes": 26579,
+        "bodyBytes": 26279
+      },
+      {
+        "name": "Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf",
+        "duration": 2013,
+        "bytes": 390024,
+        "bodyBytes": 389724
+      },
+      {
+        "name": "impact",
+        "duration": 1808,
+        "bytes": 334,
+        "bodyBytes": 34
+      },
+      {
+        "name": "products?",
+        "duration": 1808,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "promotions",
+        "duration": 1808,
+        "bytes": 302,
+        "bodyBytes": 2
+      },
+      {
+        "name": "blog?limit=3",
+        "duration": 1809,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "products?",
+        "duration": 1809,
+        "bytes": 485,
+        "bodyBytes": 185
+      },
+      {
+        "name": "home-water.3934d4b960d5a338bbd12330928a9cca.jpg",
+        "duration": 10,
+        "bytes": 72759,
+        "bodyBytes": 72459
+      },
+      {
+        "name": "water-still.25fb8fa34a3d5c0bbc26e14c559f4173.png",
+        "duration": 9,
+        "bytes": 1674,
+        "bodyBytes": 1374
+      },
+      {
+        "name": "water-test.91666ed12431f176336ea37be8df1a51.png",
+        "duration": 9,
+        "bytes": 117503,
+        "bodyBytes": 117203
+      },
+      {
+        "name": "water.ad17dc0ee6e545a5b74c22918cef2f8a.gif",
+        "duration": 72,
+        "bytes": 5613,
+        "bodyBytes": 5313
+      },
+      {
+        "name": "products-38d4874740257974b2fb8d77a7cd6486.js",
+        "duration": 22,
+        "bytes": 22012,
+        "bodyBytes": 21712
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 1,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "shop-filter.030d06cfe196c97874c596a85c86a7e9.jpg",
+        "duration": 10,
+        "bytes": 17508,
+        "bodyBytes": 17208
+      },
+      {
+        "name": "logo-lockup-white.3b1b1d34743741d2a32bfdfadd096859.png",
+        "duration": 7,
+        "bytes": 36011,
+        "bodyBytes": 35711
+      },
+      {
+        "name": "blog-db750926f9d806e7c1685cabd22614c7.js",
+        "duration": 36,
+        "bytes": 14820,
+        "bodyBytes": 14520
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 4,
+        "bytes": 0,
+        "bodyBytes": 0
+      },
+      {
+        "name": "blog?limit=12",
+        "duration": 1804,
+        "bytes": 473,
+        "bodyBytes": 173
+      },
+      {
+        "name": "blog-water.e0c72a4b8665ce6bd60304eb1782df3d.jpg",
+        "duration": 5,
+        "bytes": 67645,
+        "bodyBytes": 67345
+      },
+      {
+        "name": "favicon.ico",
+        "duration": 15,
+        "bytes": 0,
+        "bodyBytes": 0
+      }
+    ],
+    "typography": {
+      "home": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "shop": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        }
+      ],
+      "blog": [
+        {
+          "text": "Your water, your health",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "400",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Benchmark filter",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "13px"
+        },
+        {
+          "text": "Read article",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "12px"
+        },
+        {
+          "text": "Home",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Products",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "500",
+          "size": "11px"
+        },
+        {
+          "text": "Blog",
+          "family": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+          "weight": "700",
+          "size": "11px"
+        }
+      ]
+    },
+    "errors": []
+  }
+]

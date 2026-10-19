@@ -85,6 +85,7 @@ describe("Phone refresh — profile update flows through to ticket contact", () 
         firstName:    "Phone",
         lastName:     "Test",
         phone:        INITIAL_PHONE,
+        address:      "Test building, Nairobi",
         isAdmin:      false,
       })
       .returning({ id: ucUsersTable.id });
@@ -215,7 +216,7 @@ describe("Phone refresh — profile update flows through to ticket contact", () 
     assert.equal(status, 400, "A non-E.164 phone must be rejected with 400");
   });
 
-  it("PATCH /api/uc/customer/profile allows clearing the phone to empty string", async () => {
+  it("PATCH /api/uc/customer/profile rejects clearing the required phone and preserves the saved number", async () => {
     const { status, body } = await apiFetch("/api/uc/customer/profile", {
       method:  "PATCH",
       headers: {
@@ -224,9 +225,9 @@ describe("Phone refresh — profile update flows through to ticket contact", () 
       },
       body: JSON.stringify({ phone: "" }),
     });
-    assert.equal(status, 200, `Expected 200, got ${status}: ${JSON.stringify(body)}`);
-    const b = body as Record<string, unknown>;
-    assert.equal(b["phone"], "", "Phone can be cleared back to empty");
+    assert.equal(status, 400, `Expected 400, got ${status}: ${JSON.stringify(body)}`);
+    const row = await db.query.ucUsersTable.findFirst({ where: eq(ucUsersTable.id, testUserId) });
+    assert.equal(row?.phone, ADDED_PHONE);
   });
 });
 

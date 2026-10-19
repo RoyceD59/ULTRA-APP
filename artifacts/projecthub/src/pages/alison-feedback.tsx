@@ -15,7 +15,8 @@
  *  - Expand / collapse full answer text per entry
  *  - Auto-refresh every 60 s; manual refresh button
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { HighlightedText, createHighlightPattern } from '@/components/highlighted-text';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -242,41 +243,9 @@ function absTime(ts: string): string {
 
 // ── Entry card ────────────────────────────────────────────────────────────────
 
-/**
- * Splits `text` on any of the provided `keywords` (case-insensitive) and
- * returns an array of React nodes where every match is wrapped in a
- * highlighted <mark> span.  Accepts multiple terms so both the keyword-chip
- * filter and the free-text search box can highlight simultaneously.
- */
-function HighlightedText({ text, keywords }: { text: string; keywords: string[] }) {
-  const active = keywords.filter(Boolean);
-  if (!active.length || !text) return <>{text}</>;
-  const pattern = active
-    .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|');
-  const regex = new RegExp(`(${pattern})`, 'gi');
-  const parts = text.split(regex);
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <mark
-            key={i}
-            className="bg-amber-200/80 text-amber-900 font-semibold rounded-sm px-0.5 not-italic"
-          >
-            {part}
-          </mark>
-        ) : (
-          part
-        ),
-      )}
-    </>
-  );
-}
-
 function EntryCard({
-  entry, token, highlights,
-}: { entry: FeedbackEntry; token: string; highlights?: string[] }) {
+  entry, token, highlightPattern,
+}: { entry: FeedbackEntry; token: string; highlightPattern: RegExp | null }) {
   const [expanded, setExpanded] = useState(false);
   const isDown = entry.rating === 'down';
 
@@ -341,9 +310,7 @@ function EntryCard({
           }
           <p className="text-sm font-medium text-foreground leading-snug">
             {entry.question
-              ? (highlights && highlights.length > 0)
-                ? <HighlightedText text={entry.question} keywords={highlights} />
-                : entry.question
+              ? <HighlightedText text={entry.question} pattern={highlightPattern} />
               : <em className="text-muted-foreground font-normal">No question recorded</em>
             }
           </p>
@@ -366,10 +333,12 @@ function EntryCard({
 
       <CardContent className="pt-0 space-y-2">
         <div className="bg-muted/40 rounded-md p-3 text-sm text-muted-foreground leading-relaxed">
-          {expanded
-            ? entry.answer
-            : `${entry.answer.slice(0, 220)}${entry.answer.length > 220 ? '…' : ''}`
-          }
+          <HighlightedText
+            text={expanded
+              ? entry.answer
+              : `${entry.answer.slice(0, 220)}${entry.answer.length > 220 ? '…' : ''}`}
+            pattern={highlightPattern}
+          />
         </div>
         {entry.answer.length > 220 && (
           <button
@@ -557,6 +526,10 @@ export default function AlisonFeedbackPage() {
 
   // Client-side free-text search (AND with keywordFilter chip)
   const normalizedSearch = searchQuery.trim().toLowerCase();
+  const highlightPattern = useMemo(
+    () => createHighlightPattern([keywordFilter, normalizedSearch]),
+    [keywordFilter, normalizedSearch],
+  );
   const shown = normalizedSearch
     ? byTab.filter(e =>
         e.question.toLowerCase().includes(normalizedSearch) ||
@@ -784,7 +757,7 @@ export default function AlisonFeedbackPage() {
               key={entry.id != null ? `fb-${entry.id}` : `${entry.ts}-${i}`}
               entry={entry}
               token={token ?? ''}
-              highlights={[keywordFilter, normalizedSearch].filter(Boolean) as string[]}
+              highlightPattern={highlightPattern}
             />
           ))}
         </div>

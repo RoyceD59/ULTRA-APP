@@ -55,7 +55,7 @@ router.post("/whatsapp/connect", requireTeamAuth, async (_req, res): Promise<voi
     res.status(503).json({
       error: {
         code: "WHATSAPP_INIT_FAILED",
-        message: "WhatsApp could not start. Check the server configuration and retry.",
+        message: getWhatsAppStatus().error?.message ?? "WhatsApp could not start. Check the server configuration and retry.",
       },
     });
   }

@@ -10,7 +10,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import { useRouter } from 'expo-router';
 
@@ -22,6 +22,8 @@ interface Props {
   appearDelayMs?: number;
   /** Distance from the bottom edge (above footers/buttons). Default 96. */
   bottomOffset?: number;
+  /** Inline support stays in document flow instead of covering form controls. */
+  placement?: 'floating' | 'inline';
 }
 
 export default function AlisonBubble({
@@ -29,6 +31,7 @@ export default function AlisonBubble({
   collapseAfterMs = 2000,
   appearDelayMs = 0,
   bottomOffset = 96,
+  placement = 'floating',
 }: Props) {
   const colors = useColors();
   const router = useRouter();
@@ -60,7 +63,11 @@ export default function AlisonBubble({
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={[styles.wrap, { bottom: bottomOffset, opacity: fade }]}
+      style={[
+        placement === 'inline' ? styles.inlineWrap : styles.wrap,
+        placement === 'floating' ? { bottom: bottomOffset } : null,
+        { opacity: fade },
+      ]}
     >
       {expanded && (
         <TouchableOpacity
@@ -86,6 +93,10 @@ export default function AlisonBubble({
 }
 
 const styles = StyleSheet.create({
+  inlineWrap: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   wrap: {
     position: 'absolute',
     right: 16,

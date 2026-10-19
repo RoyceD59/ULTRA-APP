@@ -10,8 +10,17 @@ export interface InventoryProduct {
   id: number;
   name: string;
   sku: string;
-  stockQuantity: number;
+  /** @nullable */
+  stockQuantity: number | null;
   stockStatus: string;
+  revision?: number;
+  manageStock?: boolean;
+  reservedQuantity?: number;
+  /** @nullable */
+  availableQuantity?: number | null;
+  recordCode?: string;
+  /** @nullable */
+  parentId?: number | null;
   /** @nullable */
   permalink?: string | null;
   syncedAt: Date;

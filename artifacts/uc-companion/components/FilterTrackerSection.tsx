@@ -15,21 +15,25 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
-  Platform, ActivityIndicator, TextInput, KeyboardAvoidingView,
+  Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, AppState,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFilterProducts } from '@/hooks/useFilterProducts';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { commitPurchaseBackedRegistration } from '@/lib/filterRegistrationCommit';
-import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem } from '@/hooks/useApi';
+import { useApi, ApiError, type RegisterPurchaseResult, type RegisterPurchaseItem, type PersonalImpact, type OfflinePurchaseItem } from '@/hooks/useApi';
+import FilterLifeGauge from '@/components/FilterLifeGauge';
+import { calculateRemainingLife, resolveCapacityCycle } from '@/lib/filterRemainingLife';
 import { useAuth } from '@/context/AuthContext';
+import { customerQueryKeys } from '@/lib/customerQueryKeys';
 import ReminderOptInSheet, { wasReminderOptInSeen } from '@/components/ReminderOptInSheet';
 import {
   FilterActivation,
+  getFilterActivation,
   scheduleAllFilterNotifications,
   clearFilterActivation,
   getNotificationPermissionStatus,
@@ -48,36 +52,18 @@ import { DAY_OFFSETS, closestDayOffset } from '@/hooks/filterNudge';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
+  unified?: boolean;
   activation:    FilterActivation | null;
   onActivationChange: (a: FilterActivation | null) => void;
   /** Receipt registration also creates a server-side capacity-tracked filter. */
   onRegistrationCommitted?: () => void;
+  impact?: PersonalImpact;
+  usageLoading?: boolean;
+  usageUnavailable?: boolean;
+  onUsageRefresh?: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function daysRemainingRated(activation: FilterActivation): number {
-  const elapsed = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-  return activation.lifespanDays - elapsed;
-}
-
-function daysRemainingEffective(activation: FilterActivation): number {
-  const elapsed  = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-  return effectiveLifespanDays(activation) - elapsed;
-}
-
-function progressPercent(activation: FilterActivation): number {
-  const elapsed   = Math.floor((Date.now() - new Date(activation.activatedAt).getTime()) / 86_400_000);
-  const lifespan  = effectiveLifespanDays(activation);
-  return Math.min(100, Math.max(0, Math.round((elapsed / lifespan) * 100)));
-}
-
-function statusColor(daysLeft: number, primary: string, warning: string, destructive: string): string {
-  if (daysLeft <= 0)  return destructive;
-  if (daysLeft <= 21) return destructive;
-  if (daysLeft <= 45) return warning;
-  return primary;
-}
-
 const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; icon: string }> = {
   good:    { label: 'Performing well',    color: '#22C55E', icon: 'checkmark-circle' },
   clean:   { label: 'Clean recommended',  color: '#F59E0B', icon: 'construct'        },
@@ -85,15 +71,34 @@ const PERF_BADGE: Record<PerfRecommendation, { label: string; color: string; ico
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function FilterTrackerSection({ activation, onActivationChange, onRegistrationCommitted }: Props) {
+export default function FilterTrackerSection({ activation, onActivationChange, onRegistrationCommitted,
+  impact, usageLoading = false, usageUnavailable = false, onUsageRefresh, unified = false }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { token, user } = useAuth();
+  const [now, setNow] = useState(Date.now);
+  useFocusEffect(useCallback(() => {
+    setNow(Date.now());
+    onUsageRefresh?.();
+  }, [onUsageRefresh]));
+  useEffect(() => {
+    // Only display time and GET refresh: never schedule, cancel or sync reminders.
+    const refresh = () => { setNow(Date.now()); onUsageRefresh?.(); };
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    if (Platform.OS === 'web') document.addEventListener('visibilitychange', visible);
+    return () => {
+      clearInterval(timer); sub.remove();
+      if (Platform.OS === 'web') document.removeEventListener('visibilitychange', visible);
+    };
+  }, [onUsageRefresh]);
   const [showRegisterModal,   setShowRegisterModal]   = useState(false);
   const [showPerfModal,       setShowPerfModal]       = useState(false);
   const [toastMessage,        setToastMessage]        = useState('');
   const [toastVisible,        setToastVisible]        = useState(false);
-  const [zeroLifespanNotice,  setZeroLifespanNotice]  = useState(false);
+  const [zeroLifespanNotice, setZeroLifespanNotice] = useState<{ userId: number; active: boolean } | null>(null);
+  const userId = user?.id;
   // Pending reminder opt-in prompt, set after a successful registration for
   // signed-in users who haven't been shown the prompt for this activation yet.
   const [reminderOptIn, setReminderOptIn] = useState<{ productId: number; activatedAt: string } | null>(null);
@@ -102,34 +107,47 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
   // share the same data without triggering two independent API calls.
   const { products: filterProducts, loading: productsLoading, source: productsSource } = useFilterProducts();
 
-  // ── Zero-lifespan notice: load on mount and whenever activation changes ────────
+  // ── Zero-lifespan notice: reload when the account or activation changes ────────
   useEffect(() => {
-    if (!activation) {
-      setZeroLifespanNotice(false);
+    let cancelled = false;
+    setZeroLifespanNotice(null);
+    if (!activation || userId == null) {
       return;
     }
-    getZeroLifespanNotice().then(setZeroLifespanNotice);
-  }, [activation]);
+    getZeroLifespanNotice(userId).then(active => {
+      if (!cancelled) setZeroLifespanNotice({ userId, active });
+    });
+    return () => { cancelled = true; };
+  }, [activation, userId]);
 
   // ── Catalogue lifespan sync ──────────────────────────────────────────────────
   // Runs only when the product list came directly from the live API ('live').
   // Cache and fallback data must never overwrite a stored activation — they may
   // themselves be stale and would corrupt the reminder schedule offline.
-  const lastSyncedProductsRef = useRef<typeof filterProducts | null>(null);
+  const lastSyncedProductsRef = useRef<{ products: typeof filterProducts; userId: number } | null>(null);
+  const onActivationChangeRef = useRef(onActivationChange);
+  onActivationChangeRef.current = onActivationChange;
   useEffect(() => {
     if (productsSource !== 'live') return;  // offline/cache/fallback — hard no-op
     if (!activation)               return;  // nothing registered — no sync needed
-    if (filterProducts === lastSyncedProductsRef.current) return; // same reference, skip
-    lastSyncedProductsRef.current = filterProducts;
+    if (userId == null) return;
+    if (filterProducts === lastSyncedProductsRef.current?.products
+      && userId === lastSyncedProductsRef.current.userId) return; // same account and reference, skip
+    const syncIdentity = { products: filterProducts, userId };
+    lastSyncedProductsRef.current = syncIdentity;
+    let cancelled = false;
 
     const oldLifespan = activation.lifespanDays;
     const oldName     = activation.productName;
-    syncActivationWithCatalogue(filterProducts, user!.id).then(updated => {
+    syncActivationWithCatalogue(filterProducts, userId).then(updated => {
+      if (cancelled) return;
       // Refresh the notice flag regardless of whether the lifespan changed —
       // the sync may have set or cleared it based on the catalogue data.
-      getZeroLifespanNotice().then(setZeroLifespanNotice);
+      getZeroLifespanNotice(userId).then(active => {
+        if (!cancelled) setZeroLifespanNotice({ userId, active });
+      });
       if (updated) {
-        onActivationChange(updated);
+        onActivationChangeRef.current(updated);
         // Notify the user that the schedule was silently updated.
         setToastMessage(
           `${oldName} reminders updated: ${oldLifespan} → ${updated.lifespanDays} days`
@@ -137,7 +155,14 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
         setToastVisible(true);
       }
     });
-  }, [filterProducts, productsSource, activation, onActivationChange]);
+    return () => {
+      cancelled = true;
+      // An invalidated in-flight sync must not suppress its replacement.
+      if (lastSyncedProductsRef.current === syncIdentity) {
+        lastSyncedProductsRef.current = null;
+      }
+    };
+  }, [filterProducts, productsSource, activation, userId]);
 
   function openRegisterModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -155,17 +180,20 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
     onActivationChange(null);
   }
 
-  const effDaysLeft  = activation ? daysRemainingEffective(activation) : null;
-  const ratedDaysLeft = activation ? daysRemainingRated(activation) : null;
+  const capacity = activation && !usageUnavailable
+    ? resolveCapacityCycle(activation, impact?.filters, user?.id) : null;
+  const life = activation
+    ? calculateRemainingLife(activation, effectiveLifespanDays(activation), capacity, now) : null;
+  const effDaysLeft = life?.remainingDays === null || !life ? null : Math.ceil(life.remainingDays);
+  const ratedDaysLeft = activation
+    ? calculateRemainingLife(activation, activation.lifespanDays, null, now).remainingDays : null;
   const showEffWarning = activation &&
     effDaysLeft !== null && ratedDaysLeft !== null &&
     effDaysLeft < ratedDaysLeft - 5; // effective lifespan is meaningfully shorter
 
-  const pct      = activation ? progressPercent(activation) : 0;
   const daysLeft = effDaysLeft; // progress bar and main status use effective
-  const barColor = daysLeft !== null
-    ? statusColor(daysLeft, colors.primary, '#F59E0B', '#EF4444')
-    : colors.primary;
+  const barColor = life?.status === 'green' ? '#22C55E' : life?.status === 'amber' ? '#F59E0B'
+    : life?.status === 'red' ? '#EF4444' : colors.mutedForeground;
 
   const lastRec  = activation?.lastCheckIn?.recommendation as PerfRecommendation | undefined;
   const perfBadge = lastRec ? PERF_BADGE[lastRec] : null;
@@ -181,7 +209,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
 
       {/* ── Card ─────────────────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>My Filter</Text>
+        {!unified && <Text style={[styles.sectionTitle, { color: colors.text }]}>My Filter</Text>}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {activation ? (
             <>
@@ -191,38 +219,45 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
                   <Ionicons name="water" size={20} color={barColor} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
+                  <Text style={[styles.productName, { color: colors.text }]}>
                     {activation.productName}
                   </Text>
-                  <Text style={[styles.daysText, { color: barColor }]}>
-                    {daysLeft !== null && daysLeft > 0
-                      ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`
-                      : 'Filter replacement overdue'}
-                  </Text>
                 </View>
-                <TouchableOpacity onPress={openRegisterModal} style={[styles.replaceBtn, { borderColor: colors.primary }]}>
-                  <Text style={[styles.replaceBtnTxt, { color: colors.primary }]}>Replace</Text>
-                </TouchableOpacity>
               </View>
+              <Text style={[styles.subText, { color: colors.mutedForeground }]}>
+                Installed {activation.activatedAt.slice(0, 10)}
+                {activation.lastCleanedAt ? ` · Last cleaned ${activation.lastCleanedAt.slice(0, 10)}` : ''}
+              </Text>
 
-              {/* Progress bar */}
-              <View style={[styles.progressTrack, { backgroundColor: colors.surface }]}>
-                <View style={[styles.progressFill, { width: `${pct}%` as unknown as number, backgroundColor: barColor }]} />
-              </View>
-              <View style={styles.progressLabels}>
-                <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>Installed</Text>
-                <Text style={[styles.progressLabel, { color: showEffWarning ? '#F59E0B' : colors.mutedForeground }]}>
-                  {showEffWarning
-                    ? `~${effDaysLeft! + (daysLeft! < 0 ? 0 : 0)}d eff. / ${activation!.lifespanDays}d rated`
-                    : `${activation!.lifespanDays}d rated life`}
-                </Text>
+              <View testID="filter-lifespan-gauge" style={[styles.row, { marginVertical: 12, alignItems: 'center' }]}>
+                <FilterLifeGauge percent={life?.percent ?? null} color={barColor}
+                  label={`${life?.percent === null ? 'Percentage unavailable' : `${Math.floor(life?.percent ?? 0)} percent remaining`}. ${life?.description}. ${life?.basis}`} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: colors.text, fontSize: 24, fontWeight: '700' }}>
+                    {life?.percent === null ? '—' : `${Math.floor(life?.percent ?? 0)}%`} remaining
+                  </Text>
+                  <Text style={[styles.daysText, { color: colors.text }]}>{life?.description}</Text>
+                  <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>{life?.basis}</Text>
+                  <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
+                    {daysLeft === null ? 'Time unavailable' : `${daysLeft} days remaining · ${effectiveLifespanDays(activation)}d effective life`}
+                  </Text>
+                  <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
+                    {life?.remainingLitres != null
+                      ? `${life.remainingLitres.toLocaleString()} L left of ${capacity!.ratedCapacityLitres.toLocaleString()} L · customer/staff recorded`
+                      : usageLoading ? 'Refreshing capacity…' : usageUnavailable ? 'Capacity unavailable · could not refresh (possibly offline)' : 'Capacity unavailable · no verified cycle link or rating'}
+                  </Text>
+                  {usageLoading && life?.remainingLitres != null ? <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>Refreshing recorded usage…</Text> : null}
+                  <TouchableOpacity style={{ minHeight: 44, justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Refresh filter usage" onPress={onUsageRefresh}>
+                    <Text style={[styles.progressLabel, { color: colors.primary }]}>Refresh usage</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View testID="filter-life-summary" style={[styles.lifeSummary, { backgroundColor: colors.surface }]}>
                 <View style={styles.lifeSummaryItem}>
                   <Ionicons name="time-outline" size={15} color={barColor} />
                   <Text style={[styles.lifeSummaryValue, { color: colors.text }]}>
-                    {daysLeft !== null && daysLeft > 0 ? `${daysLeft} days` : 'Due now'}
+                    {daysLeft === null ? 'Unavailable' : daysLeft > 0 ? `${daysLeft} days` : 'Due now'}
                   </Text>
                   <Text style={[styles.lifeSummaryLabel, { color: colors.mutedForeground }]}>life remaining</Text>
                 </View>
@@ -255,7 +290,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
               {/* Zero-lifespan notice — shown when the catalogue no longer carries
                   a valid lifespan for this product (meta removed / bad store data).
                   Non-blocking: reminders are preserved from the last known lifespan. */}
-              {zeroLifespanNotice && (
+              {zeroLifespanNotice?.userId === userId && zeroLifespanNotice?.active && (
                 <View style={[styles.effWarning, { backgroundColor: '#FFF1F2', borderColor: '#FECDD3' }]}>
                   <Ionicons name="warning-outline" size={14} color="#E11D48" />
                   <Text style={[styles.effWarningText, { color: '#9F1239' }]}>
@@ -267,6 +302,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
               {/* Last performance check-in badge */}
               {perfBadge && (
                 <TouchableOpacity
+                  accessibilityRole="button"
                   onPress={openPerfModal}
                   activeOpacity={0.8}
                   style={[styles.perfBadge, { backgroundColor: perfBadge.color + '12', borderColor: perfBadge.color + '30' }]}>
@@ -281,6 +317,7 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
               {/* Check performance button (when no check-in yet) */}
               {!perfBadge && (
                 <TouchableOpacity
+                  accessibilityRole="button"
                   onPress={openPerfModal}
                   activeOpacity={0.8}
                   style={[styles.checkPerfBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -330,14 +367,14 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
             </>
           ) : (
             /* Not yet registered */
-            <TouchableOpacity onPress={openRegisterModal} style={styles.registerRow} activeOpacity={0.8}>
+            <TouchableOpacity accessibilityRole="button" onPress={openRegisterModal} style={styles.registerRow} activeOpacity={0.8}>
               <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
                 <Ionicons name="water-outline" size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.productName, { color: colors.text }]}>Register your filter</Text>
+                <Text style={[styles.productName, { color: colors.text }]}>Can't find your filter?</Text>
                 <Text style={[styles.subText, { color: colors.mutedForeground }]}>
-                  Get personalised maintenance reminders and discount offers
+                  Use your receipt to look up a purchase that is missing from My Filters.
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
@@ -345,9 +382,14 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
           )}
         </View>
       </View>
+      {activation && <TouchableOpacity accessibilityRole="button" onPress={openRegisterModal}
+        style={{ minHeight: 44, justifyContent: 'center' }}>
+        <Text style={{ color: colors.primary }}>Can't find your filter?</Text>
+      </TouchableOpacity>}
 
       {/* ── Registration / Replace Modal ─────────────────────────────────── */}
       <RegisterModal
+        key={`receipt-modal:${user?.id ?? 0}`}
         visible={showRegisterModal}
         existingActivation={activation}
         filterProducts={filterProducts}
@@ -358,11 +400,13 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
           onActivationChange(a);
           onRegistrationCommitted?.();
           setShowRegisterModal(false);
-          setToastMessage(`${a.productName} registered successfully. Your reminders are ready.`);
+          setToastMessage(activation
+            ? 'Filter registration saved. Your current tracker and reminders are unchanged.'
+            : `${a.productName} registered successfully. Your reminders are ready.`);
           setToastVisible(true);
           // Invite signed-in users to enable message reminder channels.
           // Only show the prompt once per registration (keyed by productId+activatedAt).
-          if (token && user) {
+          if (!activation && token && user) {
             const alreadySeen = await wasReminderOptInSeen(a.productId, a.activatedAt, user.id);
             if (!alreadySeen) {
               setReminderOptIn({ productId: a.productId, activatedAt: a.activatedAt });
@@ -399,6 +443,8 @@ export default function FilterTrackerSection({ activation, onActivationChange, o
 
 // ── Registration modal ────────────────────────────────────────────────────────
 interface ModalProps {
+  purchaseSelection?: { source: 'app' | 'store'; orderId: number; phone: string; unitId: string; productId: number; name: string; lifespanDays: number } | null;
+  offlineSelection?: { saleId: number; saleDate: string; item: OfflinePurchaseItem; unitId: string; registeredInstallationDate?: string } | null;
   visible: boolean;
   existingActivation: FilterActivation | null;
   filterProducts: ReturnType<typeof useFilterProducts>['products'];
@@ -416,11 +462,17 @@ interface ModalProps {
 export function RegisterModal({
   visible, existingActivation, filterProducts, productsLoading, userId, onClose, onSave,
   initialProductId = null, initialDayOffset = 0,
+  offlineSelection = null,
+  purchaseSelection = null,
 }: ModalProps) {
   const colors = useColors();
   const api = useApi();
   const queryClient = useQueryClient();
   const [saving, setSaving]     = useState(false);
+  const [installationDate, setInstallationDate] = useState('');
+  const current = useRef(true);
+  useEffect(() => { current.current = true; return () => { current.current = false; lookupSeq.current++; }; }, []);
+  useEffect(() => { setInstallationDate(offlineSelection?.registeredInstallationDate ?? ''); setLookupError(''); }, [offlineSelection?.unitId, purchaseSelection?.unitId, offlineSelection?.registeredInstallationDate, visible]);
 
   // ── Receipt-based registration state ──────────────────────────────────────
   // There is deliberately no catalogue mode: all registration side effects
@@ -499,24 +551,30 @@ export function RegisterModal({
       if (status !== 'granted') {
         await requestNotificationPermission();
       }
-      const activatedAt = purchase.dateCreated || new Date().toISOString();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(installationDate)) throw new Error('Confirm the installation date as YYYY-MM-DD.');
+      const activatedAt = `${installationDate}T00:00:00.000Z`;
       await commitPurchaseBackedRegistration(
         () => api.registerFilterPurchase(receipt.trim(), phone.trim(), {
           productId: item.productId,
           activatedAt,
         }),
-        () => scheduleAllFilterNotifications({
-          activatedAt,
+        committed => {
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          return existingActivation ? Promise.resolve(existingActivation) : scheduleAllFilterNotifications({
+          activatedAt: committed.registration?.activatedAt ?? activatedAt,
           productId:     item.productId,
           productName:   item.name,
           lifespanDays:  item.lifespanDays,
           sourceOrderId: purchase.orderId,
-        }, userId),
-        onSave,
+          registeredFilterId: committed.registration?.id,
+          }, userId);
+        },
+        a => { if (current.current) onSave(a); },
       );
       // Refresh only after durable registration so the capacity-backed impact
       // card reflects the newly registered filter.
-      await queryClient.invalidateQueries({ queryKey: ['customer-rewards'] });
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
+      await queryClient.invalidateQueries({ queryKey: ['activation-purchases', userId] });
       reset();
     } catch (e) {
       // Keep the verified purchase selection visible so the customer can retry
@@ -539,8 +597,76 @@ export function RegisterModal({
     setLookupLoading(false);
     if (purchase) setPurchase(null);
   }
+  async function handleSelectedPurchaseSave() {
+    if (!purchaseSelection || savingRef.current) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(installationDate)) {
+      setLookupError('Confirm the installation date as YYYY-MM-DD. Owning the filter does not start its lifespan.');
+      return;
+    }
+    savingRef.current = true; setSaving(true); setLookupError('');
+    try {
+      await commitPurchaseBackedRegistration(
+        () => api.registerFilterPurchase(String(purchaseSelection.orderId), purchaseSelection.phone, {
+          productId: purchaseSelection.productId, unitId: purchaseSelection.unitId, source: purchaseSelection.source,
+          activatedAt: `${installationDate}T00:00:00.000Z`,
+        }),
+        async committed => {
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          // Adding another unit must not overwrite this device's active cycle.
+          const retained = existingActivation ?? await getFilterActivation(userId);
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          if (retained) return retained;
+          const r = committed.registration;
+          if (!r) throw new Error('Activation confirmation missing.');
+          return scheduleAllFilterNotifications({
+            activatedAt: r.activatedAt, productId: purchaseSelection.productId, productName: purchaseSelection.name,
+            lifespanDays: purchaseSelection.lifespanDays, registeredFilterId: r.id, sourceOrderId: purchaseSelection.orderId,
+          }, userId);
+        },
+        activation => { if (current.current) onSave(activation); },
+      );
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
+      await queryClient.invalidateQueries({ queryKey: ['activation-purchases', userId] });
+    } catch (error) { if (current.current) setLookupError(error instanceof Error ? error.message : 'Could not activate filter.'); }
+    finally { savingRef.current = false; if (current.current) setSaving(false); }
+  }
 
-  function handleClose() { reset(); onClose(); }
+  async function handleOfflineSave() {
+    if (!offlineSelection || savingRef.current) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(installationDate)) {
+      setLookupError('Confirm the installation date as YYYY-MM-DD. The sale date is not the installation date.');
+      return;
+    }
+    savingRef.current = true; setSaving(true); setLookupError('');
+    try {
+      await commitPurchaseBackedRegistration(
+        () => api.registerOfflinePurchase(offlineSelection.saleId, offlineSelection.unitId, installationDate),
+        async committed => {
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          const retained = existingActivation ?? await getFilterActivation(userId);
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          // Restore/registration cannot reset an existing cycle, even for the same unit.
+          if (retained) return retained;
+          const r = committed.registration;
+          const status = await getNotificationPermissionStatus();
+          if (status !== 'granted') await requestNotificationPermission();
+          if (!current.current) throw new Error('Account changed. Reopen Account to refresh.');
+          return scheduleAllFilterNotifications({
+            activatedAt: r.activatedAt, productId: r.productId, productName: r.productName,
+            lifespanDays: r.lifespanDays, registeredFilterId: r.id, offlineUnitId: r.offlineUnitId,
+            cleanCount: r.maintenanceCount,
+          }, userId);
+        },
+        activation => { if (current.current) onSave(activation); },
+      );
+      await queryClient.invalidateQueries({ queryKey: customerQueryKeys.rewards(userId) });
+      await queryClient.invalidateQueries({ queryKey: ['offline-purchases', userId] });
+    } catch (e) {
+      if (current.current) setLookupError(e instanceof Error ? e.message : 'Registration failed. Retry when connected.');
+    } finally { savingRef.current = false; if (current.current) setSaving(false); }
+  }
+
+  function handleClose() { if (savingRef.current) return; reset(); onClose(); }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
@@ -557,14 +683,50 @@ export function RegisterModal({
               </TouchableOpacity>
             )}
             <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              {purchase ? 'Select Your Filter' : 'Register with Receipt'}
+              {offlineSelection || purchaseSelection ? 'Activate your filter' : purchase ? 'Select Your Filter' : 'Register with Receipt'}
             </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          {purchase === null ? (
+          {purchaseSelection ? (
+            <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.productName, { color: colors.text }]}>{purchaseSelection.name}</Text>
+              <Text style={{ color: colors.mutedForeground }}>Order #{purchaseSelection.orderId} · unit {purchaseSelection.unitId.split(':').at(-1)}</Text>
+              <Text style={{ color: colors.text }}>When did you install this filter? Purchase date is not installation date.</Text>
+              <TextInput accessibilityLabel="Installation date YYYY-MM-DD" value={installationDate} onChangeText={setInstallationDate}
+                placeholder="YYYY-MM-DD" editable={!saving} style={[styles.input, { color: colors.text }]} />
+              {existingActivation ? <Text style={{ color: colors.mutedForeground }}>This adds a separate filter cycle. Your current filter reminders and history stay unchanged.</Text> : null}
+              {!!lookupError && <Text accessibilityLiveRegion="polite" style={{ color: colors.destructive }}>{lookupError}</Text>}
+              <TouchableOpacity accessibilityRole="button" onPress={handleSelectedPurchaseSave} disabled={saving}
+                style={[styles.productRow, { backgroundColor: colors.primary }]}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Confirm installation and activate</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          ) : offlineSelection ? (
+            <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.productName, { color: colors.text }]}>{offlineSelection.item.name}</Text>
+              <Text style={[styles.receiptMeta, { color: colors.mutedForeground }]}>
+                Offline Sale · {offlineSelection.saleDate}
+              </Text>
+              <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
+                {offlineSelection.registeredInstallationDate
+                  ? existingActivation
+                    ? 'This registration is already saved. Your current tracked cycle and reminders will remain unchanged.'
+                    : 'Restore reminders using the original registration. The installation date and filter history will not be changed.'
+                  : 'When did you install this filter? Confirm the actual installation date, not the sale date.'}
+              </Text>
+              <TextInput testID="offline-installation-date" value={installationDate} onChangeText={setInstallationDate}
+                placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} editable={!saving && !offlineSelection.registeredInstallationDate}
+                accessibilityLabel="Installation date YYYY-MM-DD" style={[styles.input, { color: colors.text }]} />
+              {!!lookupError && <Text style={[styles.errorText, { color: '#EF4444' }]}>{lookupError}</Text>}
+              <TouchableOpacity accessibilityRole="button" testID="offline-register-confirm" onPress={handleOfflineSave} disabled={saving}
+                style={[styles.productRow, { backgroundColor: colors.primary }]}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>{offlineSelection.registeredInstallationDate ? 'Restore existing registration' : 'Confirm installation and register'}</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          ) : purchase === null ? (
               /* Receipt step A: receipt number + phone */
               <KeyboardAwareScrollViewCompat
                 style={{ flex: 1 }}
@@ -634,6 +796,9 @@ export function RegisterModal({
                 <Text style={[styles.stepHint, { color: colors.mutedForeground, marginTop: 4, marginBottom: 8 }]}>
                   Tap the filter you installed:
                 </Text>
+                <TextInput accessibilityLabel="Installation date YYYY-MM-DD" value={installationDate} onChangeText={setInstallationDate}
+                  placeholder="Installation date: YYYY-MM-DD" style={[styles.input, { color: colors.text }]} />
+                {existingActivation ? <Text style={{ color: colors.mutedForeground }}>A new unit is a separate cycle. Current reminders and history stay unchanged.</Text> : null}
                 <View style={{ gap: 10 }}>
                   {purchase.items.filter(i => i.lifespanDays > 0).map((item, idx) => (
                     <TouchableOpacity
@@ -700,17 +865,17 @@ const styles = StyleSheet.create({
   lifeSummaryDivider: { width: 1, height: 20 },
   divider:         { height: 1 },
   notifNote:       { fontSize: 12, marginLeft: 4 },
-  registerRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  registerRow:     { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   // Performance badge / check button
-  perfBadge:       { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+  perfBadge:       { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
   perfBadgeText:   { flex: 1, fontSize: 12, fontWeight: '600' as const },
   perfBadgeUpdate: { fontSize: 11, fontWeight: '500' as const },
-  checkPerfBtn:    { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 7, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  checkPerfBtn:    { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 7, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
   checkPerfBtnText:{ flex: 1, fontSize: 12, fontWeight: '600' as const },
   effWarning:      { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
   effWarningText:  { flex: 1, fontSize: 11, lineHeight: 16 },
-  askAiRow:        { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingVertical: 2 },
+  askAiRow:        { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingVertical: 2 },
   askAiText:       { flex: 1, fontSize: 12, fontWeight: '500' as const },
 
   // Modal

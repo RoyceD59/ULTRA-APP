@@ -8,5 +8,6 @@
 
 export interface AlisonTurnResponse {
   reply: string;
+  feedbackToken: string;
   suggestions: string[];
 }

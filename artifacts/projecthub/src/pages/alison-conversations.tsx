@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { trackEvent } from "@/lib/analytics";
 import {
   AlisonMachineApiError,
   issueAlisonMachineToken,
@@ -101,6 +102,18 @@ export default function AlisonConversationsPage() {
     () => chatsQuery.data?.chats.find((chat) => chat.conversationId === selectedId) ?? null,
     [chatsQuery.data, selectedId],
   );
+  const lastTrackedChat = useRef<string | null>(null);
+  useEffect(() => {
+    // Include the first transcript opened automatically, but not query refetches.
+    const openedId = connected && !chatsQuery.isError ? selectedChat?.conversationId ?? null : null;
+    if (!openedId) {
+      lastTrackedChat.current = null;
+      return;
+    }
+    if (lastTrackedChat.current === openedId) return;
+    lastTrackedChat.current = openedId;
+    trackEvent("alison_conversation_opened", { messageCount: selectedChat!.messages.length });
+  }, [connected, chatsQuery.isError, selectedChat]);
 
   const connect = () => {
     tokenMutation.mutate(

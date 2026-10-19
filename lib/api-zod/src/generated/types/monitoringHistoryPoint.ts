@@ -8,7 +8,8 @@
 
 export interface MonitoringHistoryPoint {
   at: string;
-  ok: boolean;
+  /** @nullable */
+  ok: boolean | null;
   /** @nullable */
   responseMs?: number | null;
 }

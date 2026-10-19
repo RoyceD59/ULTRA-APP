@@ -2,10 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DELETED_ACCOUNT_ERROR,
+  PASSWORD_RESET_SESSION_ERROR,
   handleDeletedAccountResponse,
   handleRejectedSessionResponse,
   isDeletedAccountResponse,
   isRejectedSessionResponse,
+  retrySessionRequest,
   setDeletedAccountHandler,
 } from '../deletedAccountResponse.js';
 
@@ -45,10 +47,30 @@ describe('deleted account API response detection', () => {
     assert.equal(calls, 1);
   });
 
-  it('matches any 401 only when the request carried a customer token', () => {
-    assert.equal(isRejectedSessionResponse(401, 'app-token'), true);
-    assert.equal(isRejectedSessionResponse(401, null), false);
-    assert.equal(isRejectedSessionResponse(403, 'app-token'), false);
+  it('matches only deleted-account and password-reset 401s with a customer token', () => {
+    for (const error of [DELETED_ACCOUNT_ERROR, PASSWORD_RESET_SESSION_ERROR]) {
+      assert.equal(isRejectedSessionResponse(401, 'app-token', { error }), true);
+      assert.equal(isRejectedSessionResponse(401, null, { error }), false);
+      assert.equal(isRejectedSessionResponse(401, '', { error }), false);
+      assert.equal(isRejectedSessionResponse(403, 'app-token', { error }), false);
+      assert.equal(isRejectedSessionResponse(503, 'app-token', { error }), false);
+    }
+    for (const body of [null, undefined, {}, 'Unauthorized', { error: 'Unauthorized' },
+      { error: 'Invalid credentials' }, { error: `${PASSWORD_RESET_SESSION_ERROR} ` }]) {
+      assert.equal(isRejectedSessionResponse(401, 'app-token', body), false);
+    }
+  });
+
+  it('does not retry forced sign-outs but preserves the single retry for other errors', () => {
+    for (const message of [DELETED_ACCOUNT_ERROR, PASSWORD_RESET_SESSION_ERROR]) {
+      assert.equal(retrySessionRequest(0, { status: 401, body: { error: message } }), false);
+      assert.equal(retrySessionRequest(0, { status: 401, data: { error: message } }), false);
+    }
+    for (const error of [{ status: 401, body: { error: 'Unauthorized' } }, new Error('Network error'),
+      { status: 503, body: { error: PASSWORD_RESET_SESSION_ERROR } }]) {
+      assert.equal(retrySessionRequest(0, error), true);
+      assert.equal(retrySessionRequest(1, error), false);
+    }
   });
 
   it('passes the exact rejected token to the auth handler', async () => {
@@ -57,9 +79,10 @@ describe('deleted account API response detection', () => {
       rejectedTokens.push(rejectedToken);
     });
 
-    await handleRejectedSessionResponse(401, null);
-    await handleRejectedSessionResponse(500, 'current-token');
-    await handleRejectedSessionResponse(401, 'current-token');
+    await handleRejectedSessionResponse(401, null, { error: PASSWORD_RESET_SESSION_ERROR });
+    await handleRejectedSessionResponse(500, 'current-token', { error: PASSWORD_RESET_SESSION_ERROR });
+    await handleRejectedSessionResponse(401, 'current-token', { error: 'Unauthorized' });
+    await handleRejectedSessionResponse(401, 'current-token', { error: PASSWORD_RESET_SESSION_ERROR });
     unregister();
 
     assert.deepEqual(rejectedTokens, ['current-token']);

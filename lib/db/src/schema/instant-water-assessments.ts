@@ -1,5 +1,6 @@
 import {
   index,
+  boolean,
   integer,
   jsonb,
   pgTable,
@@ -98,6 +99,8 @@ export const instantWaterCheckTicketsTable = pgTable(
     country: text("country").notNull(),
     area: text("area").notNull(),
     serviceAddress: text("service_address"),
+    promoCode: text("promo_code"),
+    freeWaterTest: boolean("free_water_test").notNull().default(false),
     preferredContactTime: text("preferred_contact_time"),
     physicalRequestAcknowledgedAt: timestamp(
       "physical_request_acknowledged_at",

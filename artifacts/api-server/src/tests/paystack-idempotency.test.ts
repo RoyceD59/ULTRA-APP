@@ -78,6 +78,7 @@ async function createTestUser(
       firstName: "Test",
       lastName: "Buyer",
       phone: "+254711000002",
+      address: "Test building, Nairobi",
     })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;

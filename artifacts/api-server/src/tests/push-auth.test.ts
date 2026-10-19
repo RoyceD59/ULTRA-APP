@@ -12,7 +12,16 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { randomInt } from "node:crypto";
+import { db, ucPushTokensTable } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 import { issueToken } from "../lib/jwt.js";
+
+// Other suites share this run's isolated DB. Fixed IDs 1 and 2 can inherit
+// their deleted-account state or token registrations, changing auth outcomes.
+const fixtureId = randomInt(1_000_000_000, 2_000_000_000);
+const userA = { id: fixtureId, email: "alice@example.com" };
+const userB = { id: fixtureId + 1, email: "bob@example.com" };
 
 // ── Minimal fetch wrapper that speaks to the running server ──────────────────
 async function apiFetch(
@@ -38,7 +47,11 @@ before(async () => {
     server = app.listen(0, "127.0.0.1", (err?: Error) => (err ? reject(err) : resolve()));
   });
 });
-after(() => new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve())));
+after(async () => {
+  await db.delete(ucPushTokensTable)
+    .where(inArray(ucPushTokensTable.userId, [String(userA.id), String(userB.id)]));
+  await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve()));
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function authHeader(claims: { id: number | string; email: string }) {
@@ -62,9 +75,6 @@ function tamperedToken(realToken: string) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 describe("Push notification auth", () => {
-  const userA = { id: 1, email: "alice@example.com" };
-  const userB = { id: 2, email: "bob@example.com" };
-
   it("allows a valid token to register a push token", async () => {
     const r = await apiFetch("/api/uc/notify/register", {
       server,

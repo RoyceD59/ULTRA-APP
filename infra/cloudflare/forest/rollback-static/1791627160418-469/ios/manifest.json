@@ -1,0 +1,193 @@
+{
+  "id": "f9c1cb80-d3e3-4a3a-9e68-a9ce3bd7b747",
+  "createdAt": "2026-10-10T10:12:40.418Z",
+  "runtimeVersion": "1.0.0",
+  "launchAsset": {
+    "key": "bundle-1791627160418-469",
+    "contentType": "application/javascript",
+    "url": "https://app.ucfilters.com/uc-companion/1791627160418-469/_expo/static/js/ios/bundle.js"
+  },
+  "assets": [],
+  "metadata": {},
+  "extra": {
+    "eas": {},
+    "expoClient": {
+      "name": "Ultra-Clear Companion",
+      "slug": "uc-companion",
+      "version": "1.0.0",
+      "orientation": "default",
+      "icon": "./assets/images/icon.png",
+      "scheme": "uc-companion",
+      "userInterfaceStyle": "automatic",
+      "updates": {
+        "enabled": false,
+        "fallbackToCacheTimeout": 0,
+        "checkAutomatically": "ON_LOAD",
+        "url": "https://u.expo.dev/REPLACE_AFTER_EAS_PROJECT_INIT"
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
+      "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.ultraclean.companion",
+        "infoPlist": {
+          "NSLocationWhenInUseUsageDescription": "Ultra-Clear uses your location to show nearby experience centres and water refill ATMs.",
+          "NSCameraUsageDescription": "Ultra-Clear uses your camera to take photos and record short videos for maintenance tickets.",
+          "NSMicrophoneUsageDescription": "Ultra-Clear uses your microphone to record audio with videos attached to maintenance tickets.",
+          "NSPhotoLibraryUsageDescription": "Ultra-Clear accesses your photo library to attach photos and videos to maintenance tickets.",
+          "NSContactsUsageDescription": "Ultra-Clear reads your contacts so you can invite friends to join and earn referral rewards."
+        }
+      },
+      "android": {
+        "package": "com.ultraclean.companion",
+        "config": {
+          "googleMaps": {
+            "apiKey": "$GOOGLE_MAPS_ANDROID_KEY"
+          }
+        },
+        "permissions": [
+          "android.permission.ACCESS_COARSE_LOCATION",
+          "android.permission.ACCESS_FINE_LOCATION",
+          "android.permission.CAMERA",
+          "android.permission.RECORD_AUDIO",
+          "android.permission.READ_MEDIA_IMAGES",
+          "android.permission.READ_MEDIA_VIDEO",
+          "android.permission.RECEIVE_BOOT_COMPLETED",
+          "android.permission.VIBRATE",
+          "android.permission.READ_CONTACTS",
+          "android.permission.SEND_SMS",
+          "android.permission.READ_CONTACTS",
+          "android.permission.WRITE_CONTACTS",
+          "android.permission.ACCESS_COARSE_LOCATION",
+          "android.permission.ACCESS_FINE_LOCATION",
+          "android.permission.RECORD_AUDIO"
+        ]
+      },
+      "web": {
+        "favicon": "./assets/images/icon.png"
+      },
+      "plugins": [
+        [
+          "expo-splash-screen",
+          {
+            "image": "./assets/images/icon.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#005d8f",
+            "imageWidth": 200
+          }
+        ],
+        [
+          "expo-router",
+          {
+            "origin": "https://replit.com/"
+          }
+        ],
+        "expo-font",
+        "expo-web-browser",
+        [
+          "expo-contacts",
+          {
+            "contactsPermission": "Allow Ultra-Clear to access your contacts to invite friends and earn referral rewards."
+          }
+        ],
+        [
+          "expo-location",
+          {
+            "locationWhenInUsePermission": "Show current location on the map."
+          }
+        ],
+        [
+          "expo-image-picker",
+          {
+            "photosPermission": "Allow Ultra-Clear to access your photos and videos for maintenance tickets.",
+            "cameraPermission": "Allow Ultra-Clear to take photos and record short videos for maintenance tickets.",
+            "microphonePermission": "Allow Ultra-Clear to record audio with videos attached to maintenance tickets."
+          }
+        ],
+        [
+          "expo-notifications",
+          {
+            "icon": "./assets/images/icon.png",
+            "color": "#0054A6",
+            "defaultChannel": "uc-default",
+            "androidMode": "default",
+            "androidCollapsedTitle": "Ultra-Clear"
+          }
+        ],
+        "expo-video",
+        "expo-sharing"
+      ],
+      "experiments": {
+        "typedRoutes": true,
+        "reactCompiler": true
+      },
+      "_internal": {
+        "isDebug": false,
+        "projectRoot": "/home/runner/workspace/.hydrate-release/artifacts/uc-companion",
+        "dynamicConfigPath": {},
+        "staticConfigPath": "/home/runner/workspace/.hydrate-release/artifacts/uc-companion/app.json",
+        "packageJsonPath": "/home/runner/workspace/.hydrate-release/artifacts/uc-companion/package.json",
+        "pluginHistory": {
+          "expo-splash-screen": {
+            "name": "expo-splash-screen",
+            "version": "57.0.9"
+          },
+          "expo-font": {
+            "name": "expo-font",
+            "version": "57.0.4"
+          },
+          "expo-web-browser": {
+            "name": "expo-web-browser",
+            "version": "57.0.3"
+          },
+          "expo-contacts": {
+            "name": "expo-contacts",
+            "version": "57.0.6"
+          },
+          "expo-location": {
+            "name": "expo-location",
+            "version": "57.0.20"
+          },
+          "expo-image-picker": {
+            "name": "expo-image-picker",
+            "version": "57.0.20"
+          },
+          "expo-notifications": {
+            "name": "expo-notifications",
+            "version": "57.0.21"
+          },
+          "expo-sharing": {
+            "name": "expo-sharing",
+            "version": "57.0.22"
+          }
+        }
+      },
+      "sdkVersion": "57.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "web"
+      ],
+      "extra": {
+        "router": {
+          "origin": "https://replit.com/"
+        }
+      },
+      "iconUrl": "http://127.0.0.1:32827/assets/./assets/images/icon.png",
+      "hostUri": "app.ucfilters.com/ios"
+    },
+    "expoGo": {
+      "debuggerHost": "app.ucfilters.com/ios",
+      "developer": {
+        "tool": "expo-cli",
+        "projectRoot": "/home/runner/workspace/.hydrate-release/artifacts/uc-companion"
+      },
+      "packagerOpts": {
+        "dev": false
+      },
+      "mainModuleName": "artifacts/uc-companion/node_modules/expo-router/entry"
+    },
+    "scopeKey": "@anonymous/uc-companion-80123b95-1326-4a4f-8e79-73afe2908fef"
+  }
+}

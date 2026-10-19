@@ -1,10 +1,12 @@
 // Web fallback — react-native-maps only works on native.
 // This screen shows a location list on web; map.native.tsx has the MapView.
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Linking } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useQuery } from '@tanstack/react-query';
 import { useApi, MapLocation } from '@/hooks/useApi';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
@@ -14,7 +16,7 @@ import { LOCATIONS_REFRESH_INTERVAL_MS, reconcileSelectedLocation, startFocusedL
 import LocationDetailModal from '@/components/LocationDetailModal';
 
 const FILTER_TABS: readonly LocationMapFilter[] = ['All', 'Centres', 'ATMs', 'Vendors', 'Stations', 'Taps'];
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 function LocationCard({ loc, colors, onPress }: { loc: MapLocation; colors: ReturnType<typeof useColors>; onPress: (location: MapLocation) => void }) {
   const isCentre = loc.type === 'experience_centre';
@@ -61,17 +63,23 @@ export default function MapScreen() {
   const [directionsError, setDirectionsError] = useState('');
   const [selected, setSelected] = useState<MapLocation | null>(null);
   const cartBarInset = useCartBarInset();
+  const locationRefreshState = useRef({ pending: false });
 
-  const { data: locations = [], isLoading, isError, refetch, isRefetching } = useQuery({
+  const { data: locationData, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['locations'],
     queryFn: () => api.getLocations(),
     staleTime: LOCATIONS_REFRESH_INTERVAL_MS,
   });
 
+  const locations = locationData ?? [];
   const visible = filterMapLocations(locations, filter);
 
   useFocusEffect(useCallback(() => {
-    return startFocusedLocationRefresh(refetch);
+    return startFocusedLocationRefresh(
+      () => refetch({ cancelRefetch: false }),
+      undefined,
+      locationRefreshState.current,
+    );
   }, [refetch]));
 
   useEffect(() => {
@@ -115,15 +123,10 @@ export default function MapScreen() {
         <Text style={[styles.mapHintText, { color: colors.primary }]}>Tap any location to view details and community ratings</Text>
       </View>
 
-       {isLoading ? (
-         <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading verified locations…</Text></View>
-       ) : isError ? (
-         <View style={styles.loading}>
-           <Ionicons name="alert-circle-outline" size={32} color={colors.primary} />
-           <Text style={[styles.stateTitle, { color: colors.text }]}>Locations are unavailable</Text>
-           <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Please check your connection and try again.</Text>
-           <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text style={styles.retryText}>{isRefetching ? 'Retrying…' : 'Try again'}</Text></TouchableOpacity>
-         </View>
+       {isLoading && locationData === undefined ? (
+         <PageDataLoader label="Loading verified locations…" />
+       ) : isError && locationData === undefined ? (
+         <PageDataError title="Locations unavailable" error={error} onRetry={refetch} />
       ) : (
         <FlatList
           data={visible}
@@ -136,7 +139,10 @@ export default function MapScreen() {
               <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text style={styles.retryText}>{isRefetching ? 'Refreshing…' : 'Refresh'}</Text></TouchableOpacity>
             </View>
           }
-          ListHeaderComponent={directionsError ? <Text style={[styles.directionsError, { color: colors.mutedForeground }]}>{directionsError}</Text> : null}
+          ListHeaderComponent={<>
+            {isError ? <PageDataError title="Locations could not refresh" message="Your saved locations are shown below." onRetry={refetch} /> : null}
+            {directionsError ? <Text style={[styles.directionsError, { color: colors.mutedForeground }]}>{directionsError}</Text> : null}
+          </>}
           renderItem={({ item }) => <LocationCard loc={item} colors={colors} onPress={setSelected} />}
         />
       )}
@@ -152,11 +158,11 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  filterRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 8 },
-  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  screen: { flex: 1, width: '100%', maxWidth: 1200, alignSelf: 'center' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16, paddingBottom: 8 },
+  filterBtn: { paddingHorizontal: 16, paddingVertical: 10, minHeight: 44, borderRadius: 20, borderWidth: 1 },
   mapHint: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
-  mapHintText: { fontSize: 13, fontWeight: '500' as const },
+  mapHintText: { flex: 1, fontSize: 13, fontWeight: '500' as const },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 28 },
   stateTitle: { fontSize: 17, fontWeight: '700' as const },
   stateText: { fontSize: 14, textAlign: 'center' },

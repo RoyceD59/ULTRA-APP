@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/context/CartContext';
+import { cartLineKey } from '@/context/cartStorage';
 import { useApi, UCProduct, resolveMediaUrl, resizedImageUrl } from '@/hooks/useApi';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,7 +44,7 @@ export default function CartScreen() {
       .then(list => {
         if (cancelled) return;
         const cartIds = new Set(idsInCart.split(',').map(Number));
-        setRecs(list.filter(p => !cartIds.has(p.id) && p.stockStatus !== 'outofstock'));
+        setRecs(list.filter(p => !cartIds.has(p.id) && ['instock', 'onbackorder'].includes(p.stockStatus)));
       })
       .catch(() => { if (!cancelled) setRecs([]); });
     return () => { cancelled = true; };
@@ -126,18 +129,13 @@ export default function CartScreen() {
     if (cartLoadError) {
       return (
         <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
-          <Ionicons name="cloud-offline-outline" size={48} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load your basket</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>There was a problem reading your saved cart.</Text>
-          <TouchableOpacity onPress={refreshCart} style={[styles.shopBtn, { backgroundColor: colors.primary }]}>
-            <Text style={styles.shopBtnText}>Retry</Text>
-          </TouchableOpacity>
+          <PageDataError title="Your basket couldn’t load" message="Your saved basket couldn’t be read. Retry to restore it." onRetry={refreshCart} />
         </View>
       );
     }
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <PageDataLoader label="Loading your basket…" />
       </View>
     );
   }
@@ -162,7 +160,7 @@ export default function CartScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <FlatList
         data={items}
-        keyExtractor={i => String(i.id)}
+        keyExtractor={cartLineKey}
         contentContainerStyle={[styles.list, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -262,19 +260,20 @@ export default function CartScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
+              {!!item.variantLabel && <Text style={{ color: colors.mutedForeground }}>{item.variantLabel} · {item.childSku}</Text>}
               <Text style={[styles.itemPrice, { color: colors.primary }]}>KES {item.price.toLocaleString('en-KE')}</Text>
             </View>
             <View style={styles.qtyRow}>
-              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(item.id, item.quantity - 1); }}
+              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(cartLineKey(item), item.quantity - 1); }}
                 style={[styles.qtyBtn, { borderColor: colors.border }]}>
                 <Ionicons name="remove" size={16} color={colors.text} />
               </TouchableOpacity>
               <Text style={[styles.qty, { color: colors.text }]}>{item.quantity}</Text>
-              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(item.id, item.quantity + 1); }}
+              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); updateQty(cartLineKey(item), item.quantity + 1); }}
                 style={[styles.qtyBtn, { borderColor: colors.border }]}>
                 <Ionicons name="add" size={16} color={colors.text} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); removeItem(item.id); }}
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); removeItem(cartLineKey(item)); }}
                 style={styles.removeBtn}>
                 <Ionicons name="trash-outline" size={18} color={colors.destructive} />
               </TouchableOpacity>

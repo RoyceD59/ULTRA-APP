@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert, Platform, Switch,
+  StyleSheet, ActivityIndicator, Alert, Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
 import { useApi } from '@/hooks/useApi';
 
 /**
  * Team-only screen: edit product name, description, pricing, and stock status
- * for any catalogue product. Updates are sent directly to WooCommerce.
+ * on the app-owned product record shared with ProjectHub.
  */
 export default function ProductEditAdminScreen() {
   const { productId, productName: paramName } = useLocalSearchParams<{
@@ -38,8 +40,8 @@ export default function ProductEditAdminScreen() {
   const [description,      setDescription]      = useState('');
   const [shortDescription, setShortDescription] = useState('');
   const [regularPrice,     setRegularPrice]     = useState('');
-  const [salePrice,        setSalePrice]        = useState('');
-  const [inStock,          setInStock]          = useState(true);
+  type Status = 'instock' | 'outofstock' | 'onbackorder' | 'unknown';
+  const [stockStatus,      setStockStatus]      = useState<Status>('unknown');
   const [stockQuantity,    setStockQuantity]    = useState('');
 
   const [seeded,  setSeeded]  = useState(false);
@@ -53,8 +55,7 @@ export default function ProductEditAdminScreen() {
       setDescription(product.description.replace(/<[^>]*>/g, ''));
       setShortDescription(product.shortDescription.replace(/<[^>]*>/g, ''));
       setRegularPrice(product.regularPrice ?? '');
-      setSalePrice(product.salePrice ?? '');
-      setInStock(product.stockStatus === 'instock');
+      setStockStatus(product.stockStatus ?? 'unknown');
       setStockQuantity(
         product.stockQuantity != null ? String(product.stockQuantity) : '',
       );
@@ -74,20 +75,20 @@ export default function ProductEditAdminScreen() {
     setSuccess(false);
 
     try {
-      const qty = stockQuantity.trim() !== '' ? parseInt(stockQuantity.trim(), 10) : undefined;
-      if (qty !== undefined && (isNaN(qty) || qty < 0)) {
-        Alert.alert('Invalid', 'Stock quantity must be a whole number ≥ 0.');
+      const t = stockQuantity.trim();
+      if (t !== '' && !/^\d+$/.test(t)) {
+        Alert.alert('Invalid', 'Managed quantity must be a whole number of 0 or more, or blank for unmanaged.');
         return;
       }
+      const qty: number | null = t === '' ? null : parseInt(t, 10);
 
       await api.updateProductDetails(pid, {
         name:             name.trim(),
         description:      description.trim(),
         shortDescription: shortDescription.trim(),
         regularPrice:     regularPrice.trim() || undefined,
-        salePrice:        salePrice.trim(),
-        stockStatus:      inStock ? 'instock' : 'outofstock',
-        ...(qty !== undefined ? { stockQuantity: qty } : {}),
+        ...(stockStatus !== 'unknown' ? { stockStatus } : {}),
+        stockQuantity:    qty,
       });
 
       // Bust all product caches so the catalogue and detail screen reflect edits.
@@ -117,24 +118,18 @@ export default function ProductEditAdminScreen() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !product) {
     return (
       <View style={[s.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} />
+        <PageDataLoader label="Loading product details…" />
       </View>
     );
   }
 
-  if (isError) {
+  if (isError && !product) {
     return (
       <View style={[s.center, { backgroundColor: colors.background, gap: 12 }]}>
-        <Ionicons name="lock-closed-outline" size={40} color={colors.mutedForeground} />
-        <Text style={{ color: colors.mutedForeground, textAlign: 'center', paddingHorizontal: 30 }}>
-          Couldn't load product — this area is for the Ultra Clear team only.
-        </Text>
-        <TouchableOpacity onPress={() => refetch()} style={[s.retryBtn, { borderColor: colors.primary }]}>
-          <Text style={{ color: colors.primary, fontWeight: '600' }}>Try again</Text>
-        </TouchableOpacity>
+        <PageDataError title="Product details unavailable" message="Product details couldn’t load. This area is for the Ultra Clear team only." onRetry={refetch} />
       </View>
     );
   }
@@ -209,7 +204,7 @@ export default function ProductEditAdminScreen() {
         <Text style={[s.label, { color: colors.text }]}>Pricing</Text>
         <View style={s.row}>
           <View style={{ flex: 1 }}>
-            <Text style={[s.subLabel, { color: colors.mutedForeground }]}>Regular price (KES)</Text>
+            <Text style={[s.subLabel, { color: colors.mutedForeground }]}>Price (KES)</Text>
             <TextInput
               style={[s.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
               value={regularPrice}
@@ -220,51 +215,45 @@ export default function ProductEditAdminScreen() {
               returnKeyType="next"
             />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.subLabel, { color: colors.mutedForeground }]}>Sale price (KES)</Text>
-            <TextInput
-              style={[s.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
-              value={salePrice}
-              onChangeText={setSalePrice}
-              placeholder="Leave blank to remove"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="decimal-pad"
-              returnKeyType="next"
-            />
-          </View>
         </View>
+        <Text style={[s.hint, { color: colors.mutedForeground }]}>
+          This is the record price used at checkout. There is no separate sale price: discounts come from promotions.
+        </Text>
       </View>
 
       {/* ── Stock ─────────────────────────────────────────────────────────── */}
       <View style={s.field}>
         <Text style={[s.label, { color: colors.text }]}>Stock</Text>
 
-        <View style={[s.stockRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View>
-            <Text style={[s.subLabel, { color: colors.text, marginBottom: 0 }]}>
-              {inStock ? 'In Stock' : 'Out of Stock'}
-            </Text>
-            <Text style={[s.hint, { color: colors.mutedForeground }]}>
-              Customers {inStock ? 'can' : 'cannot'} add this to their cart.
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {([['instock', 'In stock'], ['outofstock', 'Out of stock'], ['onbackorder', 'Backorder']] as const).map(([v, l]) => {
+            const on = stockStatus === v;
+            return (
+              <TouchableOpacity key={v} onPress={() => setStockStatus(v)} accessibilityRole="button" accessibilityState={{ selected: on }}
+                style={[s.chip, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.primary : colors.card }]}>
+                <Text style={{ color: on ? '#fff' : colors.text, fontWeight: '600', fontSize: 13 }}>{l}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {stockStatus === 'unknown' && (
+          <View style={[s.stockRow, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }]}>
+            <Ionicons name="help-circle-outline" size={18} color="#92400E" />
+            <Text style={[s.hint, { color: '#92400E', flex: 1 }]}>
+              Stock has not been reviewed. Customers cannot buy this until you choose a reviewed status.
             </Text>
           </View>
-          <Switch
-            value={inStock}
-            onValueChange={setInStock}
-            trackColor={{ false: '#ccc', true: colors.primary + '66' }}
-            thumbColor={inStock ? colors.primary : '#aaa'}
-          />
-        </View>
+        )}
 
         <View style={{ marginTop: 10 }}>
           <Text style={[s.subLabel, { color: colors.mutedForeground }]}>
-            Stock quantity (leave blank if unmanaged)
+            Managed quantity (blank = unmanaged, not zero)
           </Text>
           <TextInput
             style={[s.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.card }]}
             value={stockQuantity}
             onChangeText={setStockQuantity}
-            placeholder="e.g. 25"
+            placeholder="Unmanaged"
             placeholderTextColor={colors.mutedForeground}
             keyboardType="number-pad"
           />
@@ -276,7 +265,7 @@ export default function ProductEditAdminScreen() {
         <View style={[s.successBanner, { backgroundColor: '#ECFDF5', borderColor: '#6EE7B7' }]}>
           <Ionicons name="checkmark-circle" size={18} color="#059669" />
           <Text style={{ color: '#059669', fontWeight: '600', fontSize: 14 }}>
-            Product updated successfully
+            Saved to the product record
           </Text>
         </View>
       )}
@@ -299,7 +288,7 @@ export default function ProductEditAdminScreen() {
       </TouchableOpacity>
 
       <Text style={[s.hint, { color: colors.mutedForeground, textAlign: 'center' }]}>
-        Changes are applied to the live WooCommerce store immediately.
+        Saves to the shared product record. Customers see changes only when the product is published.
       </Text>
     </ScrollView>
   );
@@ -330,6 +319,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderRadius: 10, padding: 12,
   },
+  chip:          { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   saveBtn:       { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   saveInner:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
   saveTxt:       { color: '#fff', fontSize: 15, fontWeight: '700' },

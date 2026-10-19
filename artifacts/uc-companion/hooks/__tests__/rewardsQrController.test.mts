@@ -1,73 +1,73 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { RewardsQrController } from '../../lib/RewardsQrController';
-import { buildRewardsQrPayload } from '../../lib/rewardsQr';
-import { resolveRewardsQrToken } from '../../lib/rewardsQrResolution';
+import { customerQueryKeys } from '../../lib/customerQueryKeys';
 
-describe('RewardsQrController lifecycle', () => {
-  let onStateChange: ReturnType<typeof mock.fn>;
-  let apiRotate: ReturnType<typeof mock.fn>;
-  let readLocal: ReturnType<typeof mock.fn>;
-  let storeLocal: ReturnType<typeof mock.fn>;
-
-  beforeEach(() => {
-    onStateChange = mock.fn();
-    apiRotate = mock.fn();
-    readLocal = mock.fn();
-    storeLocal = mock.fn();
+function resolved(userId: number) {
+  return { userId, token: String(userId).repeat(43), version: null, recoveryRequired: false, persistenceWarning: false };
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
+describe('bounded account-scoped QR loading', () => {
+  it('cancels old-account completions and clears the old QR immediately', async () => {
+    const worker = new RewardsQrController();
+    await worker.load(1, async () => resolved(1));
+    const old = deferred<ReturnType<typeof resolved>>();
+    const first = worker.load(1, () => old.promise);
+    const rejected = assert.rejects(first, /cancelled/);
+    const next = deferred<ReturnType<typeof resolved>>();
+    const second = worker.load(2, () => next.promise);
+    assert.equal(worker.state.token, null);
+    assert.equal(worker.state.loading, true);
+    old.resolve(resolved(1));
+    next.resolve(resolved(2));
+    await Promise.all([rejected, second]);
+    assert.equal(worker.state.token, resolved(2).token);
   });
-
-  it('handles full revoked-token recovery sequence and account isolation', async () => {
-    const controller = new RewardsQrController(onStateChange, resolveRewardsQrToken);
-    
-    // 1. Mount for account A with stale secure-storage token and no rewards yet
-    const userA = 1;
-    readLocal.mock.mockImplementation(async (id: number) => {
-      if (id === userA) return 'stale-token-A';
-      return null;
-    });
-
-    await controller.setProps(userA, undefined, apiRotate as any, readLocal as any, storeLocal as any);
-    
-    // Stale token loads as offline fallback
-    assert.equal(controller.state.token, 'stale-token-A');
-    assert.equal(controller.state.loading, false);
-    
-    // 2. Rerender/refresh with authoritative rewards.qrToken replacement from server
-    const freshRewardsA = { qrToken: 'fresh-token-A' };
-    await controller.setProps(userA, freshRewardsA as any, apiRotate as any, readLocal as any, storeLocal as any);
-    
-    // Hook output changes to replacement
-    assert.equal(controller.state.token, 'fresh-token-A');
-    assert.equal(controller.state.loading, false);
-    
-    // Secure storage is overwritten for account A
-    assert.equal(storeLocal.mock.callCount(), 1);
-    assert.deepEqual(storeLocal.mock.calls[0].arguments, [userA, 'fresh-token-A']);
-    
-    // QR payload builder accepts/uses replacement, not stale
-    const payload = buildRewardsQrPayload(controller.state.token!);
-    assert.equal(payload, 'uc-rewards:v1:fresh-token-A');
-    
-    // 3. Switch to account B
-    const userB = 2;
-    readLocal.mock.mockImplementation(async (id: number) => null); // No local token for B
-    apiRotate.mock.mockImplementation(async () => ({ qrToken: 'rotated-token-B' }));
-    
-    // This call does not await immediately to check intermediate state
-    const promise = controller.setProps(userB, undefined, apiRotate as any, readLocal as any, storeLocal as any);
-    
-    // Assert switching to account B clears A token before B resolves
-    assert.equal(controller.state.token, null);
-    assert.equal(controller.state.loading, true);
-    
-    await promise;
-    
-    // Provide rewards without token, forcing rotation for B
-    await controller.setProps(userB, { qrToken: null } as any, apiRotate as any, readLocal as any, storeLocal as any);
-    
-    assert.equal(controller.state.token, 'rotated-token-B');
-    assert.equal(storeLocal.mock.callCount(), 2);
-    assert.deepEqual(storeLocal.mock.calls[1].arguments, [userB, 'rotated-token-B']);
+  it('times out a hanging bridge, then permits a clean retry', async () => {
+    const worker = new RewardsQrController();
+    await assert.rejects(worker.load(1, () => new Promise(() => {}), undefined, 10), /timed out/);
+    assert.equal(worker.state.loading, false);
+    assert.equal(worker.state.token, null);
+    await worker.load(1, async () => resolved(1));
+    assert.equal(worker.state.error, null);
+  });
+  it('cancellation/unmount stops late writes to controller state', async () => {
+    const worker = new RewardsQrController();
+    const signal = new AbortController();
+    const delayed = deferred<ReturnType<typeof resolved>>();
+    const request = worker.load(1, () => delayed.promise, signal.signal);
+    signal.abort();
+    await assert.rejects(request, /cancelled/);
+    delayed.resolve(resolved(1));
+    await Promise.resolve();
+    assert.equal(worker.state.token, null);
+    assert.equal(worker.state.loading, false);
+  });
+  it('account/rewards observers share one in-flight server read, with keys isolating other accounts', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const pending = deferred<ReturnType<typeof resolved>>();
+    let reads = 0;
+    const options = {
+      queryKey: customerQueryKeys.rewardsQr(1),
+      queryFn: () => { reads++; return pending.promise; },
+      staleTime: 0,
+    };
+    const account = new QueryObserver(client, options);
+    const rewards = new QueryObserver(client, options);
+    const stopAccount = account.subscribe(() => {});
+    const stopRewards = rewards.subscribe(() => {});
+    const first = account.refetch();
+    const second = rewards.refetch();
+    pending.resolve(resolved(1));
+    await Promise.all([first, second]);
+    assert.equal(reads, 1);
+    assert.deepEqual(account.getCurrentResult().data, rewards.getCurrentResult().data);
+    assert.equal(client.getQueryData(customerQueryKeys.rewardsQr(2)), undefined);
+    stopAccount(); stopRewards(); client.clear();
   });
 });

@@ -9,7 +9,11 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/db/seed.ts",
-    "test": "node --import tsx/esm src/tests/run.ts"
+    "test": "node --import tsx/esm src/tests/run.ts",
+    "fixture:guest-pay": "node scripts/guest-pay-fixture.cjs",
+    "test:guest-pay-fixture": "node --import tsx/esm --test scripts/__tests__/guest-pay-fixture*.test.cjs",
+    "eval:alison-commerce": "node --import tsx/esm src/evals/alison-commerce.ts",
+    "eval:alison-commerce:replay": "node --import tsx/esm src/evals/alison-commerce-replay.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.56",
@@ -30,13 +34,14 @@
     "google-auth-library": "^10.9.0",
     "http-proxy-middleware": "^4.2.0",
     "node-cron": "^3.0.3",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.0.9",
+    "pdfjs-dist": "^6.3.289",
     "pg": "^8.22.0",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "qrcode": "^1.5.4",
     "react-native-qrcode-svg": "^6.3.21",
-    "sharp": "^0.35.4",
+    "sharp": "0.35.5",
     "stripe": "^17.7.0"
   },
   "devDependencies": {

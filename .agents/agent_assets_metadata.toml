@@ -1,0 +1,249 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "hr6AMKQQ20TmKri3JqRIx"
+uri = "file://docs/projecthub-webhook-guide.html"
+type = "html"
+title = "ProjectHub — Webhook & Agent Dispatch Guide"
+description = "Full reference for the Webhook Tester, live ingest endpoint, payload schema, agent dispatch, and end-to-end walkthrough."
+logical_id = "11c8fc2d-64f7-49e9-bb4a-44edcc970878"
+content_type = "text/html"
+
+[[outputs]]
+id = "CbilUY1BhQStexfOxvDK4"
+uri = "file://docs/reports/companion-usability-cms-speed-2026-10-02.html"
+type = "html"
+title = "Companion audit, fixes and validation repairs"
+description = "Updated usability report with browser reliability fixes, validation repairs, CMS/loading-speed design and explicit remaining device/session coverage gaps."
+logical_id = "09be97ef-d8c5-4621-9826-8bcb1a10aeb4"
+content_hash = "sha256:ed9a89d2cc3ec6348925bc6c56be07661c070596c9ba03b52d2211c054ca30ce"
+size = 18341
+mtime_ms = 1790966998534
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/09be97ef-d8c5-4621-9826-8bcb1a10aeb4/3959c815-c95e-4f39-9dc4-9ce18d0701b9"
+storage_version_token = "1790967016891671"
+content_type = "text/html"
+
+[[outputs]]
+id = "Rq0E2jvA00MjfKM5FyLvz"
+uri = "file://infra/cloudflare/forest/rollout-evidence/live-totals-forest.png"
+type = "image"
+title = "Live forest with programme totals"
+description = "Production forest now reads real aggregate totals. Current eligible allocations are zero; field evidence remains pending."
+logical_id = "f1ae9f72-a696-4449-b535-ef618cf26a2b"
+content_hash = "sha256:19259d5944ec2ef58cc402b3913c5100e6a76b3abe03eded4e455d86facebc54"
+size = 424691
+mtime_ms = 1791057841958
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/f1ae9f72-a696-4449-b535-ef618cf26a2b/4c035ea1-1a7d-489b-be71-df22d5c31c35"
+storage_version_token = "1791057977320285"
+content_type = "image/png"
+
+[[outputs]]
+id = "a8KqJtQMNkj-2hHmVutOp"
+uri = "file://.local/outputs/weekly-analytics.chart.html"
+type = "text"
+title = "Recorded traffic peaked on October 3"
+description = "Recorded project pageviews in the requested seven-day window. Only dates with recorded events are plotted; October 4 is partial."
+logical_id = "f310e14b-641a-476c-adc9-1dc283dc0be4"
+content_hash = "sha256:e0999b8869964050c2e915b2939edb9156270b12a165fe0b68288fa987a529e2"
+size = 3103
+mtime_ms = 1791113767404
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/f310e14b-641a-476c-adc9-1dc283dc0be4/f89d12af-df4e-4af7-bbd0-791fab3a7a0a"
+storage_version_token = "1791113767739002"
+content_type = "text/html;profile=replit-chart"
+
+[[outputs]]
+id = "4tVELpBAlieA9C3KOOwCc"
+uri = "file://.local/reports/five-day-verification/verification.html"
+type = "html"
+title = "Five-day independent verification report"
+description = "FAIL verdict with captured build/test/HTTP evidence, production-versus-frozen-source comparison, corrected browser findings and explicit verification gaps."
+logical_id = "9e52dcd3-4b1b-4ca5-9ce3-fa8bac284e3a"
+content_hash = "sha256:ff9b2f5f64abfc44b542755ee19264a53b81c55898a62be1f8a6e6cdec24a1ce"
+size = 188913
+mtime_ms = 1791184461324
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/9e52dcd3-4b1b-4ca5-9ce3-fa8bac284e3a/20d51d9d-2039-424b-98b0-fe56bccb83b4"
+storage_version_token = "1791184461978047"
+content_type = "text/html"
+
+[[outputs]]
+id = "Apiy0XthXGUfkXv3wEqIF"
+uri = "file://.local/reports/consistency-rollout/api-first-gate.html"
+type = "html"
+title = "Main consistency rollout: API-first gate"
+description = "Prepared changes confirmed, empty production schema diff, isolated build/test evidence and the dependency findings currently pausing publication."
+logical_id = "4eb191cc-c5ee-47c9-a969-ece5d8ee652c"
+content_hash = "sha256:ee3c72d6441868b4685972c98980821e80710fbc6a3151bd5f998c4d780968c0"
+size = 13294
+mtime_ms = 1791287063604
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/4eb191cc-c5ee-47c9-a969-ece5d8ee652c/63240dda-9aaf-400e-8fd3-56734082d5c7"
+storage_version_token = "1791287064623635"
+content_type = "text/html"
+
+[[outputs]]
+id = "wqw5DMbAAOst6skC9ijGX"
+uri = "file://.local/reports/consistency-rollout/security-only-revision.html"
+type = "html"
+title = "Security-only consistency revision: verification"
+description = "Exact source boundary, three fixed dependency versions, 32 passing candidate checks and isolated API build. Not published; tracked Security Center review remains pending."
+logical_id = "0eeda23e-c97a-4618-b758-77bb7b7747b4"
+content_hash = "sha256:b0e801097238921e29578e40a3a10f29829cbe0a21c46454af22c0e87af7c066"
+size = 15091
+mtime_ms = 1791288847526
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/0eeda23e-c97a-4618-b758-77bb7b7747b4/15553ee9-4b2e-419f-acbf-594c6f6bcf33"
+storage_version_token = "1791288847942318"
+content_type = "text/html"
+
+[[outputs]]
+id = "XtRoMdo2-rkscRPeVp0Xh"
+uri = "file://.local/reports/consistency-rollout/main-reinspection.html"
+type = "html"
+title = "Main rollout: deployment and full schema inspection"
+description = "Verified prepared files and empty full production schema diff. Public hosts still serve the legacy response; clients and publication remain gated."
+logical_id = "5ab6d5a7-6c67-43a6-8c9b-b9ca1add66f9"
+content_hash = "sha256:c0e11b411ef8168b41291508ac9eeb114edc8bae49674e8f03b72402206d7de7"
+size = 3156
+mtime_ms = 1791331993917
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/5ab6d5a7-6c67-43a6-8c9b-b9ca1add66f9/7daf2b5b-0901-4665-96b8-19cf9b5e106a"
+storage_version_token = "1791331994375693"
+content_type = "text/html"
+
+[[outputs]]
+id = "0lBdBqRTyf2ukjGAqhw0w"
+uri = "file://.local/reports/consistency-rollout/coordinated-main-verification.html"
+type = "html"
+title = "Coordinated rollout: main, production and security coverage"
+description = "Approved package verified; fresh snapshots agree. Full additive schema diff and merged-feature coverage show why publication and blanket deployed claims remain blocked."
+logical_id = "dc6b41a3-1501-42c1-b353-88b33073f1f8"
+content_hash = "sha256:b214208027b2dc820448f6ba2c1443860c0dcdee5871df7c4d26f705fa03bb95"
+size = 14832
+mtime_ms = 1791473702181
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/dc6b41a3-1501-42c1-b353-88b33073f1f8/2f171276-c9c5-4750-ada8-ddf9a665ca37"
+storage_version_token = "1791473702842071"
+content_type = "text/html"
+
+[[outputs]]
+id = "jaYu4zuJ43_3O8DJFdUHT"
+uri = "file://.local/reports/consistency-rollout/consolidated-review.html"
+type = "html"
+title = "Consolidated release review — validated, not published"
+description = "Merged feature/security package, isolated dependency fixes, passed checks and the remaining API-first, schema, scanner and runtime dependency gates."
+logical_id = "1a6c24db-78c0-47c7-97cf-6b0e006dd3df"
+content_hash = "sha256:8231c3416910eb7636e5f2986824d8703adbc526dbf440a487f73d7e285edc20"
+size = 10111
+mtime_ms = 1791475797361
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/1a6c24db-78c0-47c7-97cf-6b0e006dd3df/f944e48d-1132-4eb6-aa58-dfed42ac41e0"
+storage_version_token = "1791475798683113"
+content_type = "text/html"
+
+[[outputs]]
+id = "63s9D6aH3i7e0cWHPQpI6"
+uri = "file://.local/reports/observability-roadmap/design-review.html"
+type = "html"
+title = "Full observability roadmap — written design review"
+description = "API-first release sequence, implementation boundaries, privacy rules, acceptance checks, independent uptime and native-crash phases."
+logical_id = "0ef2b7e7-daa3-466f-99f3-7b269949eea3"
+content_hash = "sha256:f2531bb5b38d0821d577f654d5b65f400e2b8002e64988b5e99e26d3161f68df"
+size = 19235
+mtime_ms = 1791480450485
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/0ef2b7e7-daa3-466f-99f3-7b269949eea3/d7b342aa-2066-47d2-b091-a40a93e43128"
+storage_version_token = "1791480451027567"
+content_type = "text/html"
+
+[[outputs]]
+id = "rrWkJmLO8eU0iczq99tHF"
+uri = "file://exports/release-observability-and-test-guide.html"
+type = "html"
+title = "Release observability and test guide"
+description = "Printable operating guide for release identity, isolated security tests, live API snapshot gates, build/image evidence and privacy-safe monitoring. Publication remains separately gated."
+logical_id = "9b5407df-1618-442c-aa6b-251110cc4a48"
+content_hash = "sha256:fd325e1894a2cb823f83d03c5c4de015ad84f85748eca2af50bb6eaedb905e1f"
+size = 16660
+mtime_ms = 1791480997463
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/9b5407df-1618-442c-aa6b-251110cc4a48/c4b7f1fe-f69f-4bad-8abf-5a1ac370289e"
+storage_version_token = "1791481020861726"
+content_type = "text/html"
+
+[[outputs]]
+id = "54NnTiZGyYJtEXTmEkaP2"
+uri = "file://exports/full-observability-roadmap-and-testing.html"
+type = "html"
+title = "Full observability roadmap and testing steps"
+description = "Eight release milestones, testing locations, exact commands, browser/device procedures, pass criteria and safety gates."
+logical_id = "af58b85f-ab36-4785-a0a4-810339edb96a"
+content_hash = "sha256:537a3818000f878ba403f670fc9a492298bad8ffbff32eee97d0efa40a6bc134"
+size = 40228
+mtime_ms = 1791483585193
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/af58b85f-ab36-4785-a0a4-810339edb96a/75e728ec-9434-494c-bf1e-3c8675471d0a"
+storage_version_token = "1791483585961697"
+content_type = "text/html"
+
+[[outputs]]
+id = "GMEjM7j1GWLXe1Bdl2Lp2"
+uri = "file://exports/security-only-dependency-review.html"
+type = "html"
+title = "Verified security-only package — scope and release review"
+description = "Exact archive, three dependency changes, 72 passing checks, builds, audit findings and API-first publication gates. Not selected or published."
+logical_id = "896c81e6-12b8-4850-a809-8ed8983f7134"
+content_hash = "sha256:645e7e5e4e8085f0e04006b688e3481586430c72167f99a0f730a83aefe11a53"
+size = 15021
+mtime_ms = 1791539843440
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/896c81e6-12b8-4850-a809-8ed8983f7134/5189485c-2086-44e2-99cf-636b01d522ed"
+storage_version_token = "1791539957700730"
+content_type = "text/html"
+
+[[outputs]]
+id = "oOyUuk3raBu29JspG2G7e"
+uri = "file://exports/security-only-selection-status.html"
+type = "html"
+title = "Security-only selection verified — publication still on hold"
+description = "Main pins, exact-source verification, production schema diff, public API checks and additional Security Center findings."
+logical_id = "d3375de8-12f9-424a-a2d0-3e72ead1705c"
+content_hash = "sha256:fd1738242c958c92e38b2ceb49e774b8b7bac2fe9f6bbbd4df9c05147f2ca1bf"
+size = 9952
+mtime_ms = 1791542820214
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/d3375de8-12f9-424a-a2d0-3e72ead1705c/14939c33-66c5-4e03-82db-b29f554de846"
+storage_version_token = "1791542821000425"
+content_type = "text/html"
+
+[[outputs]]
+id = "8h9ksItUUfEytR9m5nEUX"
+uri = "file://exports/security-center-review-blocked.html"
+type = "html"
+title = "Security-only review — installation blocker recorded"
+description = "Exact narrow package, dependency findings, verified progress, cache installation failure and release gates."
+logical_id = "de8f542f-9412-4569-a0ec-bf4a270ab81e"
+content_hash = "sha256:9f4bfd78428a1d0db252e73a4cf1a0772295d766aed034f4eb3c1424284e59f6"
+size = 6731
+mtime_ms = 1791547555609
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/de8f542f-9412-4569-a0ec-bf4a270ab81e/1a509294-3572-4981-b53d-97a6f8ce9dc4"
+storage_version_token = "1791547556340520"
+content_type = "text/html"
+
+[[outputs]]
+id = "qzJY2IyUBhm8O2VpIM7MM"
+uri = "file://exports/security-cache-installation-resolved.html"
+type = "html"
+title = "Security installation blocker resolved — exact package review"
+description = "Cold-install proof, three fixed dependency versions, remaining tested-backport advisories, production schema/host observations and approval gates."
+logical_id = "8804db49-1b07-4018-a468-2f8b27998c54"
+content_hash = "sha256:e67f9fbfe0a465aab3619336993545cc0a18e92822e6f68eb61c32572cdff95e"
+size = 7066
+mtime_ms = 1791557325360
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/8804db49-1b07-4018-a468-2f8b27998c54/cad0dc72-c7f2-4b3f-a11a-7fdb7470a0da"
+storage_version_token = "1791557325836061"
+content_type = "text/html"
+
+[[outputs]]
+id = "FfE4PVmNAqupflVNaUB8Q"
+uri = "file://exports/security-package-selected.html"
+type = "html"
+title = "Approved security package selected — verification record"
+description = "Main alignment, 74 completed release checks, retained advisory exceptions, empty schema diff and separate API-first publication gate."
+logical_id = "c553d9f8-1260-4e20-bc2b-c0c4acfa0b2f"
+content_hash = "sha256:bc7d535cb7b6109721b5ae1392091634cb8720cefc8f3e89a793f56e300b76f9"
+size = 2241
+mtime_ms = 1791558546851
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:d663b7bc-63dd-4d9c-a358-3d9e4ae2078b/c553d9f8-1260-4e20-bc2b-c0c4acfa0b2f/5ec2782c-3337-4b15-b460-1dc15dba93b1"
+storage_version_token = "1791558547436745"
+content_type = "text/html"

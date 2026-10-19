@@ -24,6 +24,10 @@ async function routeRequest(request) {
   }
 
   const requestOrigin = request.headers.get("Origin");
+  // This one aggregate is public and credential-free. Never widen private API CORS.
+  const isPublicForestRead = incoming.pathname === "/api/uc/impact/forest" &&
+    (request.method === "GET" || request.method === "HEAD" ||
+      (request.method === "OPTIONS" && ["GET", "HEAD"].includes(request.headers.get("Access-Control-Request-Method"))));
   const isAllowedApiOrigin = ALLOWED_API_ORIGINS.has(requestOrigin);
   const isApiPath =
     incoming.pathname === "/api" || incoming.pathname.startsWith("/api/");
@@ -49,7 +53,10 @@ async function routeRequest(request) {
     request.headers.has("Access-Control-Request-Method")
   ) {
     const headers = apiNoStoreHeaders();
-    if (isAllowedApiOrigin) {
+    if (isPublicForestRead) {
+      headers.set("Access-Control-Allow-Origin", "*");
+      headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    } else if (isAllowedApiOrigin) {
       applyApiCors(headers, requestOrigin);
     }
     return new Response(null, { status: 204, headers });
@@ -114,7 +121,10 @@ async function routeRequest(request) {
   if (isApiHost) {
     headers.delete("Access-Control-Allow-Origin");
     headers.delete("Access-Control-Allow-Credentials");
-    if (isAllowedApiOrigin) {
+    if (isPublicForestRead) {
+      headers.set("Access-Control-Allow-Origin", "*");
+      headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    } else if (isAllowedApiOrigin) {
       applyApiCors(headers, requestOrigin);
     }
   }
@@ -131,6 +141,13 @@ async function routeRequest(request) {
   }
 
   const contentType = headers.get("Content-Type") || "";
+  // HTML and release metadata must always reflect the current deployment.
+  // A cached shell can point at removed bundles and hide newly shipped tabs.
+  if (contentType.includes("text/html") || incoming.pathname === "/version.json") {
+    headers.set("Cache-Control", "no-store");
+    headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+    headers.delete("Expires");
+  }
   const isExpoManifest =
     isCompanionHost &&
     contentType.includes("application/json") &&

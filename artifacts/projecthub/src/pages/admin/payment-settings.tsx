@@ -121,7 +121,7 @@ function TeamAlertEmailCard({ data }: { data: PaymentSettingsData }) {
       void qc.invalidateQueries({ queryKey: ["admin-payment-settings"] });
       toast({
         title: "Alert email saved",
-        description: "Account-deletion alerts will be sent to the new address immediately.",
+        description: "Recovery-order and account-deletion alerts will use the new address immediately.",
       });
       setEmail("");
       setShowInput(false);
@@ -142,7 +142,7 @@ function TeamAlertEmailCard({ data }: { data: PaymentSettingsData }) {
             Team Alert Email Address
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Account-deletion alerts are sent to this address. Changes take effect immediately —
+            Recovery-order and account-deletion alerts are sent to this address. Changes take effect immediately —
             no server restart needed.
           </p>
         </div>
@@ -182,14 +182,14 @@ function TeamAlertEmailCard({ data }: { data: PaymentSettingsData }) {
             <Input
               id="alert-email"
               type="email"
-              placeholder="e.g. privacy@yourcompany.com"
+              placeholder="e.g. alerts@yourcompany.com"
               value={email}
               onChange={(ev) => setEmail(ev.target.value)}
               disabled={mutation.isPending}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              Account-deletion notifications will be delivered here. Use a mailbox the team monitors regularly.
+               Recovery-order and account-deletion notifications will be delivered here. Use a mailbox the team monitors regularly.
             </p>
           </div>
           <div className="flex gap-2">

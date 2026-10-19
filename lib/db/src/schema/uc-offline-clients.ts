@@ -8,6 +8,9 @@ import { pgTable, serial, text, timestamp, json, integer, index, uniqueIndex } f
  */
 
 export interface OfflineProduct {
+  lineId?: string;
+  /** Server-owned unit identities. Removed units are never recycled. */
+  unitIds?: string[];
   productId?:     number;   // maps to PRODUCT_LITRES capacity map on the server
   productName:    string;   // display name (always required)
   quantity:       number;

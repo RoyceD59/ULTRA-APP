@@ -1,0 +1,237 @@
+{
+  "observedAt": "2026-10-09T10:46:58.977Z",
+  "candidateSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+  "scopeSha256": "4ee4d0f8c6741da1fd5e7b5c840286ec79214d6f561662ed3a85f332fc546cb6",
+  "selectionApproved": true,
+  "testedBackportMitigationsAccepted": [
+    "GHSA-vfj7-8cjw-p6xm: unchanged braces backport, verified installed-consumer fixtures",
+    "GHSA-86w9-cpqp-85rv: unchanged node-forge backport, verified installed-consumer fixtures"
+  ],
+  "publicationApproved": false,
+  "clientsAdvanced": false,
+  "priorArchivesAndApprovalsUnchanged": true,
+  "mainPins": {
+    "sharp": "0.35.5",
+    "librsvg": "2.63.2",
+    "shell-quote": "1.11.0",
+    "music-metadata": "11.16.0"
+  },
+  "mainImporters": "All unchanged except approved sharp direct pin and existing WhatsApp sharp peer reference; original codegen contexts preserved",
+  "stageAdoption": {
+    "retainedSourceFilesAndModesCompared": 1264,
+    "archiveSha256": "1e4c4a6ab52703298db9b4b460cc7faed8ccd796a672f46a9b8baa6c905e9af0",
+    "installedFrozenLockfileVerified": true
+  },
+  "verification": {
+    "selectionTestsPassed": 7,
+    "archiveIntegrityTestsPassed": 41,
+    "handoffTestsPassed": 9,
+    "consolidatedIsolationTestsPassed": 2,
+    "mainBackportFixturesPassed": 7,
+    "retainedConsumerFixturesPassed": 4,
+    "typechecks": [
+      "main shared libraries",
+      "main API",
+      "main ProjectHub",
+      "main Companion",
+      "selected API"
+    ],
+    "selectedApiLocalOnlyBuild": "passed; outputs not copied; no publication",
+    "selectedApiSecurityFixtureTestsPassed": 34,
+    "developmentApiAndCompanionRestarted": true,
+    "developmentApiHealth": "ok",
+    "projecthubPublicPreview": "sign-in page loads"
+  },
+  "productionTarget": {
+    "additionalUrls": [],
+    "deploymentType": "autoscale",
+    "hasSuccessfulBuild": true,
+    "isDeployed": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "success": true,
+    "visibility": "public"
+  },
+  "fullProductionSchemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": false,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "publicApiCompatibility": {
+    "observedAt": "2026-10-09T10:44:21.230Z",
+    "success": true,
+    "snapshots": [
+      {
+        "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+        "adjustmentRevision": 1,
+        "calculatedAt": "2026-10-09T10:44:24.585Z",
+        "lifespanAvailable": true,
+        "totalUsers": 6,
+        "litresFiltered": 1550,
+        "plasticsAvoided": 3100,
+        "cleanWaterDays": 0
+      },
+      {
+        "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+        "adjustmentRevision": 1,
+        "calculatedAt": "2026-10-09T10:44:24.390Z",
+        "lifespanAvailable": true,
+        "totalUsers": 6,
+        "litresFiltered": 1550,
+        "plasticsAvoided": 3100,
+        "cleanWaterDays": 0
+      }
+    ],
+    "purpose": "Read-only compatibility check, not proof that the newly selected security package is published",
+    "repeatBeforeClientPublication": true
+  },
+  "productionOnlyPnpmAudit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 2,
+      "critical": 0
+    },
+    "dependencies": 875,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 875
+  },
+  "broaderSecurityCenter": {
+    "metadata": {
+      "vulnerabilities": {
+        "critical": 0,
+        "high": 3,
+        "info": 0,
+        "low": 0,
+        "moderate": 2
+      }
+    },
+    "findings": [
+      {
+        "id": "GHSA-vfj7-8cjw-p6xm@braces-3.0.3",
+        "package": {
+          "ecosystem": "npm",
+          "name": "braces",
+          "purl": "pkg:npm/braces",
+          "version": "3.0.3"
+        },
+        "severity": {
+          "level": "high",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+        },
+        "source": {
+          "scannedAt": "2026-10-09T10:42:42.654Z",
+          "scanner": "osv-scanner"
+        }
+      },
+      {
+        "id": "GHSA-jggr-w7fw-pc2j@fast-copy-4.0.4",
+        "package": {
+          "ecosystem": "npm",
+          "name": "fast-copy",
+          "purl": "pkg:npm/fast-copy",
+          "version": "4.0.4"
+        },
+        "severity": {
+          "level": "moderate",
+          "type": "CVSS_V4",
+          "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N"
+        },
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": false,
+          "version": "4.1.0"
+        },
+        "source": {
+          "scannedAt": "2026-10-09T10:42:42.657Z",
+          "scanner": "osv-scanner"
+        }
+      },
+      {
+        "id": "GHSA-ch52-4w7c-c8xp@http-cache-semantics-4.2.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "http-cache-semantics",
+          "purl": "pkg:npm/http-cache-semantics",
+          "version": "4.2.0"
+        },
+        "severity": {
+          "level": "high",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+        },
+        "source": {
+          "scannedAt": "2026-10-09T10:42:42.657Z",
+          "scanner": "osv-scanner"
+        }
+      },
+      {
+        "id": "GHSA-86w9-cpqp-85rv@node-forge-1.4.0",
+        "package": {
+          "ecosystem": "npm",
+          "name": "node-forge",
+          "purl": "pkg:npm/node-forge",
+          "version": "1.4.0"
+        },
+        "severity": {
+          "level": "high",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+        },
+        "source": {
+          "scannedAt": "2026-10-09T10:42:42.657Z",
+          "scanner": "osv-scanner"
+        }
+      },
+      {
+        "id": "GHSA-rj75-hqrm-r3gf@postcss-selector-parser-6.0.10",
+        "package": {
+          "ecosystem": "npm",
+          "name": "postcss-selector-parser",
+          "purl": "pkg:npm/postcss-selector-parser",
+          "version": "6.0.10"
+        },
+        "severity": {
+          "level": "moderate",
+          "type": "CVSS_V3",
+          "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+        },
+        "fix": {
+          "available": true,
+          "requiresMajorUpdate": true,
+          "version": "7.1.6"
+        },
+        "source": {
+          "scannedAt": "2026-10-09T10:42:42.657Z",
+          "scanner": "osv-scanner"
+        }
+      }
+    ]
+  },
+  "additionalReview": {
+    "requiredBeforePublication": true,
+    "httpCacheSemantics": "existing unchanged backport tested, additional version-based high feed finding not included in the two newly accepted advisory records",
+    "fastCopy": "4.0.4 reported moderate; confirmed bundled into selected API pino-pretty worker despite dev dependency classification",
+    "postcssSelectorParser": "6.0.10 reported moderate through ProjectHub Tailwind typography build dependency"
+  },
+  "limits": {
+    "apiPublished": false,
+    "productionSchemasApplied": false,
+    "clientsPublished": false,
+    "clientSelectorsUnchanged": true,
+    "newLiveSecurityPackageVerified": false,
+    "nativeBinaryDistributed": false,
+    "providerConfigurationChanged": false
+  },
+  "nextStep": "Review additional broader-scan findings within security-only scope before separately approved API publication. Verify the new API publication and repeat both-host fresh snapshot checks before any client publication."
+}

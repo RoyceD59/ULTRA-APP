@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import { reloadAppAsync } from 'expo';
+import FilterDropIllustration from './FilterDropIllustration';
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -68,6 +69,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       ) : null}
 
       <View style={styles.content}>
+        <FilterDropIllustration />
         <Text style={[styles.title, { color: colors.foreground }]}>
           Something went wrong
         </Text>
@@ -78,6 +80,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
         <Pressable
           onPress={handleRestart}
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.button,
             {

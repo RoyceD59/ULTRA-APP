@@ -2,16 +2,23 @@ import React, { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useApi, type UCBlogArticleSummary } from '@/hooks/useApi';
 import { fetchBlogPage } from '@/lib/blogContent';
 import { useCartBarInset } from '@/hooks/useCartBarInset';
+import { useCompanionLayout } from '@/hooks/useCompanionLayout';
+import PageDataLoader from '@/components/PageDataLoader';
+import PageDataError from '@/components/PageDataError';
+
+import PhotoHeader from '@/components/PhotoHeader';
+import SwipeTabs from '@/components/SwipeTabs';
+import { headingProps } from '@/lib/accessibility';
 
 const PAGE_SIZE = 12;
-const topPad = Platform.OS === 'web' ? 67 : 0;
+const topPad = 0;
 
 function formatPublishedDate(value: string): string {
   const date = new Date(value);
@@ -50,6 +57,11 @@ function ArticleCard({
 }
 
 export default function BlogScreen() {
+  return <SwipeTabs tab="blog"><BlogScreenContent /></SwipeTabs>;
+}
+
+function BlogScreenContent() {
+  const layout = useCompanionLayout();
   const colors = useColors();
   const router = useRouter();
   const api = useApi();
@@ -77,7 +89,8 @@ export default function BlogScreen() {
       signal,
     ),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 
@@ -95,25 +108,32 @@ export default function BlogScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <FlatList
+        key={`articles-${layout.articleColumns}`}
+        numColumns={layout.articleColumns}
+        columnWrapperStyle={layout.articleColumns > 1 ? { gap: layout.gap } : undefined}
         data={articles}
         keyExtractor={(article) => article.id}
         renderItem={({ item }) => (
-          <ArticleCard article={item} onPress={() => router.push(`/blog/${encodeURIComponent(item.slug)}` as never)} />
+          <View style={{ width: layout.articleWidth }}>
+            <ArticleCard article={item} onPress={() => router.push(`/blog/${encodeURIComponent(item.slug)}` as never)} />
+          </View>
         )}
-        contentContainerStyle={[styles.listContent, { paddingBottom: cartBarInset || (Platform.OS === 'web' ? 118 : 100) }]}
+        contentContainerStyle={[styles.listContent, { paddingHorizontal: layout.gutter, paddingBottom: cartBarInset }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={(
           <View style={styles.listHeader}>
-            <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topPad + 22 }]}>
+            <PhotoHeader initialView source={require('@/assets/headers/blog-water.jpg')} photoHeight={112} position="top" style={{ marginHorizontal: -14 }}>
+            <View style={[styles.header, { backgroundColor: '#005d8f', marginHorizontal: 0, paddingTop: topPad + 18 }]}>
               <View style={[styles.headerIcon, { backgroundColor: colors.primaryForeground }]}>
                 <Ionicons name="book-outline" size={23} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.headerTitle, { color: colors.primaryForeground }]}>The UC Blog</Text>
+                <Text {...headingProps(1)} style={[styles.headerTitle, { color: colors.primaryForeground }]}>The UC Blog</Text>
                 <Text style={[styles.headerSubtitle, { color: colors.primaryForeground }]}>Clear answers for healthier water.</Text>
               </View>
             </View>
+            </PhotoHeader>
             <View style={styles.controls}>
               <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Ionicons name="search-outline" size={19} color={colors.mutedForeground} />
@@ -167,25 +187,17 @@ export default function BlogScreen() {
                   <Text style={[styles.offlineText, { color: colors.text }]}>Showing saved articles. Connect to refresh.</Text>
                 </View>
               ) : null}
+               {query.isError && query.data !== undefined ? (
+                 <PageDataError title="Articles could not refresh" message="Your saved articles remain available." onRetry={query.refetch} />
+              ) : null}
             </View>
           </View>
         )}
         ListEmptyComponent={
-          query.isLoading ? (
-            <View style={styles.state}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Loading articles…</Text>
-            </View>
-          ) : query.isError ? (
-            <View style={styles.state}>
-              <Ionicons name="cloud-offline-outline" size={28} color={colors.mutedForeground} />
-              <Text style={[styles.stateTitle, { color: colors.text }]}>Blog unavailable</Text>
-              <Text style={[styles.stateText, { color: colors.mutedForeground }]}>Your other Companion features are still here. Try again when your connection is back.</Text>
-              <TouchableOpacity accessibilityRole="button" testID="blog-retry" onPress={() => { void query.refetch(); }}
-                style={[styles.retryButton, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.retryText, { color: colors.primaryForeground }]}>Try again</Text>
-              </TouchableOpacity>
-            </View>
+          query.data === undefined && query.isLoading ? (
+            <PageDataLoader label="Loading articles…" />
+          ) : query.data === undefined && query.isError ? (
+            <PageDataError title="Blog unavailable" error={query.error} onRetry={query.refetch} testID="blog-retry" />
           ) : (
             <View style={styles.state}>
               <Ionicons name="newspaper-outline" size={30} color={colors.mutedForeground} />
@@ -220,7 +232,7 @@ export default function BlogScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  listContent: { paddingHorizontal: 14, gap: 12, width: '100%', maxWidth: 900, alignSelf: 'center' },
+  listContent: { paddingHorizontal: 14, gap: 12, width: '100%', maxWidth: 1200, alignSelf: 'center' },
   listHeader: { gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 13, marginHorizontal: -14, paddingHorizontal: 20, paddingBottom: 22 },
   headerIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
@@ -235,7 +247,7 @@ const styles = StyleSheet.create({
   offlineNotice: { borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
   offlineText: { fontSize: 12, flexShrink: 1 },
   articleCard: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 9 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   category: { maxWidth: '70%', overflow: 'hidden', borderRadius: 20, paddingHorizontal: 9, paddingVertical: 4, fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase', letterSpacing: 0.4 },
   date: { fontSize: 11 },
   articleTitle: { fontSize: 17, lineHeight: 23, fontWeight: '700' as const },

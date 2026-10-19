@@ -13,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { LibraryKnowledgeReview, type KnowledgeMetadata } from "@/components/library-knowledge-review";
 import {
   Upload, FileText, FileImage, Film, Archive, File, Download, Trash2,
   BookOpen, Search, Loader2, FolderOpen,
@@ -29,6 +30,11 @@ interface LibraryDoc {
   objectPath: string;
   uploadedBy: string;
   createdAt:  string;
+  knowledgeStatus: "private" | "approved" | "revoked";
+  knowledgeRevision: number;
+  knowledgeTitle: string | null;
+  knowledgeReviewedAt: string | null;
+  knowledgeReviewedBy: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -122,6 +128,9 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file || !title.trim()) return;
+    const fileType = (!file.type || file.type === "application/octet-stream")
+      ? (/\.(md|markdown)$/i.test(file.name) ? "text/markdown" : /\.txt$/i.test(file.name) ? "text/plain" : file.type)
+      : file.type;
 
     try {
       // Step 1: request presigned URL — server creates the upload slot and returns
@@ -131,7 +140,7 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
       const { uploadURL, uploadId } = await apiFetch("/api/library/request-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, fileSize: file.size, fileType: file.type }),
+        body: JSON.stringify({ fileName: file.name, fileSize: file.size, fileType }),
       }).then(r => r.json()) as { uploadURL: string; uploadId: string };
 
       // Step 2: upload directly to GCS via presigned URL (no auth header — signed URL is self-authenticating)
@@ -144,7 +153,7 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
         xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`GCS upload failed: ${xhr.status}`));
         xhr.onerror = () => reject(new Error("Network error during upload"));
         xhr.open("PUT", uploadURL);
-        xhr.setRequestHeader("Content-Type", file.type);
+        xhr.setRequestHeader("Content-Type", fileType);
         xhr.send(file);
       });
 
@@ -157,7 +166,7 @@ function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(), fileName: file.name,
-          fileSize: file.size, fileType: file.type, uploadId,
+          fileSize: file.size, fileType, uploadId,
         }),
       }).then(r => r.json()) as LibraryDoc;
 
@@ -272,10 +281,18 @@ export default function LibraryPage() {
   const [deleteTarget, setDeleteTarget] = useState<LibraryDoc | null>(null);
   const [deleting,     setDeleting]     = useState(false);
   const [downloading,  setDownloading]  = useState<string | null>(null);
+  const [reviewDoc, setReviewDoc] = useState<LibraryDoc | null>(null);
 
   // ── Fetch docs ──────────────────────────────────────────────────────────────
   useEffect(() => {
     loadDocs();
+    const refresh = () => {
+      apiFetch("/api/library/docs").then(r => r.json()).then(({ docs: list }: { docs: LibraryDoc[] }) => setDocs(list))
+        .catch(() => { /* foreground reload retains the explicit error state */ });
+    };
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener("focus", refresh); };
   }, []);
 
   async function loadDocs() {
@@ -348,6 +365,9 @@ export default function LibraryPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Team document repository — SOPs, reports, guides, and reference files.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Uploads are private by default. Administrators can review UTF-8 Markdown/text (32 KB) or text-based PDFs (5 MB, 40 pages) for Alison. Extracted text is limited to 16,000 characters.
           </p>
         </div>
         <Button onClick={() => setShowUpload(true)}>
@@ -430,6 +450,21 @@ export default function LibraryPage() {
               </div>
 
               {/* Actions */}
+              <div className="space-y-1">
+                <Badge variant={doc.knowledgeStatus === "approved" ? "default" : "secondary"}>
+                  {doc.knowledgeStatus === "approved" ? "Approved for Alison" : doc.knowledgeStatus === "revoked" ? "Alison approval revoked" : "Private — not used by Alison"}
+                </Badge>
+                {doc.knowledgeReviewedAt && <p className="text-xs text-muted-foreground">
+                  Reviewed {formatDate(doc.knowledgeReviewedAt)}
+                  {doc.knowledgeTitle ? ` · ${doc.knowledgeTitle}` : ""}
+                </p>}
+                {admin && <Button size="sm" variant="outline" className="w-full" onClick={() => setReviewDoc(doc)}
+                  disabled={doc.knowledgeStatus !== "approved" && (doc.fileType === "application/pdf" ? doc.fileSize > 5 * 1024 * 1024 : !["text/plain", "text/markdown", "text/x-markdown"].includes(doc.fileType) || doc.fileSize > 32 * 1024)}>
+                  {doc.knowledgeStatus === "approved" ? "Review / revoke Alison approval" : "Review for Alison"}
+                </Button>}
+                {admin && (doc.fileType === "application/pdf" ? doc.fileSize > 5 * 1024 * 1024 : !["text/plain", "text/markdown", "text/x-markdown"].includes(doc.fileType) || doc.fileSize > 32 * 1024)
+                  && <p className="text-xs text-muted-foreground">For Alison, upload public Markdown/text (32 KB) or a text-based PDF (5 MB, 40 pages). Word and scanned PDFs are unsupported.</p>}
+              </div>
               <div className="flex gap-2 pt-1">
                 <Button
                   size="sm"
@@ -458,6 +493,11 @@ export default function LibraryPage() {
       )}
 
       {/* Upload dialog */}
+      {reviewDoc && <LibraryKnowledgeReview doc={reviewDoc} request={apiFetch} onClose={() => setReviewDoc(null)}
+        onChanged={(metadata: KnowledgeMetadata) => {
+          setDocs(prev => prev.map(doc => doc.id === metadata.id ? { ...doc, ...metadata } : doc));
+          toast({ title: metadata.knowledgeStatus === "approved" ? "Approved for Alison" : "Alison approval revoked" });
+        }} />}
       <UploadDialog
         open={showUpload}
         onClose={() => setShowUpload(false)}

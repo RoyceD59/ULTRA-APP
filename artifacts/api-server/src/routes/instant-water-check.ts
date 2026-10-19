@@ -27,6 +27,7 @@ import { getLiveWaterTestsAccess } from "../lib/adminAuth.js";
 import { sendSmsAwaitable } from "../lib/sms.js";
 import { sendWhatsAppMessage } from "../lib/whatsapp.js";
 import { logger } from "../lib/logger.js";
+import { normalizeWaterSelections } from "../lib/instant-water-check.js";
 import {
   attachAssessment,
   confirmVerification,
@@ -65,7 +66,9 @@ function onlyKeys(value: unknown, keys: readonly string[]): boolean {
 }
 
 function validAnswers(value: unknown): boolean {
-  return onlyKeys(value, ["country", "area", "source", "concern", "symptom", "useContext", "setting"]);
+  if (!onlyKeys(value, ["country", "area", "source", "concern", "symptom", "useContext", "setting", "sources", "concerns", "settings"])) return false;
+  try { normalizeWaterSelections(value as Parameters<typeof normalizeWaterSelections>[0]); return true; }
+  catch { return false; }
 }
 
 function identityError(value: unknown): "INVALID_FIRST_NAME" | "INVALID_PHONE" | null {
@@ -84,13 +87,23 @@ function identityError(value: unknown): "INVALID_FIRST_NAME" | "INVALID_PHONE" |
 }
 
 function fail(res: Response, error: unknown): void {
+  const promotionError = (error as { code?: string })?.code;
+  if (promotionError === "INVALID_PROMOTION" || promotionError === "PROMOTION_EXHAUSTED") {
+    res.status(422).json({ error: (error as Error).message }); return;
+  }
   const code = error instanceof Error ? error.message : "";
+  if (code === "CONTACT_COMPLETION_REQUIRED" || code === "CONTACT_ADDRESS_REQUIRED") {
+    res.status(422).json({ code, error: code === "CONTACT_COMPLETION_REQUIRED"
+      ? "Save a valid phone and contact address in your account before booking."
+      : "Enter the service address before booking.", fields: { address: "A nonblank address of 500 characters or fewer is required." } });
+    return;
+  }
   const safeCodes = new Set([
     "RATE_LIMITED", "IDEMPOTENCY_CONFLICT", "CONFLICT", "OWNERSHIP_CONFLICT", "NOT_FOUND",
     "ACTION_UNAUTHORIZED", "OTP_LOCKED", "INVALID_CODE", "SMS_CONSENT_REQUIRED",
      "INVALID_FIRST_NAME", "INVALID_PHONE", "MEDIA_LIMIT", "INVALID_MEDIA_REFERENCE", "ACKNOWLEDGEMENT_REQUIRED",
     "EXPECTED_UPDATED_AT_REQUIRED", "INVALID_STATE_TRANSITION", "MEDIA_OWNERSHIP_INVALID",
-    "DELIVERY_RETRYABLE", "DELIVERY_IN_PROGRESS",
+    "DELIVERY_RETRYABLE", "DELIVERY_IN_PROGRESS", "VERIFICATION_EXPIRED", "VERIFICATION_USED",
     "MEDIA_METADATA_INVALID",
   ]);
   if (safeCodes.has(code)) logger.warn({ code }, "Instant water check request rejected");
@@ -102,12 +115,16 @@ function fail(res: Response, error: unknown): void {
     code === "OTP_LOCKED" ? 429 :
     code === "DELIVERY_RETRYABLE" ? 503 :
     code === "DELIVERY_IN_PROGRESS" ? 409 :
+    code === "VERIFICATION_EXPIRED" ? 410 :
+    code === "VERIFICATION_USED" ? 409 :
     code === "HANDOFF_INVALID" ? 403 :
     code === "INVALID_CODE" ? 400 :
      code === "SMS_CONSENT_REQUIRED" || code.endsWith("_REQUIRED") || code === "INVALID_FIRST_NAME" || code === "INVALID_PHONE" || code === "MEDIA_LIMIT" || code === "INVALID_MEDIA_REFERENCE" || code === "MEDIA_OWNERSHIP_INVALID" || code === "MEDIA_METADATA_INVALID" || code === "INVALID_STATE_TRANSITION" ? 400 : 500;
   const messages: Record<string, string> = {
     INVALID_FIRST_NAME: "Please enter a valid first name",
     INVALID_PHONE: "Please enter a valid phone number for the selected country",
+    VERIFICATION_EXPIRED: "This verification code has expired. Request a new code with a new idempotency key.",
+    VERIFICATION_USED: "This verification code has already been used. Request a new code with a new idempotency key if verification is still needed.",
   };
   res.status(status).json({ error: status === 500 ? "Water assessment operation failed" : messages[code] ?? code.toLowerCase().replaceAll("_", " ") });
 }
@@ -298,7 +315,7 @@ router.post("/uc/water-check/assessments/:assessmentId/physical-test", async (re
   const params = parsed(RequestInstantWaterPhysicalTestParams, req.params);
   const body = parsed(RequestInstantWaterPhysicalTestBody.strict(), req.body);
   if (!params || !body ||
-      !onlyKeys(req.body, ["actionToken", "idempotencyKey", "serviceAddress", "preferredContactTime", "acknowledgement", "mediaReferences"]) ||
+      !onlyKeys(req.body, ["actionToken", "idempotencyKey", "serviceAddress", "preferredContactTime", "acknowledgement", "mediaReferences", "promoCode"]) ||
       (req.body?.mediaReferences !== undefined &&
        (!Array.isArray(req.body.mediaReferences) ||
         req.body.mediaReferences.some((item: unknown) => !onlyKeys(item, ["reference", "mediaType"]))))) {
@@ -315,6 +332,7 @@ router.post("/uc/water-check/assessments/:assessmentId/physical-test", async (re
       acknowledgement: body.acknowledgement,
       mediaReferences: body.mediaReferences,
        idempotencyKey: body.idempotencyKey,
+      promoCode: body.promoCode,
     });
     res.json(result);
   } catch (error) {

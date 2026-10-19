@@ -60,7 +60,7 @@ function logSmsAttempt(params: {
       errorMessage: params.errorMessage,
     })
     .catch((err: unknown) => {
-      console.error("[sms] notification log write failed:", err);
+      console.error("[sms] notification log write failed");
     });
 }
 
@@ -79,10 +79,12 @@ export async function sendSms(
     orderId?:  number | string;
     ticketId?: string;
     testId?:   string;
+    redactLogs?: boolean;
   },
 ): Promise<void> {
   if (!hasATCredentials()) {
-    console.log("[sms] AT credentials absent — skipping SMS to", to);
+    if (meta?.redactLogs) console.log("[sms] private order SMS unavailable", { orderId: meta.orderId });
+    else console.log("[sms] AT credentials absent — skipping SMS to", to);
     logSmsAttempt({
       recipient:    normalisePhone(to) || to,
       template:     meta?.template ?? "",
@@ -98,7 +100,8 @@ export async function sendSms(
 
   const phone = normalisePhone(to);
   if (!phone) {
-    console.warn("[sms] Cannot normalise phone number:", to);
+    if (meta?.redactLogs) console.warn("[sms] private order SMS phone invalid", { orderId: meta.orderId });
+    else console.warn("[sms] Cannot normalise phone number:", to);
     return;
   }
 
@@ -132,25 +135,28 @@ export async function sendSms(
     .then(async (res) => {
       if (!res.ok) {
         const body = await res.text().catch(() => "(unreadable)");
-        console.error(`[sms] AT returned ${res.status}:`, body);
-        logSmsAttempt({ ...logMeta, status: "failed", errorMessage: `AT ${res.status}: ${body}` });
+        const diagnostic = meta?.redactLogs ? `AT ${res.status}` : `AT ${res.status}: ${body}`;
+        console.error("[sms] delivery rejected", diagnostic);
+        logSmsAttempt({ ...logMeta, status: "failed", errorMessage: diagnostic });
       } else {
         const data = await res.json().catch(() => null);
-        console.log("[sms] sent to", phone, "—", JSON.stringify(data));
+        if (meta?.redactLogs) console.log("[sms] private order SMS accepted", { orderId: meta.orderId });
+        else console.log("[sms] sent to", phone, "—", JSON.stringify(data));
         logSmsAttempt({ ...logMeta, status: "sent" });
       }
     })
     .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[sms] network error:", err);
+      const msg = meta?.redactLogs ? "SMS transport unavailable" : err instanceof Error ? err.message : String(err);
+      if (meta?.redactLogs) console.error("[sms] network error:", msg);
+      else console.error("[sms] network error:", err);
       logSmsAttempt({ ...logMeta, status: "failed", errorMessage: `Network error: ${msg}` });
     });
 }
 
 /**
  * Awaitable variant of sendSms — resolves to `true` when AT accepts the
- * message (HTTP 2xx) and `false` otherwise (non-2xx, network error, or
- * missing credentials / phone).
+ * message (HTTP 2xx and successful recipient status) and `false` otherwise
+ * (provider rejection, network error, or missing credentials / phone).
  *
  * Unlike `sendSms` this awaits the AT fetch so callers that need to know
  * whether the channel succeeded can react accordingly.  The same
@@ -165,6 +171,7 @@ export async function sendSmsAwaitable(
     ticketId?: string;
     testId?:   string;
   },
+  signal?: AbortSignal,
 ): Promise<boolean> {
   if (!hasATCredentials()) {
     console.log("[sms] AT credentials absent — skipping SMS to", to);
@@ -201,6 +208,7 @@ export async function sendSmsAwaitable(
 
   try {
     const res = await fetch(AT_BASE, {
+      signal,
       method: "POST",
       headers: {
         "Accept":       "application/json",
@@ -221,8 +229,16 @@ export async function sendSmsAwaitable(
       return false;
     }
 
-    const data = await res.json().catch(() => null);
-    console.log("[sms] sent to", phone, "—", JSON.stringify(data));
+    const data = await res.json().catch(() => null) as {
+      SMSMessageData?: { Recipients?: { statusCode?: number }[] };
+    } | null;
+    const recipients = data?.SMSMessageData?.Recipients;
+    if (!Array.isArray(recipients) || recipients.length === 0 ||
+        recipients.some((recipient: { statusCode?: number }) => ![100, 101, 102].includes(Number(recipient.statusCode)))) {
+      logSmsAttempt({ ...logMeta, status: "failed", errorMessage: "Africa's Talking did not accept the recipient" });
+      return false;
+    }
+    console.log("[sms] sent to", phone);
     logSmsAttempt({ ...logMeta, status: "sent" });
     return true;
   } catch (err: unknown) {
@@ -234,6 +250,27 @@ export async function sendSmsAwaitable(
 }
 
 // ─── Message templates ─────────────────────────────────────────────────────────
+
+export type OrderFulfillmentDetails = {
+  estimatedDelivery?: string;
+  trackingUrl?: string;
+  trackingNumber?: string;
+  collectionLocation?: string;
+  note?: string;
+};
+
+export function orderShippedSms(params: OrderFulfillmentDetails & { orderId: string | number }): string {
+  return `Your Ultra Clear order #${params.orderId} is on its way!` +
+    (params.estimatedDelivery ? ` Estimated delivery: ${params.estimatedDelivery}.` : "") +
+    (params.trackingUrl ? ` Track your driver: ${params.trackingUrl}` : "") +
+    (params.trackingNumber ? ` Tracking number: ${params.trackingNumber}.` : "") +
+    (params.note ? ` ${params.note}` : "");
+}
+
+export function orderReadyToCollectSms(params: OrderFulfillmentDetails & { orderId: string | number; collectionLocation: string }): string {
+  return `Your Ultra Clear order #${params.orderId} is ready to collect from ${params.collectionLocation}.` +
+    (params.note ? ` ${params.note}` : "");
+}
 
 export function orderConfirmationSms(params: {
   orderId:   string | number;
@@ -262,12 +299,13 @@ export function waterTestConfirmationSms(params: {
   testId:    string;
   address:   string;
   firstName: string;
+  freeWaterTest?: boolean;
 }): string {
   const shortAddr = params.address.length > 40
     ? params.address.slice(0, 37) + "…"
     : params.address;
   return (
-    `Hi ${params.firstName}! Your free Ultra Clear water quality test (ref: ${params.testId}) ` +
+    `Hi ${params.firstName}! Your ${params.freeWaterTest ? "free " : ""}Ultra Clear water quality test (ref: ${params.testId}) ` +
     `is booked for ${shortAddr}. ` +
     `We'll call to confirm the appointment time. Questions? Call 0717774049.`
   );

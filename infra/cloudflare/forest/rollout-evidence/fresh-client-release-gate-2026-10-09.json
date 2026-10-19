@@ -1,0 +1,155 @@
+{
+  "recordedAt": "2026-10-09T09:20:55.096Z",
+  "mainRevision": "1c3181f6448121055dcf8bc2bb6205503e67df1a",
+  "requestedAction": "Refresh live snapshots and prepare approved consistency client publication",
+  "candidateSha256": "88f896ab82c4450ac11d9b21ce27035cc8596c0b36c122f29ff857ef124f5e82",
+  "archiveAndApprovalVerification": "passed",
+  "productionTarget": {
+    "additionalUrls": [],
+    "deploymentType": "autoscale",
+    "hasSuccessfulBuild": true,
+    "isDeployed": true,
+    "primaryUrl": "https://team-horizon--jerryaroyce.replit.app",
+    "success": true,
+    "visibility": "public"
+  },
+  "fullProductionSchemaDiff": {
+    "columnsToRemove": [],
+    "hasDiff": false,
+    "hasStructuralDataLoss": false,
+    "matViewsToRemove": [],
+    "maybeNonBackwardsCompatible": false,
+    "schemasToRemove": [],
+    "statementsToExecute": [],
+    "success": true,
+    "tablesToRemove": [],
+    "tablesToTruncate": [],
+    "warnings": []
+  },
+  "snapshots": {
+    "checkedAt": "2026-10-09T09:18:05.638Z",
+    "compatibleFreshAndAgreeingAtProbe": true,
+    "snapshotId": "9ef3b54c4cfe12d9216b71e300d3c5981de6534fff7c662e29aa7efc1a599c2b",
+    "adjustmentRevision": 1,
+    "hosts": [
+      {
+        "origin": "https://api.ucfilters.com",
+        "calculatedAt": "2026-10-09T09:18:08.626Z"
+      },
+      {
+        "origin": "https://team-horizon--jerryaroyce.replit.app",
+        "calculatedAt": "2026-10-09T09:18:08.409Z"
+      }
+    ],
+    "totalUsers": 6,
+    "litresFiltered": 1550,
+    "plasticsAvoided": 3100,
+    "cleanWaterDays": 0,
+    "lifespanAvailable": true
+  },
+  "servedClient": {
+    "buildId": "1791526319429-504",
+    "revision": "a787b1a16fad710f8725a9e1fb7722a89661c54e",
+    "builtAt": "2026-10-09T06:12:57.823Z",
+    "allThreeBundlesAvailable": true,
+    "referencedAssetsAvailable": 56,
+    "referencedAssetFailures": 0,
+    "versionedNativeManifestUrlsStatus": 404,
+    "activeNativeManifestFallbacks": {
+      "ios": "matching build, HTTP 200",
+      "android": "matching build, HTTP 200"
+    },
+    "completeLocalRollbackCopyRetained": false
+  },
+  "securityAudit": {
+    "scope": "Production dependencies in exact selected retained source archive, extracted into disposable /tmp review directory; no package installation or source modification",
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 3,
+        "high": 3,
+        "critical": 1
+      },
+      "dependencies": 856,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 856
+    },
+    "advisories": [
+      {
+        "package": "node-forge",
+        "severity": "high",
+        "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+        "url": "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+        "vulnerableVersions": "<=1.4.0",
+        "patchedVersions": "<0.0.0"
+      },
+      {
+        "package": "braces",
+        "severity": "high",
+        "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+        "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "vulnerableVersions": "<=3.0.3",
+        "patchedVersions": "<0.0.0"
+      },
+      {
+        "package": "sharp",
+        "severity": "high",
+        "title": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+        "url": "https://github.com/advisories/GHSA-wq5f-xc86-pv6w",
+        "vulnerableVersions": "<0.35.5",
+        "patchedVersions": ">=0.35.5"
+      },
+      {
+        "package": "shell-quote",
+        "severity": "critical",
+        "title": "shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
+        "url": "https://github.com/advisories/GHSA-pqg4-j6r4-53mv",
+        "vulnerableVersions": ">=1.8.4 <1.11.0",
+        "patchedVersions": ">=1.11.0"
+      },
+      {
+        "package": "music-metadata",
+        "severity": "moderate",
+        "title": "music-metadata: MP4 stsd sample-entry size==0 causes a synchronous infinite loop (DoS) — unreleased regression on master",
+        "url": "https://github.com/advisories/GHSA-f94x-6692-553q",
+        "vulnerableVersions": "<11.16.0",
+        "patchedVersions": ">=11.16.0"
+      },
+      {
+        "package": "music-metadata",
+        "severity": "moderate",
+        "title": "music-metadata: EBML parser trusts element lengths, allowing memory exhaustion or process abort",
+        "url": "https://github.com/advisories/GHSA-5gfj-9q3v-qfp3",
+        "vulnerableVersions": "<11.16.0",
+        "patchedVersions": ">=11.16.0"
+      },
+      {
+        "package": "music-metadata",
+        "severity": "moderate",
+        "title": "music-metadata: uncatchable process crash parsing a crafted `.dsf` (residual of GHSA-v6c2-xwv6-8xf7)",
+        "url": "https://github.com/advisories/GHSA-8j4c-6x6g-rq3j",
+        "vulnerableVersions": "<=11.14.0",
+        "patchedVersions": ">=11.15.0"
+      }
+    ],
+    "knownBackports": [
+      "braces",
+      "node-forge"
+    ],
+    "unresolvedCriticalHighBlockers": [
+      "shell-quote <1.11.0",
+      "sharp <0.35.5"
+    ],
+    "moderateFindingsRequireReview": true
+  },
+  "decision": "NO-GO: fresh snapshot gate passes but unresolved critical/high dependencies prevent client-publication preparation. Do not substitute consolidated package or bypass security gate.",
+  "actions": {
+    "publication": false,
+    "clientSelectionChange": false,
+    "productionWrites": false,
+    "dependencyChanges": false,
+    "applicationTestsRun": false
+  }
+}

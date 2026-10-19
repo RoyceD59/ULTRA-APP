@@ -1,0 +1,143 @@
+/**
+ * Repeatable production-export benchmark. No live customer/payment requests.
+ * node scripts/measure-loading.cjs /tmp/export /tmp/results.json
+ * Requires the workspace's Playwright (no mobile device emulation claim).
+ */
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const zlib = require('node:zlib');
+const { chromium } = require('@playwright/test');
+const { observeFonts, isFontRequest } = require('./startup-fonts.cjs');
+
+function scriptBytes(directory, urls) {
+  return urls.map(url => {
+    const bytes = fs.readFileSync(path.join(directory, decodeURIComponent(url)));
+    return {
+      name: path.basename(url),
+      raw: bytes.length,
+      gzip: zlib.gzipSync(bytes, { level: 9 }).length,
+      brotli: zlib.brotliCompressSync(bytes, {
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9 },
+      }).length,
+    };
+  });
+}
+
+async function typography(page) {
+  return page.evaluate(() => {
+    const texts = ['Your water, your health', 'Benchmark filter', 'Read article', 'Home', 'Products', 'Blog'];
+    return [...document.querySelectorAll('*')].filter(el =>
+      el.children.length === 0 && texts.includes(el.textContent) && el.getBoundingClientRect().width > 0
+    ).map(el => {
+      const style = getComputedStyle(el);
+      return { text: el.textContent, family: style.fontFamily, weight: style.fontWeight, size: style.fontSize };
+    });
+  });
+}
+
+function serveExport(directory, port = 8098) {
+  const root = path.resolve(directory);
+  return http.createServer((req, res) => {
+    const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    const file = path.join(root, pathname === '/' ? 'index.html' : pathname);
+    const target = fs.existsSync(file) && fs.statSync(file).isFile() ? file : path.join(root, 'index.html');
+    res.setHeader('content-type', ({ '.js': 'text/javascript', '.html': 'text/html', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif' })[path.extname(target)] || 'application/octet-stream');
+    res.end(fs.readFileSync(target));
+  }).listen(port, '127.0.0.1');
+}
+
+async function main() {
+  const results = [];
+  const server = serveExport(process.argv[2]);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || '/repl/tools/bin/chromium', args: ['--no-sandbox'] });
+  try {
+    for (const slow of [false, true]) {
+      for (let run = 0; run < 3; run++) {
+        const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+        const page = await context.newPage();
+        const fontObserver = observeFonts(page);
+        const profile = await context.newCDPSession(page);
+        await profile.send('Performance.enable');
+        const errors = [];
+        const errorStacks = [];
+        const failedRequests = [];
+        page.on('pageerror', e => { errors.push(e.message); errorStacks.push(e.stack); });
+        page.on('requestfailed', r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
+        page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });
+        let requests = 0;
+        const scripts = new Set();
+        page.on('request', request => {
+          requests++;
+          const url = new URL(request.url());
+          if (url.pathname.endsWith('.js')) scripts.add(url.pathname);
+        });
+        await page.route('**/*', async route => {
+          const url = route.request().url();
+          if (slow && isFontRequest(route.request())) await new Promise(r => setTimeout(r, 2000));
+          if (url.includes('/api/')) {
+            if (slow) await new Promise(r => setTimeout(r, 1800));
+            const payload = url.includes('/blog') ? {
+              articles: [{ id: 'benchmark', slug: 'benchmark', title: 'Benchmark water guide', category: 'Water', summary: 'Fixture only', publishedAt: '2026-01-01' }], nextCursor: null,
+            } : url.includes('/products') ? [{
+              id: 900000, name: 'Benchmark filter', price: '100', regularPrice: '100', salePrice: '', images: [], sku: 'BENCH', categories: [], tags: [], stockStatus: 'instock', stockQuantity: 1,
+            }] : url.includes('/impact') ? { totalLitres: 0, treesPlanted: 0 } : [];
+            return route.fulfill({ json: payload });
+          }
+          return route.continue();
+        });
+        const start = Date.now();
+        await page.goto('http://localhost:8098/', { waitUntil: 'domcontentloaded' });
+        await page.getByText('Your water, your health', { exact: true }).waitFor();
+        const homeUsableMs = Date.now() - start;
+        // Count all initially requested runtime/shared/layout/route scripts,
+        // not just entry.js. Encoded bytes are estimates, not edge transfers.
+        const initialScriptUrls = [...scripts];
+        const startupMetrics = await profile.send('Performance.getMetrics');
+        const startupJsWork = Object.fromEntries(startupMetrics.metrics
+          .filter(m => ['ScriptDuration', 'TaskDuration'].includes(m.name))
+          .map(m => [m.name, m.value]));
+        await page.getByText('Benchmark filter', { exact: true }).first().waitFor();
+        const homeProductsMs = Date.now() - start;
+        const homeTypography = await typography(page);
+        let t = Date.now();
+        await page.getByRole('tab', { name: 'Products', exact: true }).click();
+        await page.getByPlaceholder('Search filters, systems…').waitFor();
+        await page.getByText('Benchmark filter', { exact: true }).first().waitFor();
+        const shopMs = Date.now() - t;
+        const shopTypography = await typography(page);
+        t = Date.now();
+        await page.getByRole('tab', { name: 'Blog', exact: true }).click();
+        await page.getByText('Read article', { exact: true }).first().waitFor();
+        const blogMs = Date.now() - t;
+        const blogTypography = await typography(page);
+        t = Date.now();
+        await page.getByRole('tab', { name: 'Home', exact: true }).click();
+        await page.getByText('Your water, your health', { exact: true }).waitFor();
+        const warmHomeMs = Date.now() - t;
+        const { metrics } = await profile.send('Performance.getMetrics');
+        // Include background font transfers even if navigation finishes first.
+        await page.waitForLoadState('networkidle');
+        const fonts = await fontObserver.report();
+        fontObserver.stop();
+        const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(r => ({ name: r.name.split('/').pop(), duration: Math.round(r.duration), bytes: r.transferSize, bodyBytes: r.encodedBodySize })));
+        const jsWork = Object.fromEntries(metrics.filter(m => ['ScriptDuration', 'TaskDuration', 'JSHeapUsedSize'].includes(m.name)).map(m => [m.name, m.value]));
+        // Compression is deliberately outside the timed browser journey.
+        const initialScripts = scriptBytes(process.argv[2], initialScriptUrls);
+        results.push({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests, startupJsWork, initialScripts, jsWork, resources, fonts, typography: { home: homeTypography, shop: shopTypography, blog: blogTypography }, errors, errorStacks, failedRequests });
+        // Preserve evidence from failed profiling runs; never label them passes.
+        fs.writeFileSync(process.argv[3], JSON.stringify(results, null, 2));
+        console.log({ slow, run, homeUsableMs, homeProductsMs, shopMs, blogMs, warmHomeMs, requests });
+        if (errors.length) throw new Error(JSON.stringify(errors));
+        await context.close();
+      }
+    }
+    fs.writeFileSync(process.argv[3], JSON.stringify(results, null, 2));
+    console.log(results.map(({ resources, ...rest }) => rest));
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}
+module.exports = { serveExport };
+if (require.main === module) main().catch(e => { console.error(e); process.exitCode = 1; });

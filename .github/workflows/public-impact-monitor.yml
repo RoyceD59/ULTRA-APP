@@ -1,0 +1,50 @@
+name: Public impact snapshot monitor
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check without reading/writing incident state or sending warnings'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: public-impact-monitor
+  cancel-in-progress: false
+jobs:
+  monitor:
+    if: github.event_name == 'workflow_dispatch' || vars.PUBLIC_IMPACT_MONITOR_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Check approved contract fixtures
+        run: node --test infra/cloudflare/forest/public-impact-monitor.test.mjs
+      - name: No-send public check
+        if: vars.PUBLIC_IMPACT_MONITOR_ENABLED != 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        run: node infra/cloudflare/forest/run-public-impact-monitor.mjs --dry-run
+      - name: Approved live check
+        if: vars.PUBLIC_IMPACT_MONITOR_ENABLED == 'true' && (github.event_name == 'schedule' || !inputs.dry_run)
+        env:
+          PUBLIC_IMPACT_MONITOR_ENABLED: ${{ vars.PUBLIC_IMPACT_MONITOR_ENABLED }}
+          PUBLIC_IMPACT_MONITOR_ISSUE: ${{ vars.PUBLIC_IMPACT_MONITOR_ISSUE }}
+          MONITOR_GITHUB_TOKEN: ${{ github.token }}
+        run: node infra/cloudflare/forest/run-public-impact-monitor.mjs --live
+      - name: Retain sanitized UTC evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: public-impact-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: generated-artifacts/public-impact-monitor/evidence.json
+          if-no-files-found: warn
+          retention-days: 14

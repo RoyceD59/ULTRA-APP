@@ -1,3 +1,12 @@
+import type { File } from "@google-cloud/storage";
+
+export const IMAGE_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
+]);
+export const VIDEO_TYPES = new Set([
+  "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
+]);
+
 const ASCII = (bytes: Buffer, start: number, length: number): string =>
   bytes.subarray(start, start + length).toString("ascii");
 
@@ -47,7 +56,27 @@ export function detectReviewMediaMime(bytes: Buffer): string | null {
 }
 
 export function mediaMimeFamily(contentType: string): "photo" | "video" | null {
-  if (contentType.startsWith("image/")) return "photo";
-  if (contentType.startsWith("video/")) return "video";
+  if (IMAGE_TYPES.has(contentType)) return "photo";
+  if (VIDEO_TYPES.has(contentType)) return "video";
   return null;
+}
+
+/** Stored MIME metadata is uploader-controlled, even after presigning.
+ * Read a bounded prefix for every attachment, not only unlabelled objects. */
+export async function verifyReviewMediaContent(
+  file: Pick<File, "createReadStream">,
+  contentType: string,
+  family: "photo" | "video",
+): Promise<string | null> {
+  if (contentType && contentType !== "application/octet-stream" &&
+      mediaMimeFamily(contentType) !== family) return null;
+  const header = await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const stream = file.createReadStream({ start: 0, end: 63 });
+    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+  const detectedType = detectReviewMediaMime(header);
+  return detectedType && mediaMimeFamily(detectedType) === family ? detectedType : null;
 }

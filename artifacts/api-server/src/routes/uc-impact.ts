@@ -18,18 +18,21 @@
  * was entered before the per-client register existed.
  */
 import { Router, type Request, type Response, type IRouter } from "express";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { createHash } from "node:crypto";
 import {
   db,
   ucOrdersTable,
   ucOrderItemsTable,
   ucOfflineClientsTable,
+  ucGlobalImpactTable,
   type OfflineProduct,
 } from "@workspace/db";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { requireImpactEditAccess } from "../lib/adminAuth.js";
 import { getProductLifespanMap } from "./uc.js";
+import { saveGlobalImpact, ImpactConflict } from "../lib/global-impact-store.js";
+import { verifyToken } from "../lib/jwt.js";
+import { ReadGlobalImpactResponse, SaveGlobalImpactAdjustmentBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -63,49 +66,14 @@ export const PRODUCT_LITRES: Record<number, number> = {
 // Statuses that count as "fulfilled" for impact purposes
 const FULFILLED_STATUSES = ["completed", "processing", "on-hold"];
 
-// ─── Legacy override file ──────────────────────────────────────────────────────
-const OVERRIDE_FILE = path.resolve("artifacts/api-server/data/impact-override.json");
-
-interface ImpactOverride {
-  litresOffset:  number;
-  usersOffset:   number;
-  lastUpdatedBy: string;
-  lastUpdatedAt: string;
-}
-
-const DEFAULT_OVERRIDE: ImpactOverride = {
-  litresOffset:  0,
-  usersOffset:   0,
-  lastUpdatedBy: "system",
-  lastUpdatedAt: "",
-};
-
-let _override: ImpactOverride | null = null;
-
-async function readOverride(): Promise<ImpactOverride> {
-  if (_override !== null) return _override;
-  try {
-    const raw = await fs.readFile(OVERRIDE_FILE, "utf8");
-    _override = JSON.parse(raw) as ImpactOverride;
-  } catch {
-    _override = { ...DEFAULT_OVERRIDE };
-  }
-  return _override;
-}
-
-async function writeOverride(o: ImpactOverride): Promise<void> {
-  _override = o;
-  await fs.writeFile(OVERRIDE_FILE, JSON.stringify(o, null, 2), "utf8");
-}
-
 // ─── Auto-calculate from app DB orders ───────────────────────────────────────
 
-async function calcImpactFromDb(): Promise<{
+async function calcImpactFromDb(database: Pick<typeof db, "select">, lifespans: Map<number, number> | null): Promise<{
   totalUsers: number;
   litresFiltered: number;
   cleanWaterDays: number;
 }> {
-  const orders = await db
+  const orders = await database
     .select({ id: ucOrdersTable.id, userId: ucOrdersTable.userId })
     .from(ucOrdersTable)
     .where(inArray(ucOrdersTable.status, FULFILLED_STATUSES));
@@ -116,7 +84,7 @@ async function calcImpactFromDb(): Promise<{
   const userIds    = new Set(orders.map(o => o.userId));
   const totalUsers = userIds.size;
 
-  const items = await db
+  const items = await database
     .select({
       productId: ucOrderItemsTable.productId,
       quantity:  ucOrderItemsTable.quantity,
@@ -127,7 +95,6 @@ async function calcImpactFromDb(): Promise<{
   // Lifespan map from the live catalogue (cached, never guessed). When the
   // store has never been reachable the map is null — count 0 rather than
   // fabricate lifespans; litres/users are unaffected.
-  const lifespans = await getProductLifespanMap();
 
   let litresFiltered = 0;
   let cleanWaterDays = 0;
@@ -143,11 +110,11 @@ async function calcImpactFromDb(): Promise<{
 
 // ─── Calculate from offline client entries ────────────────────────────────────
 
-async function calcImpactFromOfflineClients(): Promise<{
+async function calcImpactFromOfflineClients(database: Pick<typeof db, "select">): Promise<{
   clientCount: number;
   litresFiltered: number;
 }> {
-  const rows = await db.select().from(ucOfflineClientsTable);
+  const rows = await database.select().from(ucOfflineClientsTable);
   if (rows.length === 0) return { clientCount: 0, litresFiltered: 0 };
 
   let litresFiltered = 0;
@@ -166,17 +133,19 @@ async function calcImpactFromOfflineClients(): Promise<{
 
 // ─── GET /api/uc/impact ───────────────────────────────────────────────────────
 
-router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => {
+router.get("/uc/impact", async (req: Request, res: Response): Promise<void> => {
+  res.set("Cache-Control", "no-store");
   try {
-    const [
-      { totalUsers: dbUsers, litresFiltered: dbLitres, cleanWaterDays },
-      { clientCount: offlineCount, litresFiltered: offlineLitres },
-      override,
-    ] = await Promise.all([
-      calcImpactFromDb(),
-      calcImpactFromOfflineClients(),
-      readOverride(),
-    ]);
+    const lifespans = await getProductLifespanMap();
+    // All DB components come from one MVCC snapshot, not independently racing reads.
+    const [{ totalUsers: dbUsers, litresFiltered: dbLitres, cleanWaterDays },
+      { clientCount: offlineCount, litresFiltered: offlineLitres }, override] = await db.transaction(async tx => {
+      const app = await calcImpactFromDb(tx, lifespans);
+      const offline = await calcImpactFromOfflineClients(tx);
+      const [adjustment] = await tx.select().from(ucGlobalImpactTable).where(eq(ucGlobalImpactTable.id, "global"));
+      if (!adjustment) throw new Error("Shared impact adjustments await explicit legacy import or staff initialization");
+      return [app, offline, adjustment] as const;
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
 
     const legacyLitresOffset = override.litresOffset ?? 0;
     const legacyUsersOffset  = override.usersOffset  ?? 0;
@@ -185,7 +154,16 @@ router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => 
     const litresFiltered  = dbLitres     + offlineLitres   + legacyLitresOffset;
     const plasticsAvoided = litresFiltered * 2;
 
-    res.json({
+    const snapshotId = createHash("sha256").update(JSON.stringify({
+      dbUsers, dbLitres, cleanWaterDays, offlineCount, offlineLitres,
+      legacyLitresOffset, legacyUsersOffset, revision: override.revision, lifespanAvailable: lifespans !== null,
+    })).digest("hex");
+    res.json(ReadGlobalImpactResponse.parse({
+      snapshotId,
+      adjustmentRevision: override.revision,
+      calculatedAt: new Date().toISOString(),
+      maxAgeSeconds: 60,
+      lifespanAvailable: lifespans !== null,
       totalUsers:      Math.max(0, totalUsers),
       litresFiltered:  Math.max(0, litresFiltered),
       plasticsAvoided: Math.max(0, plasticsAvoided),
@@ -205,13 +183,13 @@ router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => 
         litresOffset:  legacyLitresOffset,
         usersOffset:   legacyUsersOffset,
         lastUpdatedBy: override.lastUpdatedBy,
-        lastUpdatedAt: override.lastUpdatedAt,
+        lastUpdatedAt: override.lastUpdatedAt?.toISOString() ?? "",
       },
       lastUpdated: new Date().toISOString(),
-    });
+    }));
   } catch (err) {
-    console.error("[uc/impact] calculation error:", err);
-    res.status(500).json({ error: "Failed to calculate impact metrics" });
+    req.log.error({ err }, "Global impact calculation unavailable");
+    res.status(503).json({ error: "Global impact is unavailable; no live totals were calculated" });
   }
 });
 
@@ -219,10 +197,12 @@ router.get("/uc/impact", async (_req: Request, res: Response): Promise<void> => 
 
 router.post("/uc/impact/override", async (req: Request, res: Response): Promise<void> => {
   if (!(await requireImpactEditAccess(req, res))) return;
-  const { litresOffset, usersOffset, updatedBy } = req.body as {
+  const parsed = SaveGlobalImpactAdjustmentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid global impact adjustment" }); return; }
+  const { litresOffset, usersOffset, expectedRevision } = req.body as {
     litresOffset?: unknown;
     usersOffset?:  unknown;
-    updatedBy?:    unknown;
+    expectedRevision?: unknown;
   };
 
   if (
@@ -240,16 +220,26 @@ router.post("/uc/impact/override", async (req: Request, res: Response): Promise<
     return;
   }
 
-  const current = await readOverride();
-  const next: ImpactOverride = {
-    litresOffset:  typeof litresOffset === "number" ? Math.round(litresOffset) : current.litresOffset,
-    usersOffset:   typeof usersOffset  === "number" ? Math.round(usersOffset)  : current.usersOffset,
-    lastUpdatedBy: typeof updatedBy    === "string" ? updatedBy : "admin",
-    lastUpdatedAt: new Date().toISOString(),
-  };
-
-  await writeOverride(next);
-  res.json({ ok: true, override: next });
+  if ((litresOffset === undefined && usersOffset === undefined) ||
+      (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || Number(expectedRevision) < 0))) {
+    res.status(400).json({ error: "Provide an adjustment and a valid expectedRevision" }); return;
+  }
+  try {
+    const claims = verifyToken(req.headers.authorization)!;
+    const next = await saveGlobalImpact({
+      litresOffset: typeof litresOffset === "number" ? Math.round(litresOffset) : undefined,
+      usersOffset: typeof usersOffset === "number" ? Math.round(usersOffset) : undefined,
+    }, `${claims.type === "team-session" ? "team" : "customer"}:${claims.id}`,
+    typeof expectedRevision === "number" ? expectedRevision : undefined);
+    res.json({ ok: true, override: {
+      litresOffset: next.litres_offset, usersOffset: next.users_offset, revision: next.revision,
+      lastUpdatedBy: next.last_updated_by, lastUpdatedAt: next.last_updated_at,
+    } });
+  } catch (err) {
+    if (err instanceof ImpactConflict) { res.status(409).json({ error: err.message }); return; }
+    req.log.error({ err }, "Global adjustment save failed");
+    res.status(503).json({ error: "Adjustments could not be saved. Retry after refreshing." });
+  }
 });
 
 export default router;

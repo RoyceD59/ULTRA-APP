@@ -1,0 +1,34 @@
+{
+  "/": {
+    "title": "Ultra-Clear Companion",
+    "description": "Helping Kenyan Ultra Clear filter owners keep their filters working, log the water they filter and see the difference it makes."
+  },
+  "/products": {
+    "title": "Ultra Clear Products",
+    "description": "Browse Ultra Clear filters and accessories, explore product details and contact the team with product enquiries."
+  },
+  "/blog": {
+    "title": "The UC Blog",
+    "description": "Read published Ultra Clear articles about water, filters and care."
+  },
+  "/about": {
+    "title": "About Ultra Clear Companion",
+    "description": "Ultra Clear Companion is the owner's app for Ultra Clear filters. It helps you maintain your filter, log the water you filter and see your personal impact alongside the shared impact of the community."
+  },
+  "/map": {
+    "title": "Ultra Clear Locations",
+    "description": "Explore verified Ultra Clear locations and their published addresses, opening hours and access information."
+  },
+  "/water-test": {
+    "title": "Water Assessment and Testing",
+    "description": "Assess your water sources and concerns, and request a physical water test through Ultra Clear Companion."
+  },
+  "/enquiry": {
+    "title": "Product Enquiry",
+    "description": "Contact the Ultra Clear team about a product and send your enquiry."
+  },
+  "/support": {
+    "title": "Ultra Clear Support",
+    "description": "Find published installation and care guides for your Ultra Clear filter."
+  }
+}

@@ -1,0 +1,906 @@
+{
+  "measuredAt": "2026-10-04T02:35:27.042Z",
+  "origin": "https://app.ucfilters.com",
+  "note": "Chromium workspace simulation. Cold/warm refer to browser cache only. LCP/CLS are lab observations; INP requires representative interactions/field data. No physical Android/iPhone claims.",
+  "samples": [
+    {
+      "throttled": false,
+      "run": 0,
+      "warmth": "cold",
+      "route": "/product/10170",
+      "observationMs": 7519,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 2576,
+        "cls": 0,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 222.19999999995343,
+          "transfer": 1192013,
+          "encoded": 1191713,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 62.299999999813735,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 73.89999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 119.20000000018626,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 24.0999999998603,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/favicon.ico",
+          "duration": 60.60000000009313,
+          "transfer": 309,
+          "encoded": 9,
+          "decoded": 9
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 0.5999999998603016,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 0.6999999999534339,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 0.39999999990686774,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 0.7000000001862645,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 171.5,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170",
+          "duration": 1346.8000000000466,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170/reviews",
+          "duration": 148.19999999995343,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 216.30000000004657,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 130.30000000004657,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 151,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 0.7999999998137355,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 80.60000000009313,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/storage/objects/uploads/a073bc56-ec21-4982-b1c5-4de72c19d30e?w=390",
+          "duration": 105.4000000001397,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/product/10170",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 498.30000000004657,
+        "navigationId": 5977,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 1.1000000000931323,
+        "domainLookupStart": 3.1000000000931323,
+        "domainLookupEnd": 3.300000000046566,
+        "connectStart": 3.300000000046566,
+        "secureConnectionStart": 15.200000000186265,
+        "connectEnd": 78.9000000001397,
+        "requestStart": 79.10000000009313,
+        "responseStart": 132.80000000004657,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 132.80000000004657,
+        "responseEnd": 133.9000000001397,
+        "transferSize": 1456,
+        "encodedBodySize": 1156,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "EXPIRED"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 7,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 32,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 156.70000000018626,
+        "domContentLoadedEventStart": 496.10000000009313,
+        "domContentLoadedEventEnd": 497.10000000009313,
+        "domComplete": 497.4000000001397,
+        "loadEventStart": 498.30000000004657,
+        "loadEventEnd": 498.30000000004657,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "low"
+        }
+      },
+      "visibleText": "Product Details\nProducts\nSALE\nAccessories &amp; Replacements\n\nFaucet Filter Cartridge\nSKU: \n\n\n\n\n\n4.0 (1)\nKES 1,499\nKES 1,999\n\nIn Stock\n\nPrices match our website — guaranteed\nProduct Details\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nCertifications & Trust\nCertified & Trusted\nPatrons\n\nYour Neighborhood\nRated\n\nDermatologist\nTested\n\nISO 9001\nCertified\n\nBPA\nFree\n\nRoHS\nCertified\nReviews\n\n\n\n\n\n4.0 · 1 review\nJ\nJosphine W.\n\n\n\n\n\n4 Sept 2026\nHaving the filter replacement is very good\n\nWrite a review\n\n\nAdd to Cart",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 0.46801,
+        "TaskDuration": 0.73707
+      }
+    },
+    {
+      "throttled": false,
+      "run": 0,
+      "warmth": "warm",
+      "route": "/product/10170",
+      "observationMs": 7186,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 1720,
+        "cls": 0.012442366851223768,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 1191713,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 5.399999999906868,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 4.900000000139698,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 4.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 18.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 167.30000000004657,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170",
+          "duration": 1159.1999999999534,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170/reviews",
+          "duration": 101.0999999998603,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 61.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 16,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 165.89999999990687,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 222.19999999995343,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 141.30000000004657,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 7.7000000001862645,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 71.19999999995343,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/storage/objects/uploads/a073bc56-ec21-4982-b1c5-4de72c19d30e?w=390",
+          "duration": 84.60000000009313,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/product/10170",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 416.39999999990687,
+        "navigationId": 6127,
+        "initiatorType": "navigation",
+        "deliveryType": "cache",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 0.8000000000465661,
+        "domainLookupStart": 0.8000000000465661,
+        "domainLookupEnd": 0.8000000000465661,
+        "connectStart": 0.8000000000465661,
+        "secureConnectionStart": 0.8000000000465661,
+        "connectEnd": 0.8000000000465661,
+        "requestStart": 2.0999999998603016,
+        "responseStart": 2.0999999998603016,
+        "firstInterimResponseStart": 2.0999999998603016,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 6.599999999860302,
+        "transferSize": 0,
+        "encodedBodySize": 1156,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "EXPIRED"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 7,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 32,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 19.0999999998603,
+        "unloadEventEnd": 19.0999999998603,
+        "domInteractive": 44.89999999990687,
+        "domContentLoadedEventStart": 149.89999999990687,
+        "domContentLoadedEventEnd": 150.5999999998603,
+        "domComplete": 415.80000000004657,
+        "loadEventStart": 416.30000000004657,
+        "loadEventEnd": 416.39999999990687,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "high"
+        }
+      },
+      "visibleText": "Product Details\nProducts\nSALE\nAccessories &amp; Replacements\n\nFaucet Filter Cartridge\nSKU: \n\n\n\n\n\n4.0 (1)\nKES 1,499\nKES 1,999\n\nIn Stock\n\nPrices match our website — guaranteed\nProduct Details\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nCertifications & Trust\nCertified & Trusted\nPatrons\n\nYour Neighborhood\nRated\n\nDermatologist\nTested\n\nISO 9001\nCertified\n\nBPA\nFree\n\nRoHS\nCertified\nReviews\n\n\n\n\n\n4.0 · 1 review\nJ\nJosphine W.\n\n\n\n\n\n4 Sept 2026\nHaving the filter replacement is very good\n\nWrite a review\n\n\nAdd to Cart",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 0.150359,
+        "TaskDuration": 0.347141
+      }
+    },
+    {
+      "throttled": true,
+      "run": 0,
+      "warmth": "cold",
+      "route": "/product/10170",
+      "observationMs": 26289,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 11544,
+        "cls": 0.012442366851223768,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 6275.300000000047,
+          "transfer": 1194664,
+          "encoded": 1194364,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 197.10000000009313,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 300.69999999995343,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 237.19999999995343,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 162.30000000004657,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 0.5999999998603016,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 0.6999999999534339,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 0.4000000001396984,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 0.6999999999534339,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 852.8000000000466,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170",
+          "duration": 1539.1000000000931,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170/reviews",
+          "duration": 226.0999999998603,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 542,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 155.30000000004657,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 167.39999999990687,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 1.3999999999068677,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 173.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/storage/objects/uploads/a073bc56-ec21-4982-b1c5-4de72c19d30e?w=390",
+          "duration": 199.39999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/product/10170",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 7432.399999999907,
+        "navigationId": 8238,
+        "initiatorType": "navigation",
+        "deliveryType": "",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 1.8000000000465661,
+        "domainLookupStart": 5.300000000046566,
+        "domainLookupEnd": 5.300000000046566,
+        "connectStart": 5.300000000046566,
+        "secureConnectionStart": 15.899999999906868,
+        "connectEnd": 102.89999999990687,
+        "requestStart": 103.10000000009313,
+        "responseStart": 152.80000000004657,
+        "firstInterimResponseStart": 0,
+        "finalResponseHeadersStart": 152.80000000004657,
+        "responseEnd": 265.39999999990687,
+        "transferSize": 1456,
+        "encodedBodySize": 1156,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "EXPIRED"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 6,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 30,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 0,
+        "unloadEventEnd": 0,
+        "domInteractive": 357.80000000004657,
+        "domContentLoadedEventStart": 7384.100000000093,
+        "domContentLoadedEventEnd": 7404.300000000047,
+        "domComplete": 7421.199999999953,
+        "loadEventStart": 7432.399999999907,
+        "loadEventEnd": 7432.399999999907,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "high"
+        }
+      },
+      "visibleText": "Product Details\nProducts\nSALE\nAccessories &amp; Replacements\n\nFaucet Filter Cartridge\nSKU: \n\n\n\n\n\n4.0 (1)\nKES 1,499\nKES 1,999\n\nIn Stock\n\nPrices match our website — guaranteed\nProduct Details\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nCertifications & Trust\nCertified & Trusted\nPatrons\n\nYour Neighborhood\nRated\n\nDermatologist\nTested\n\nISO 9001\nCertified\n\nBPA\nFree\n\nRoHS\nCertified\nReviews\n\n\n\n\n\n4.0 · 1 review\nJ\nJosphine W.\n\n\n\n\n\n4 Sept 2026\nHaving the filter replacement is very good\n\nWrite a review\n\n\nAdd to Cart",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 3.128997,
+        "TaskDuration": 5.142536
+      }
+    },
+    {
+      "throttled": true,
+      "run": 0,
+      "warmth": "warm",
+      "route": "/product/10170",
+      "observationMs": 24455,
+      "build": "1791066251025-340",
+      "vitals": {
+        "lcp": 17000,
+        "cls": 0.012442366851223768,
+        "interactions": []
+      },
+      "resources": [
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/static/js/web/bundle.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 1194364,
+          "decoded": 4810710
+        },
+        {
+          "url": "https://i.replit.com/script.js",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "duration": 0,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 196.39999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "duration": 95.29999999981374,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "duration": 62.200000000186265,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+          "duration": 75.10000000009313,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo-google-fonts+inter@0.4.2/node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "duration": 77,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/cdn-cgi/rum?",
+          "duration": 171.10000000009313,
+          "transfer": 300,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+          "duration": 1019.2999999998137,
+          "transfer": 83036,
+          "encoded": 82736,
+          "decoded": 317398
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170",
+          "duration": 1617.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/uc/products/10170/reviews",
+          "duration": 199.5,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/npm/@clerk/ui@1/dist/ui.browser.js",
+          "duration": 540.3000000000466,
+          "transfer": 45580,
+          "encoded": 45280,
+          "decoded": 148354
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/environment?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 154.69999999995343,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/api/__clerk/v1/client?__clerk_api_version=2026-05-12&_clerk_js_version=6.36.0",
+          "duration": 168.4000000001397,
+          "transfer": 558,
+          "encoded": 258,
+          "decoded": 258
+        },
+        {
+          "url": "https://app.ucfilters.com/uc-companion/1791066251025-340/_expo/node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@57.0.4_react-native@0.86.3_@babel+core@7.29.7_@type_22b43a428d37ad42510862448e7e7361/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+          "duration": 71.19999999995343,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://i.replit.com/api/send",
+          "duration": 184.89999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        },
+        {
+          "url": "https://api.ucfilters.com/api/storage/objects/uploads/a073bc56-ec21-4982-b1c5-4de72c19d30e?w=390",
+          "duration": 208.89999999990687,
+          "transfer": 0,
+          "encoded": 0,
+          "decoded": 0
+        }
+      ],
+      "navigation": {
+        "name": "https://app.ucfilters.com/product/10170",
+        "entryType": "navigation",
+        "startTime": 0,
+        "duration": 13485.300000000047,
+        "navigationId": 2845,
+        "initiatorType": "navigation",
+        "deliveryType": "cache",
+        "nextHopProtocol": "h2",
+        "renderBlockingStatus": "non-blocking",
+        "contentType": "text/html",
+        "contentEncoding": "zstd",
+        "workerStart": 0,
+        "workerRouterEvaluationStart": 0,
+        "workerCacheLookupStart": 0,
+        "workerMatchedSourceType": "",
+        "workerFinalSourceType": "",
+        "redirectStart": 0,
+        "redirectEnd": 0,
+        "fetchStart": 12.399999999906868,
+        "domainLookupStart": 12.399999999906868,
+        "domainLookupEnd": 12.399999999906868,
+        "connectStart": 12.399999999906868,
+        "secureConnectionStart": 12.399999999906868,
+        "connectEnd": 12.399999999906868,
+        "requestStart": 27,
+        "responseStart": 27,
+        "firstInterimResponseStart": 27,
+        "finalResponseHeadersStart": 0,
+        "responseEnd": 73.89999999990687,
+        "transferSize": 0,
+        "encodedBodySize": 1156,
+        "decodedBodySize": 2100,
+        "responseStatus": 200,
+        "serverTiming": [
+          {
+            "name": "cfCacheStatus",
+            "duration": 0,
+            "description": "EXPIRED"
+          },
+          {
+            "name": "cfEdge",
+            "duration": 6,
+            "description": ""
+          },
+          {
+            "name": "cfOrigin",
+            "duration": 0,
+            "description": ""
+          },
+          {
+            "name": "cfWorker",
+            "duration": 30,
+            "description": ""
+          }
+        ],
+        "unloadEventStart": 242.19999999995343,
+        "unloadEventEnd": 242.19999999995343,
+        "domInteractive": 924.3000000000466,
+        "domContentLoadedEventStart": 5615.600000000093,
+        "domContentLoadedEventEnd": 6241.300000000047,
+        "domComplete": 13462.300000000047,
+        "loadEventStart": 13484.600000000093,
+        "loadEventEnd": 13485.300000000047,
+        "type": "navigate",
+        "redirectCount": 0,
+        "activationStart": 0,
+        "criticalCHRestart": 0,
+        "notRestoredReasons": null,
+        "confidence": {
+          "randomizedTriggerRate": 0.4994798,
+          "value": "low"
+        }
+      },
+      "visibleText": "Product Details\nProducts\nSALE\nAccessories &amp; Replacements\n\nFaucet Filter Cartridge\nSKU: \n\n\n\n\n\n4.0 (1)\nKES 1,499\nKES 1,999\n\nIn Stock\n\nPrices match our website — guaranteed\nProduct Details\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nSpecification-led. Builds credibility with buyers, distributors, and procurement teams. Tone: authoritative, precise, benefit-confirmed.\n\nCertifications & Trust\nCertified & Trusted\nPatrons\n\nYour Neighborhood\nRated\n\nDermatologist\nTested\n\nISO 9001\nCertified\n\nBPA\nFree\n\nRoHS\nCertified\nReviews\n\n\n\n\n\n4.0 · 1 review\nJ\nJosphine W.\n\n\n\n\n\n4 Sept 2026\nHaving the filter replacement is very good\n\nWrite a review\n\n\nAdd to Cart",
+      "errors": [
+        "A network error occurred."
+      ],
+      "cpu": {
+        "ScriptDuration": 9.503415,
+        "TaskDuration": 15.402927
+      }
+    }
+  ]
+}

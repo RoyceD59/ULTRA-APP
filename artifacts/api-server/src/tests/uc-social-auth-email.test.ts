@@ -8,7 +8,7 @@
  */
 
 import express, { type Request } from "express";
-import { describe, it, before, after, afterEach, mock } from "node:test";
+import { describe, it, before, after, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import supertest from "supertest";
 import { and, eq } from "drizzle-orm";
@@ -19,7 +19,12 @@ import {
   ucUsersTable,
 } from "@workspace/db";
 import socialAuthRouter from "../routes/uc-social-auth.js";
+import rewardsRouter from "../routes/uc-rewards.js";
+import { assertRewardsQrIdentity } from "./helpers/assert-rewards-qr.js";
 import { verifyToken } from "../lib/jwt.js";
+import ucRouter from "../routes/uc.js";
+import { authLimiter } from "../lib/rate-limiters.js";
+import { ipKeyGenerator } from "express-rate-limit";
 
 type ClerkUserFixture = {
   id: string;
@@ -47,6 +52,9 @@ const SOCIAL_PASSWORD_SENTINEL = "!social-login-no-password";
 const originalFetch = globalThis.fetch;
 const originalResendBaseUrl = process.env["RESEND_BASE_URL"];
 const originalResendApiKey = process.env["RESEND_API_KEY"];
+const originalWcBaseUrl = process.env["WC_BASE_URL"];
+const wooBaseUrl = "https://woo-social-boundary.test";
+let wooRequests = 0;
 
 let currentClerkUser: ClerkUserFixture;
 let clerkUsers = new Map<string, ClerkUserFixture>();
@@ -83,6 +91,8 @@ app.use((req, _res, next) => {
   next();
 });
 app.use(socialAuthRouter);
+app.use("/api", rewardsRouter);
+app.use("/api", ucRouter);
 
 const clerkLookupMock = mock.method(
   clerkClient.users,
@@ -120,7 +130,17 @@ function registerClerkUser(user: ClerkUserFixture): ClerkUserFixture {
 function installResendStub(): void {
   process.env["RESEND_BASE_URL"] = "https://api.resend.com";
   process.env["RESEND_API_KEY"] = "re_test_social_auth";
-  globalThis.fetch = async (_url: unknown, init?: RequestInit) => {
+  globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+    if (String(url) === `${wooBaseUrl}/wp-json/jwt-auth/v1/token`) {
+      wooRequests += 1;
+      const body = JSON.parse(String(init?.body)) as { username: string };
+      return new Response(JSON.stringify({
+        token: "verified-woo-token",
+        user_email: body.username,
+        user_display_name: "Woo Customer",
+      }), { status: 200 });
+    }
+    assert.equal(String(url), "https://api.resend.com/emails", "unexpected outbound request");
     capturedEmails.push(
       JSON.parse(String(init?.body ?? "{}")) as EmailPayload,
     );
@@ -187,7 +207,14 @@ function assertNoCredentialsOrResetTokens(emails: EmailPayload[]): void {
 
 before(() => {
   process.env["SESSION_SECRET"] ??= "test-social-auth-email-secret";
+  process.env["WC_BASE_URL"] = wooBaseUrl;
   installResendStub();
+});
+
+beforeEach(() => {
+  authLimiter.resetKey(ipKeyGenerator("::ffff:127.0.0.1"));
+  authLimiter.resetKey("127.0.0.1");
+  wooRequests = 0;
 });
 
 after(() => {
@@ -197,6 +224,8 @@ after(() => {
   else process.env["RESEND_BASE_URL"] = originalResendBaseUrl;
   if (originalResendApiKey === undefined) delete process.env["RESEND_API_KEY"];
   else process.env["RESEND_API_KEY"] = originalResendApiKey;
+  if (originalWcBaseUrl === undefined) delete process.env["WC_BASE_URL"];
+  else process.env["WC_BASE_URL"] = originalWcBaseUrl;
 });
 
 afterEach(async () => {
@@ -220,6 +249,51 @@ afterEach(async () => {
 });
 
 describe("social sign-in email delivery", () => {
+  for (const provider of ["google", "apple"] as const) {
+    it(`does not let Woo claim a ${provider}-linked customer by email alone`, async () => {
+      const socialUser = registerClerkUser(
+        fixture(provider, `social-woo-${provider}-${Date.now()}-${process.pid}@test.internal`),
+      );
+      const email = socialUser.emailAddresses[0]!.emailAddress;
+      const social = await supertest(app).post("/uc/auth/social").send({});
+      assert.equal(social.status, 200);
+      await waitForLog(email, "uc-social-welcome");
+      const [original] = await db.select().from(ucUsersTable)
+        .where(eq(ucUsersTable.email, email));
+      assert.ok(original);
+      assert.equal(original.clerkUserId, socialUser.id);
+      assert.equal(original.authProvider, "social");
+      await assertRewardsQrIdentity(app, social.body.token, original.id);
+      const originalRewards = await supertest(app).get("/api/uc/customer/rewards")
+        .set("Authorization", `Bearer ${social.body.token}`);
+      assert.equal(originalRewards.status, 200);
+      assert.match(originalRewards.body.qrToken, /^[A-Za-z0-9_-]{43}$/);
+      const [protectedAccount] = await db.select().from(ucUsersTable)
+        .where(eq(ucUsersTable.id, original.id));
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const denied = await supertest(app).post("/api/uc/auth/login")
+          .send({ email, password: "woo-account-password" });
+        assert.equal(denied.status, 401);
+        assert.equal(denied.body.token, undefined);
+      }
+      assert.equal(wooRequests, 0, "social accounts must not fall back to Woo");
+      const rows = await db.select().from(ucUsersTable)
+        .where(eq(ucUsersTable.email, email));
+      assert.deepEqual(rows, [protectedAccount], "Woo attempts must not claim, duplicate, or modify the social account");
+
+      const repeated = await supertest(app).post("/uc/auth/social").send({});
+      assert.equal(repeated.status, 200);
+      assert.equal(repeated.body.user.id, original.id);
+      assert.equal(verifyToken(`Bearer ${repeated.body.token}`)?.id, original.id);
+      const rewards = await supertest(app).get("/api/uc/customer/rewards")
+        .set("Authorization", `Bearer ${repeated.body.token}`);
+      assert.equal(rewards.status, 200);
+      assert.equal(rewards.body.qrToken, originalRewards.body.qrToken);
+      await waitForLog(email, "uc-social-sign-in");
+    });
+  }
+
   it("creates a Google account, sends the welcome template, and audits the accepted send", async () => {
     currentClerkUser = registerClerkUser(fixture("google", `social-welcome-${Date.now()}@test.internal`));
     resendMode = "defer";
@@ -232,6 +306,7 @@ describe("social sign-in email delivery", () => {
     assert.equal(response.status, 200);
     assert.equal(response.body.user.email, currentClerkUser.emailAddresses[0]!.emailAddress);
     assert.equal(typeof response.body.token, "string");
+    await assertRewardsQrIdentity(app, response.body.token, response.body.user.id);
     assert.equal(capturedEmails.length, 1, "welcome email should be dispatched");
     assert.equal(capturedEmails[0]!.subject, "Welcome to Ultra-Clear");
     assert.match(capturedEmails[0]!.text, /Welcome to Ultra-Clear/);
@@ -260,6 +335,7 @@ describe("social sign-in email delivery", () => {
     assert.equal(response.body.user.email, currentClerkUser.emailAddresses[0]!.emailAddress);
     assert.equal(capturedEmails.length, 1);
     assert.equal(capturedEmails[0]!.subject, "New sign-in to your Ultra-Clear account");
+    await assertRewardsQrIdentity(app, response.body.token, response.body.user.id);
     assert.match(capturedEmails[0]!.text, /Google or Apple/);
     assertNoCredentialsOrResetTokens(capturedEmails);
 

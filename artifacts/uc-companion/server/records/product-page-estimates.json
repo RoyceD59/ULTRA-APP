@@ -1,0 +1,121 @@
+{
+  "referenceSha256": "305946cc540122c321fba03ca0cd5c658648af556d2db1b01e80df2dcc6f8a58",
+  "products": {
+    "HDF": {
+      "headline": "Save about KES 29,500 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 7 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "TRG": {
+      "headline": "Save about KES 30,500 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 5 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "VDR": {
+      "headline": "Save about KES 31,000 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 4 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "GMB": {
+      "headline": "Save about KES 30,000 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 6 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "TMB": {
+      "headline": "Save about KES 32,500 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 2 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "BRZ": {
+      "headline": "Save about KES 32,000 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 3 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "FLX": {
+      "headline": "Save about KES 32,000 in your first year",
+      "detail": [
+        "That's about KES 90 a day.",
+        "About 1,450 fewer 500 ml plastic bottles a year.",
+        "It pays for itself in about 3 weeks.",
+        "Filtered water costs you about KES 7.20 a litre. About the same as a refill station, without the trip."
+      ],
+      "assumption": "Estimate based on 2 litres a day, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "RBC": {
+      "headline": "Filtered water for about KES 7.20 a litre",
+      "detail": [
+        "Compared with KES 53.50 a litre at the average price of bought water."
+      ],
+      "assumption": "Cartridge price divided by its rated life."
+    },
+    "SVS": {
+      "headline": "Save about KES 14,000 over its 300 L filter",
+      "detail": [
+        "That's about 600 fewer 500 ml plastic bottles on your trips.",
+        "Filtered water costs you about KES 5.40 a litre. Less than a refill station."
+      ],
+      "assumption": "Estimate: Survivor Straw price divided by its 300 L filter, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Delivery not included."
+    },
+    "ECO": {
+      "headline": "Save about KES 41,500 over its 1,000 L rated life",
+      "detail": [
+        "That's about 2,000 fewer 500 ml plastic bottles on your trips.",
+        "Filtered water costs you about KES 11.99 a litre."
+      ],
+      "assumption": "Estimate: EcoSmart price divided by its 1,000 L rated life, compared with the average price of bought water (KES 53.50 a litre: refill station from KES 7, 500 ml bottle KES 50, or KES 100 a litre). Delivery not included."
+    },
+    "RSF": {
+      "headline": "Filtered water for about KES 1.47 a litre",
+      "detail": [
+        "Compared with KES 53.50 a litre at the average price of bought water."
+      ],
+      "assumption": "Cartridge price divided by its rated life."
+    },
+    "FCT": {
+      "headline": "Save about KES 27,000 in your first year",
+      "detail": [
+        "That's about KES 80 a day.",
+        "It pays for itself in about 6 weeks.",
+        "Filtered water costs you about KES 0.99 a litre. Less than a refill station."
+      ],
+      "assumption": "Estimate based on 14 litres a day, compared with refill-station water at KES 7 a litre, the lowest price we found. Your saving depends on how much you drink and where you would otherwise buy water. Delivery not included."
+    },
+    "RSH": {
+      "headline": "Filtered water for about KES 0.99 a litre",
+      "detail": [
+        "Compared with KES 7.00 a litre at a refill station."
+      ],
+      "assumption": "Cartridge price divided by its rated life."
+    }
+  }
+}

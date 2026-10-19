@@ -39,6 +39,8 @@ import { objectStorageClient } from "./objectStorage";
 import { sendEmail, buildWhatsAppAlertEmail } from "./email";
 import { sendViaResend } from "./resend";
 import { pushReceiptUpdate } from "./receiptStream";
+import { WhatsAppOperations } from "./whatsapp-operations";
+import { syncSessionFiles } from "./whatsapp-session-sync";
 
 // Credentials are stored in AUTH_DIR so they survive hot-reloads and process
 // restarts.  The path is controlled by the WHATSAPP_SESSION_DIR env var; the
@@ -236,28 +238,27 @@ async function syncFromObjectStorage(): Promise<void> {
  * Called on every creds.update event so the bucket always has the latest tokens.
  * No-op when SESSION_BUCKET_PATH is not set.
  */
-async function syncToObjectStorage(): Promise<void> {
-  if (!SESSION_BUCKET_PATH) return;
+async function syncToObjectStorage(generation: number, signal: AbortSignal): Promise<void> {
+  if (!SESSION_BUCKET_PATH || signal.aborted || generation !== lifecycleGeneration) return;
   try {
     const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
     const bucket = objectStorageClient.bucket(bucketName);
-    let fileNames: string[];
-    try {
-      fileNames = await readdir(AUTH_DIR);
-    } catch {
-      return; // AUTH_DIR doesn't exist yet
-    }
-    await Promise.all(
-      fileNames.map(async (name) => {
-        const localPath = join(AUTH_DIR, name);
-        const contents = await readFile(localPath);
+    await syncSessionFiles({
+      signal,
+      isCurrent: () => generation === lifecycleGeneration,
+      listFiles: () => readdir(AUTH_DIR),
+      readFile: name => readFile(join(AUTH_DIR, name)),
+      saveFile: async (name, contents) => {
         const objectName = prefix ? `${prefix}/${name}` : name;
-        await bucket.file(objectName).save(contents, { resumable: false });
-      })
-    );
-  } catch (err) {
+        await bucket.file(objectName).save(Buffer.from(contents), { resumable: false });
+      },
+      log: event => console.warn("[whatsapp] Session backup:", JSON.stringify(event)),
+    });
+  } catch {
     // Non-fatal: credential sync failure should never crash the main process
-    console.error("[whatsapp] Failed to push session to Object Storage:", err);
+    console.error("[whatsapp] Session backup:", JSON.stringify({
+      operation: "whatsapp_session_backup", status: "failed", category: "permanent",
+    }));
   }
 }
 
@@ -271,7 +272,8 @@ export type WaState = "disconnected" | "connecting" | "qr" | "connected" | "erro
 export type WaErrorCode =
   | "QR_GENERATION_FAILED"
   | "QR_EXPIRED"
-  | "WHATSAPP_INIT_FAILED";
+  | "WHATSAPP_INIT_FAILED"
+  | "SESSION_CLEANUP_REQUIRED";
 export interface WaError {
   code: WaErrorCode;
   message: string;
@@ -288,6 +290,7 @@ let sessionSyncQueue: Promise<void> = Promise.resolve();
 // Invalidated by disconnect (and by a manual retry) so work belonging to an
 // old socket cannot install a session or change the state of a newer socket.
 let lifecycleGeneration = 0;
+let sessionBackupAbort = new AbortController();
 
 /**
  * A QR update can start an asynchronous conversion while Baileys emits a
@@ -334,7 +337,7 @@ async function clearStoredSession(): Promise<void> {
     const { bucketName, prefix } = parseBucketPath(SESSION_BUCKET_PATH);
     // Refuse to wipe a bucket root: the session must have an isolated prefix
     // so disconnect can never delete unrelated application objects.
-    if (!bucketName || !prefix) return;
+    if (!bucketName || !prefix) throw new Error("Session storage needs an isolated prefix");
     const dirPrefix = prefix ? `${prefix}/` : "";
     const [files] = await objectStorageClient.bucket(bucketName).getFiles({
       prefix: dirPrefix || undefined,
@@ -543,7 +546,13 @@ async function handleMessageUpdates(updates: WAMessageUpdate[]): Promise<void> {
 
 // ─── Session lifecycle ────────────────────────────────────────────────────────
 
-export async function initWhatsApp(): Promise<void> {
+const sessionOperations = new WhatsAppOperations(startWhatsApp, invalidateSession, clearWhatsAppSession);
+
+export function initWhatsApp(): Promise<void> {
+  return sessionOperations.connect();
+}
+
+async function startWhatsApp(): Promise<void> {
   if (isInitializing || connectionState === "connected") return;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -552,6 +561,9 @@ export async function initWhatsApp(): Promise<void> {
   // A manual retry starts a new lifecycle. Events from an older socket must
   // not be allowed to move the new connection back to a stale state.
   const generation = ++lifecycleGeneration;
+  sessionBackupAbort.abort();
+  sessionBackupAbort = new AbortController();
+  const backupSignal = sessionBackupAbort.signal;
   let latestQrSequence = 0;
   const previousSock = sock;
   sock = null;
@@ -589,19 +601,19 @@ export async function initWhatsApp(): Promise<void> {
     // immediately after the local files are written.
     const saveAndSyncCreds = async () => {
       if (generation !== lifecycleGeneration) return;
-      await saveCreds();
-      if (generation !== lifecycleGeneration) return;
       sessionSyncQueue = sessionSyncQueue
         .then(async () => {
           if (generation !== lifecycleGeneration) return;
-          await syncToObjectStorage();
+          await saveCreds();
+          if (generation !== lifecycleGeneration) return;
+          await syncToObjectStorage(generation, backupSignal);
         })
-        .catch((err) => {
+        .catch(() => {
           console.error(
-            "[whatsapp] Session sync queue failed:",
-            err instanceof Error ? err.message : "unknown error",
+            "[whatsapp] Session sync queue failed: credential write unavailable",
           );
         });
+      await sessionSyncQueue;
     };
 
     const nextSock = makeWASocket({
@@ -726,7 +738,7 @@ export async function initWhatsApp(): Promise<void> {
         if (shouldReconnect && !qrGenerationFailed) {
           // Back off 5 s before reconnecting so we don't hammer the WA servers
           if (!reconnectTimer) {
-            reconnectTimer = setTimeout(() => initWhatsApp(), 5_000);
+            reconnectTimer = setTimeout(() => { void initWhatsApp().catch(() => undefined); }, 5_000);
           }
 
           // Schedule a "still disconnected" alert if we haven't already alerted
@@ -795,15 +807,20 @@ export async function initWhatsApp(): Promise<void> {
     // Retry after 10 s on unexpected init error. Disconnect clears this timer.
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      void initWhatsApp();
+      void initWhatsApp().catch(() => undefined);
     }, 10_000);
   }
 }
 
-export async function disconnectWhatsApp(): Promise<void> {
+export function disconnectWhatsApp(): Promise<void> {
+  return sessionOperations.disconnect();
+}
+
+function invalidateSession(): void {
   // Invalidate all in-flight storage/auth work and event handlers before
   // awaiting logout. Baileys may emit a late "close" event after logout.
   lifecycleGeneration++;
+  sessionBackupAbort.abort();
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -815,14 +832,29 @@ export async function disconnectWhatsApp(): Promise<void> {
   }
   // Reset alert state so the next session start gets a fresh alert if needed.
   alertSentForCurrentSession = false;
-  currentError = null;
+  currentError = {
+    code: "SESSION_CLEANUP_REQUIRED",
+    message: "Saved session cleanup is pending. Retry Disconnect before pairing again.",
+  };
+  currentQrDataUri = null;
+  connectionState = "error";
+}
+
+async function clearWhatsAppSession(): Promise<void> {
   if (sock) {
     const activeSock = sock;
     sock = null;
+    let logoutTimer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await activeSock.logout();
+      await Promise.race([
+        activeSock.logout(),
+        new Promise<void>((resolve) => { logoutTimer = setTimeout(resolve, 5_000); }),
+      ]);
     } catch {
       // Ignore — socket may already be closed
+    } finally {
+      clearTimeout(logoutTimer);
+      closeSocketWithoutLogout(activeSock);
     }
   }
   // Let any credential write that started before invalidation finish, then
@@ -831,9 +863,10 @@ export async function disconnectWhatsApp(): Promise<void> {
   await sessionSyncQueue.catch(() => undefined);
   const cleanup = await Promise.allSettled([clearLocalSession(), clearStoredSession()]);
   currentQrDataUri = null;
-  connectionState = "disconnected";
   isInitializing = false;
   if (cleanup.some((result) => result.status === "rejected")) {
     throw new Error("WhatsApp session cleanup failed");
   }
+  currentError = null;
+  connectionState = "disconnected";
 }

@@ -7,6 +7,8 @@
  */
 
 export type MonitoringSnapshotProblems = {
-  recoveryOrders: number;
-  notificationFailures7d: number;
+  /** @nullable */
+  recoveryOrders: number | null;
+  /** @nullable */
+  notificationFailures7d: number | null;
 };

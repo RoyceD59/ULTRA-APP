@@ -63,6 +63,49 @@ describe("customer water-impact ledger", () => {
     await db.delete(ucUsersTable).where(inArray(ucUsersTable.id, [customerId, otherCustomerId, adminId]));
   });
 
+  it("exposes only this customer's cycle usage and leaves registration and ledger untouched", async () => {
+    const [cycle] = await db.insert(ucRegisteredFiltersTable).values({
+      userId: customerId, productId: 71001, productName: "100 L test filter",
+      ratedCapacityLitres: 100, activatedAt: new Date("2026-01-01T00:00:00Z"),
+      source: "app", sourceOrderId: 76543,
+    }).returning();
+    try {
+      await db.insert(ucWaterImpactLedgerTable).values([
+        { userId: customerId, registeredFilterId: cycle!.id, litres: 60, reason: "Filtered water",
+          actor: `customer:${customerId}`, idempotencyKey: "gauge-own-cycle" },
+        // Malformed legacy association must never consume this user's capacity.
+        { userId: otherCustomerId, registeredFilterId: cycle!.id, litres: 20, reason: "Other account",
+          actor: `customer:${otherCustomerId}`, idempotencyKey: "gauge-wrong-owner" },
+      ]);
+      const before = await db.select().from(ucRegisteredFiltersTable).where(eq(ucRegisteredFiltersTable.id, cycle!.id));
+      const ledgerBefore = await db.select().from(ucWaterImpactLedgerTable).where(eq(ucWaterImpactLedgerTable.registeredFilterId, cycle!.id));
+      const headers = { Authorization: tokenFor(customerId, customerEmail) };
+      const response = await call("/uc/customer/impact", { headers });
+      assert.equal(response.status, 200);
+      const found = response.body.filters.find((f: any) => f.id === cycle!.id);
+      assert.equal(found.userId, customerId);
+      assert.equal(found.sourceOrderId, 76543);
+      assert.equal(found.activatedAt, cycle!.activatedAt.toISOString());
+      assert.equal(found.verificationStatus, "approved");
+      assert.equal(found.capacityUsageValid, true);
+      assert.equal(found.usedLitres, 60);
+      assert.equal(found.remainingCapacityLitres, 40);
+      assert.ok(!response.body.filters.some((f: any) => f.id === otherFilterId));
+      assert.deepEqual(await db.select().from(ucRegisteredFiltersTable).where(eq(ucRegisteredFiltersTable.id, cycle!.id)), before);
+      assert.deepEqual(await db.select().from(ucWaterImpactLedgerTable).where(eq(ucWaterImpactLedgerTable.registeredFilterId, cycle!.id)), ledgerBefore);
+      // A prior-cycle entry cannot be silently interpreted as fresh zero usage.
+      await db.insert(ucWaterImpactLedgerTable).values({
+        userId: customerId, registeredFilterId: cycle!.id, litres: 1, reason: "Old cycle",
+        actor: `customer:${customerId}`, idempotencyKey: "gauge-old-cycle", createdAt: new Date("2025-12-01T00:00:00Z"),
+      });
+      const refreshed = await call("/uc/customer/impact", { headers });
+      assert.equal(refreshed.body.filters.find((f: any) => f.id === cycle!.id).capacityUsageValid, false);
+    } finally {
+      await db.delete(ucWaterImpactLedgerTable).where(eq(ucWaterImpactLedgerTable.registeredFilterId, cycle!.id));
+      await db.delete(ucRegisteredFiltersTable).where(eq(ucRegisteredFiltersTable.id, cycle!.id));
+    }
+  });
+
   it("accepts the capacity boundary once, rejects an over-capacity refill, and retries idempotently", async () => {
     const headers = { Authorization: tokenFor(customerId, customerEmail), "Content-Type": "application/json" };
     const body = { registeredFilterId: filterId, litres: 100, idempotencyKey: "impact-boundary-entry" };

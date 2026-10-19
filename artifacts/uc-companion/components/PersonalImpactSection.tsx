@@ -1,21 +1,33 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useApi, type PersonalImpact } from '@/hooks/useApi';
 import { calculateImpact, getActiveMilestone } from '@/lib/calculateImpact';
+import ImpactTreeSection from '@/components/ImpactTreeSection';
 
 interface Props {
   impact: PersonalImpact;
   onUpdated: (impact: PersonalImpact) => void;
 }
 
+function filterContext(filter: PersonalImpact['filters'][number]): string {
+  const receipt = filter.sourceOrderId == null
+    ? 'Receipt/order not available'
+    : `Receipt/order #${filter.sourceOrderId}`;
+  const activation = new Date(filter.activatedAt);
+  const activated = Number.isNaN(activation.getTime())
+    ? 'Activation date not available'
+    : `Activated ${activation.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  return `${receipt} · ${activated}`;
+}
+
 export default function PersonalImpactSection({ impact, onUpdated }: Props) {
   const colors = useColors();
   const api = useApi();
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [co2eOpen, setCo2eOpen] = useState(false);
 
@@ -167,9 +179,10 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
                   {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addButtonText}>Add</Text>}
                 </TouchableOpacity>
               </View>
-              {refillableFilters.length > 1 && selectedFilter ? (
+              {selectedFilter ? (
                 <Text style={[styles.feedbackText, { color: colors.mutedForeground, marginTop: 2 }]}>
-                  Adding to: {selectedFilter.productName} (Change in Details)
+                  Adding to: {selectedFilter.productName}{'\n'}
+                  {filterContext(selectedFilter)}{refillableFilters.length > 1 ? '\nChange in Details' : ''}
                 </Text>
               ) : null}
               {error ? <Text style={[styles.feedbackText, { color: colors.destructive }]}>{error}</Text> : null}
@@ -245,10 +258,13 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
             </View>
           )}
 
-          {/* HYDRATE THE FUTURE */}
+          {/* HYDRATE THE FUTURE — supplied shared-tree section */}
+          <ImpactTreeSection
+            refillEntries={Math.max(impact.history.filter(h => h.litres > 0).length, impact.hasRefilled ? 1 : 0)}
+          />
           <View style={styles.hydrateContainer}>
             <Text style={[styles.hydrateText, { color: colors.mutedForeground }]}>
-              3% of Ultra Clear revenue supports clean-water access through Hydrate the Future™
+              Part of the 3% allocated from eligible paid purchases goes towards afforestation in our community. Hydrate the Future™ shares the full 3% contribution equally between tree growing and clean-water access. Explore the programme and join our mission. Logged refills do not add funding.
             </Text>
           </View>
 
@@ -303,6 +319,10 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
                   {impact.filters.map(f => (
                     <TouchableOpacity
                       key={f.id}
+                      testID={`impact-filter-${f.id}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${f.productName}. ${filterContext(f)}`}
+                      accessibilityState={{ selected: currentFilterId === f.id }}
                       activeOpacity={0.7}
                       onPress={() => f.remainingCapacityLitres > 0 ? setSelectedFilterId(f.id) : null}
                       style={[
@@ -312,6 +332,7 @@ export default function PersonalImpactSection({ impact, onUpdated }: Props) {
                     >
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.filterItemName, { color: colors.text }]}>{f.productName}</Text>
+                        <Text style={[styles.filterItemSub, { color: colors.mutedForeground }]}>{filterContext(f)}</Text>
                         <Text style={[styles.filterItemSub, { color: colors.mutedForeground }]}>
                           {f.ratedCapacityLitres === 0 ? 'Time-based lifespan' : `${f.remainingCapacityLitres} L left of ${f.ratedCapacityLitres} L`}
                         </Text>

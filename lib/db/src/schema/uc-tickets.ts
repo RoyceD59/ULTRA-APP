@@ -12,6 +12,7 @@ export const ucTicketsTable = pgTable("uc_tickets", {
   photos:               json("photos").$type<string[]>().default([]),
   videos:               json("videos").$type<string[]>().default([]),
   status:               text("status").notNull().default("submitted"),
+  contactDetails: json("contact_details").$type<{ phone: string; address: string }>(),
   createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

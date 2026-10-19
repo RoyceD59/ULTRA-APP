@@ -9,6 +9,7 @@
 export interface InventoryUpdateResult {
   ok: boolean;
   productId: number;
-  stockQuantity: number;
+  /** @nullable */
+  stockQuantity: number | null;
   source: string;
 }

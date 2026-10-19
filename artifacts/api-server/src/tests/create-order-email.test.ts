@@ -7,7 +7,8 @@
  *             fires the confirmation email.
  *
  *   Path B — DB: WC credentials are absent; the DB insert succeeds; the
- *             confirmation email is sent from the main success path.
+ *             confirmation email is sent from the main success path for
+ *             COD and Stripe (payment verification in mock mode).
  *
  *   Path C — Fallback: WC credentials are absent; the DB insert throws;
  *             sendOrderConfirmationEmail is called with the in-memory
@@ -77,7 +78,7 @@ async function createTestUser(
   const hash  = await bcryptjs.hash("Test1234!", 4);
   const [row]  = await db
     .insert(ucUsersTable)
-    .values({ email, passwordHash: hash, firstName: "Test", lastName: "Buyer", phone: "+254711000001" })
+    .values({ email, passwordHash: hash, firstName: "Test", lastName: "Buyer", phone: "+254711000001", address: "Test building, Nairobi" })
     .returning({ id: ucUsersTable.id });
   const id = row!.id;
   createdUserIds.push(id);
@@ -232,6 +233,7 @@ describe("createOrder — WooCommerce path — sendViaResend is called", () => {
         const u = String(url);
 
         // WC orders POST → mock WooCommerce response with one line item.
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
         if (u.includes("wc.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -341,6 +343,7 @@ describe("createOrder — WooCommerce COD path — sendViaResend is called", () 
         const u = String(url);
 
         // WC orders POST → mock WooCommerce order for COD.
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:2,name:"Truva Go",price:"2599",stock_status:"instock",status:"publish"}]));
         if (u.includes("wc-cod.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -455,6 +458,7 @@ describe("createOrder — WooCommerce path — empty line_items — fallback rec
         const u = String(url);
 
         // WC orders POST → mock WooCommerce response with NO line items.
+        if (u.includes("/products")) return new Response(JSON.stringify([{id:1,name:"Hydra Flux",price:"3499",stock_status:"instock",status:"publish"}]));
         if (u.includes("wc-empty.test") && u.includes("/orders") && init?.method === "POST") {
           return new Response(
             JSON.stringify({
@@ -489,7 +493,7 @@ describe("createOrder — WooCommerce path — empty line_items — fallback rec
 
       const { status, body: orderBody } = await postOrders(
         {
-          lineItems:        [],              // client also sends no items
+          lineItems:        [{productId:1,quantity:1}], // Valid cart; WC unexpectedly omits its receipt lines.
           paymentMethod:    "paystack",
           paymentReference: payRef,
           shippingAddress:  { firstName: "Test", lastName: "Buyer", address1: "5 Empty St", city: "Nairobi", phone: "+254711000013" },
@@ -606,6 +610,10 @@ describe("createOrder — DB path — sendViaResend is called", () => {
         bodyText.includes("Bottle Filter Cartridge"),
         "email body must contain the line-item name",
       );
+      assert.ok(bodyText.includes("Cash on Delivery"), "raw-SQL orders must retain their payment method");
+      assert.ok(bodyText.includes("Payment pending"), "uncollected COD must remain pending");
+      assert.ok(typeof orderBody["receiptSerial"] === "string" && bodyText.includes(orderBody["receiptSerial"]),
+        "the issued serial must match the confirmation-page response");
 
       if (typeof orderId === "number") createdOrderIds.push(orderId);
 
@@ -620,6 +628,76 @@ describe("createOrder — DB path — sendViaResend is called", () => {
       .from(ucOrdersTable)
       .where(eq(ucOrdersTable.userId, String(userId)));
     for (const r of allRows) createdOrderIds.push(r.id);
+  });
+});
+
+// ── Path B2 — DB path with Stripe payment verification in mock mode ───────────
+
+describe("createOrder — Stripe DB path — sendViaResend is called", () => {
+  it("emails the customer's exact address after a Stripe payment in mock mode", async () => {
+    const savedWcKey = process.env["WC_CONSUMER_KEY"];
+    const savedWcSecret = process.env["WC_CONSUMER_SECRET"];
+    const savedStripeKey = process.env["STRIPE_SECRET_KEY"];
+
+    try {
+      // Select the local DB path and Stripe's no-key verification branch.
+      // Never contact Stripe or WooCommerce using workspace credentials.
+      delete process.env["WC_CONSUMER_KEY"];
+      delete process.env["WC_CONSUMER_SECRET"];
+      delete process.env["STRIPE_SECRET_KEY"];
+
+      const { id: userId, email: userEmail, jwt } = await createTestUser("db-stripe");
+      const paymentReference = `cs_test_${nextRef()}`;
+      const resendCalls: { to: string; subject: string; html: string; text: string }[] = [];
+
+      globalThis.fetch = async (url: unknown, init?: RequestInit) => {
+        if (String(url).includes("resend.com") && String(url).includes("/emails")) {
+          resendCalls.push(JSON.parse(init?.body as string ?? "{}") as typeof resendCalls[0]);
+          return new Response(JSON.stringify({ id: "re_db_stripe_stub" }), { status: 200 });
+        }
+        return new Response(JSON.stringify({}), { status: 200 });
+      };
+
+      const { status, body: orderBody } = await postOrders(
+        {
+          lineItems: [{ productId: 22, quantity: 2 }],
+          paymentMethod: "stripe",
+          paymentReference,
+          shippingAddress: { firstName: "Test", lastName: "Buyer", address1: "6 Test St", city: "Nairobi", phone: "+254712345022" },
+          idempotencyKey: `coe-db-stripe-${paymentReference}`,
+        },
+        jwt,
+      );
+
+      assert.equal(status, 200, `Stripe order must succeed; got ${status}, body: ${JSON.stringify(orderBody)}`);
+      const orderId = orderBody["id"];
+      assert.equal(typeof orderId, "number", "response must contain a DB order id");
+      createdOrderIds.push(orderId as number);
+
+      const [storedOrder] = await db.select().from(ucOrdersTable)
+        .where(eq(ucOrdersTable.id, orderId as number));
+      assert.ok(storedOrder, "Stripe order must be persisted, not an in-memory fallback");
+      assert.equal(storedOrder.userId, String(userId));
+      assert.equal(storedOrder.paymentMethod, "stripe");
+      assert.equal(storedOrder.paymentReference, paymentReference);
+      assert.equal(storedOrder.status, "processing", "verified Stripe payment must produce a paid order");
+
+      assert.ok(
+        await waitFor(() => resendCalls.length > 0),
+        "sendViaResend must be called within 4 s for the Stripe DB path",
+      );
+      assert.equal(resendCalls.length, 1, "Stripe checkout must send one confirmation email");
+      const call = resendCalls[0]!;
+      assert.equal(call.to, userEmail);
+      assert.ok(call.subject.includes(String(orderId)), "subject must contain the Stripe order id");
+      const bodyText = (call.html ?? "") + (call.text ?? "");
+      assert.ok(bodyText.includes("Bottle Filter Cartridge"), "receipt body must contain the purchased item");
+    } finally {
+      globalThis.fetch = realFetch;
+      if (savedWcKey !== undefined) process.env["WC_CONSUMER_KEY"] = savedWcKey; else delete process.env["WC_CONSUMER_KEY"];
+      if (savedWcSecret !== undefined) process.env["WC_CONSUMER_SECRET"] = savedWcSecret; else delete process.env["WC_CONSUMER_SECRET"];
+      if (savedStripeKey !== undefined) process.env["STRIPE_SECRET_KEY"] = savedStripeKey; else delete process.env["STRIPE_SECRET_KEY"];
+    }
   });
 });
 

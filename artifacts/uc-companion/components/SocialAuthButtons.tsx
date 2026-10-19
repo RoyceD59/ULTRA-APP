@@ -12,7 +12,7 @@ import { View, Text, TouchableOpacity, Platform, ActivityIndicator, StyleSheet, 
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { ClerkLoaded, useSSO } from '@clerk/expo';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
@@ -34,6 +34,11 @@ WebBrowser.maybeCompleteAuthSession();
 type Provider = 'google' | 'apple';
 
 export default function SocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
+  if (process.env.EXPO_PUBLIC_PREVIEW_SAFE_MODE === '1') return null;
+  return <ConnectedSocialAuthButtons onSuccess={onSuccess} />;
+}
+
+function ConnectedSocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
   useWarmUpBrowser();
   const colors = useColors();
   const { startSSOFlow } = useSSO();
