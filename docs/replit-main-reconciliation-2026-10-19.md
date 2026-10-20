@@ -118,9 +118,14 @@ the existing Cloudflare worker; a Replit publish cannot activate it.
 4. Verify current selected archive, API/Hub lineage, approved schema delta and
    compiled stage before publication. Preserve the current database-backed
    adjustment row/audit and existing hosting, DNS, auth and distribution.
-5. Complete configured-admin/two-approved-customer checks through secure access.
-   Keep identifiers and credentials out of chat/files. Phones remain under
-   #822; exact native binaries/store approval remain under #1005.
+5. Owner update, 20 October 2026: availability covers all existing customer
+   accounts and normally registered new users. The named two-customer requirement
+   and request for a second customer's identifier are superseded. Check new and
+   existing account journeys and account switching in isolation; perform live
+   authenticated acceptance through secure sign-in without a named-customer
+   dependency. Keep personal data private and admin permissions unchanged. Keep
+   identifiers and credentials out of chat/files. Phones remain under #822;
+   exact native binaries/store approval remain under #1005.
 
 If another gated Replit publish fails without diagnostics, use its build ID and
 UTC timestamp for a Replit Support investigation. No support message has been

@@ -5,6 +5,21 @@ request proves that GitHub accepted source changes. A live release is valid only
 after its published files, API and representative customer journeys are checked.
 Record each check as PASS, FAIL, or UNVERIFIED with a UTC timestamp.
 
+## Customer availability — owner update, 20 October 2026
+
+The owner authorized availability to all existing customer accounts and all new
+users who complete normal registration. There is no two-customer pilot or named
+customer approval requirement. The earlier request for a second customer's
+identifier is superseded; do not collect it as a release dependency.
+
+Source inspection of registration and sign-in found no two-customer eligibility
+allowlist to remove. This policy update does not itself publish pending features.
+It does not grant customers Project Hub staff/admin permissions or change normal
+validation, deleted-account guards, account ownership or feature/payment rules.
+Keep global snapshots shared and personal orders, filters, rewards and impact
+private to their owner. No account deletion, migration or credential change is
+needed to adopt this audience.
+
 ## 1. Establish the source being tested
 
 PR #6 merged on 19 October 2026 at 08:02 UTC into commit
@@ -141,10 +156,14 @@ a real Android and iPhone under task #822. Device emulation is separate evidence
 - Check blog/article links, support, Alison enquiry handoff and map selection.
   A nonexistent public content URL must show a genuine 404. A 200 HTML shell
   does not prove that a route or its data works.
-- Compare Home, About and ProjectHub global snapshots signed out, as the
-  configured admin, and as the two approved customers. Use existing credentials
-  through secure access. Record only comparison results and public snapshot
-  IDs; keep customer identifiers, credentials and raw logs out of documents.
+- Compare Home, About and ProjectHub global snapshots signed out and through
+  the appropriate authenticated customer/admin views. Validate a newly registered
+  customer and an existing customer in the isolated test environment, including
+  switching between accounts. These are representative test cases, not a live
+  access allowlist. Perform any live authenticated acceptance through the secure
+  sign-in process; no specifically named pair of customers is required. Record
+  comparison results and public snapshot IDs only; keep customer identifiers,
+  credentials and raw logs out of documents. Do not mark unperformed checks PASS.
 - Confirm that personal orders, filter state, rewards and personal impact remain
   scoped to the signed-in account, including switching accounts on one device.
   Shared global counters agreeing does not mean private account data is shared.

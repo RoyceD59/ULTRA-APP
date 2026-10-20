@@ -1,3 +1,26 @@
+# 20 October 2026 — General customer availability
+
+- Owner authorized the pending customer-facing features for all existing accounts
+  and all normally registered new users, replacing the named two-customer rollout
+  requirement. Do not request a second customer's identifier as a release gate.
+  Earlier dated entries describe the former checklist and are superseded on this
+  point by this entry and docs/deployment-validity-guide.md.
+- Inspected customer registration/login, customer/admin authorization and source
+  references to pilot/allowlist controls. No two-customer customer-access allowlist
+  was found. Existing admin, content, upload, network and refill-station scope
+  controls are distinct and remain in place. No runtime change is necessary for
+  this audience policy; no accounts were deleted or given additional privileges.
+- Updated the active deployment guide and reconciliation follow-up to cover new
+  and existing customers without a named pair. Retain registration, account
+  switching, private-data isolation and authenticated acceptance checks. This
+  update does not report those live checks as completed or waive phone task #822.
+- Validation: documentation diff review and current-main identity verification.
+  No application code, database, frozen archive, live release selection or
+  deployment configuration changed; no production publish was performed.
+- Next: finish the remaining artifact/API/Hub and device/account acceptance
+  verification, then publish the approved customer-facing candidate for the full
+  audience and verify the actually served release.
+
 # 19 October 2026 — Preserve pending Replit work and reconcile tested main
 
 - With offline provider initialization in place, the complete API run reached 1758 tests: 1755 passed, one failed, two existing skips, no cancellations. The remaining SMS-team-alert test counted four email requests instead of two because earlier tests used an unavailable Replit connector and their delayed retries entered the later outage stub. Set the intercepted Resend adapter explicitly before each test and restore the original environment after the suite. Kept the exact two-attempt assertion and production retry implementation unchanged. Focused SMS suite passes 23/23 locally; full CI rerun required.
