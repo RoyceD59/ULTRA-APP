@@ -1,3 +1,38 @@
+# 20 October 2026 — Retain tested web builds and locate pending delivery
+
+- Added a successful-preview-only artifact step to the existing isolated Docker
+  workflow. It copies only the tested Companion/Hub public web output, records
+  the exact CI checkout revision plus per-file SHA-256 hashes, verifies checksums
+  and uploads web-preview-builds-<run ID> for 14 days with a summary download link.
+  The existing browser evidence remains separate. No deployment, API workspace,
+  database, customer identifiers or credentials enter this new artifact.
+- Added scripts/preview/package-builds.mjs to reject missing app entries,
+  symlinks and environment/private-key files. Its manifest/README explicitly mark
+  the exports fixture-only and ineligible for production, and explain that a
+  complete interactive preview still needs the matching isolated API/database.
+  Excluded generated preview-builds from Git and Docker build context.
+- Added docs/build-locations-and-remaining-tasks.md covering GitHub source/run
+  downloads, checksum-scoped Replit output paths, native task #822, worker
+  publication and #1005 signing boundaries. No newly hosted staging or phone
+  acceptance URL is claimed.
+- Fresh public probes found Companion build 1792278093274-833 on both public
+  client hosts and healthy agreeing global API snapshots at adjustment revision
+  1. Main's selected source/archive/scope are unchanged from the recovered
+  ee734d2d candidate. These are public-read/source checks, not signed-in or phone
+  acceptance. No production writes, schema command or publication occurred.
+- Replit is signed out in the available browser. Local Docker's engine is not
+  running, and C: has roughly 250 MiB free; do not start a large local build.
+  A Windows long-path issue while materializing tracked release files was
+  resolved by retaining a smaller sparse checkout. No source bytes or user
+  files were deleted; GitHub-hosted preview is the independent test route.
+- Validation: local packaging fixtures passed for complete file hashes, preview
+  provenance, invalid source rejection, private environment-file rejection and
+  a missing Hub entry. Node syntax and git diff whitespace checks passed. Still
+  inspect the actual CI artifact/checks before calling the download ready;
+  restore Replit access for
+  stage/API/Hub lineage and controlled candidate delivery. Keep authenticated
+  account isolation and physical-device results unverified until performed.
+
 # 20 October 2026 — General customer availability
 
 - Owner authorized the pending customer-facing features for all existing accounts
