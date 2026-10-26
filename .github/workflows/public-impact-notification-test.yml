@@ -1,0 +1,51 @@
+name: Public impact isolated notification test
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview only; no GitHub reads, writes or notifications'
+        type: boolean
+        default: true
+      confirmation:
+        description: 'Only after separate send approval: SEND TEST TO ISSUE 12'
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: public-impact-isolated-notification-test
+  cancel-in-progress: false
+jobs:
+  receipt-test:
+    if: github.repository == 'RoyceD59/ULTRA-APP' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Check isolated receipt-test guards
+        run: node --test infra/cloudflare/forest/public-impact-notification-test.test.mjs
+      - name: Preview without network access
+        if: inputs.dry_run
+        run: node infra/cloudflare/forest/public-impact-notification-test.mjs --preview
+      - name: Separately approved one-shot bot notification
+        if: ${{ !inputs.dry_run }}
+        env:
+          RECEIPT_TEST_CONFIRMATION: ${{ inputs.confirmation }}
+          RECEIPT_TEST_TOKEN: ${{ github.token }}
+        run: node infra/cloudflare/forest/public-impact-notification-test.mjs --send
+      - name: Retain sanitized test evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: public-impact-receipt-test-${{ github.run_id }}-${{ github.run_attempt }}
+          path: generated-artifacts/public-impact-notification-test/evidence.json
+          if-no-files-found: warn
+          retention-days: 14
