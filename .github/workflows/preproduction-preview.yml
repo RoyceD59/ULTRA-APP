@@ -34,6 +34,26 @@ jobs:
         run: |
           pnpm exec playwright install --with-deps chromium
           pnpm exec playwright test
+      - name: Retain the tested public web builds
+        run: |
+          mkdir preview-builds
+          docker compose -p ultra-preview -f infra/preview/compose.yaml cp companion:/workspace/artifacts/uc-companion/dist preview-builds/companion
+          docker compose -p ultra-preview -f infra/preview/compose.yaml cp hub:/workspace/artifacts/projecthub/dist/public preview-builds/hub
+          node scripts/preview/package-builds.mjs preview-builds
+          cd preview-builds
+          sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@v6
+        id: upload-preview-builds
+        with:
+          name: web-preview-builds-${{ github.run_id }}
+          path: preview-builds/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Link the preview download
+        env:
+          PREVIEW_ARTIFACT_URL: ${{ steps.upload-preview-builds.outputs.artifact-url }}
+        run: |
+          printf '### Tested web preview builds\n\n[Download Companion and Project Hub exports](%s)\n\nSource: `%s`\n\nFixture-only; not a public staging site, production release or native binary. See `manifest.json` and `README.txt` in the download.\n' "$PREVIEW_ARTIFACT_URL" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
       - name: Capture container logs
         if: always()
         run: docker compose -p ultra-preview -f infra/preview/compose.yaml logs --no-color > preview-compose.log 2>&1 || true
