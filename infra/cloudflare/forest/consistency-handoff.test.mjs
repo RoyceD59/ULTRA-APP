@@ -153,7 +153,7 @@ test('production serving works with all external fetches unavailable, while clie
     await mkdir(resolve(tools, 'security-center-cache-review'));
     await mkdir(resolve(tools, 'product-browser-restock-review'));
     await mkdir(resolve(tools, 'product-page-review'));
-    for (const name of ['product-page-selection.mjs', 'verify-product-page-source.py']) {
+    for (const name of ['product-page-selection.mjs', 'verify-product-page-source.py', 'capture-live-client.mjs']) {
       await cp(resolve(here, name), resolve(tools, name));
     }
     for (const name of ['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']) {

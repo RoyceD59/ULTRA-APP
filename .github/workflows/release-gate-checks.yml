@@ -22,7 +22,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Verify reviewed source, active build guards and immutable rollback behaviour
+        shell: bash
         run: |
+          set -euo pipefail
           node --test \
             infra/cloudflare/forest/auth-upload-security.test.mjs \
             infra/cloudflare/forest/consistency-handoff.test.mjs \

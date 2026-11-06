@@ -1,5 +1,14 @@
 # 6 November 2026 — Resolve release validation holds
 
+- Follow-up log review: the initial Linux release run had 26/28 passing, with a
+  missing capture-helper fixture input and a historical README compared to newer
+  working documentation. Added the helper; retained exact executable patch/test
+  comparison and pinned archive digest for historical docs. Set explicit Bash
+  pipefail so tee cannot hide a nonzero test result. The initial job badge was
+  green despite those two failures; it is not accepted passing evidence.
+- Local complete Companion suite passed 1001/1001 with no skips; library and
+  Companion typechecks and frozen-lockfile installation passed. The preflight
+  regression returns a specific 502/start-services failure before UI assertions.
 - Reproduced Expo Doctor 19/20 with nine SDK-57 patch mismatches. Updated only
   those nine direct ranges and the pnpm lockfile using pinned pnpm 10.28.2, with
   lifecycle scripts disabled. Dependency check now passes and Doctor reports
