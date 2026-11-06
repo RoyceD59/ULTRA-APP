@@ -1,5 +1,12 @@
 # 6 November 2026 — Resolve release validation holds
 
+- The completed catalogue fixture exposed a second browser-harness issue: the
+  navigation clock preceded Products mounting. Track the single active
+  eight-second timer after cart hydration, then assert the exact mount-relative
+  7,999/8,000 ms boundary. Scope the category action to its navigation chip,
+  since the fixture also displays that category on its product card. Local
+  exported-web Chromium now passes all four UI phases without page errors.
+  No production timer, component or assertion was weakened. Final CI pending.
 - Linux release-gate follow-up now passes 28/28 with zero skips/failures and
   explicit pipefail enabled. Local dependency-security regression passes 7/7.
   These results do not certify the separate Docker welcome-fixture correction

@@ -53,6 +53,21 @@ async function main() {
       });
     }
     await page.clock.install();
+    // Anchor the boundary to the mounted screen's timer, rather than navigation:
+    // hydration can mount Products after the first controlled-clock tick. Track
+    // active eight-second timers; cart hydration cancels its own timeout.
+    await page.addInitScript(() => {
+      const schedule = window.setTimeout.bind(window);
+      const cancel = window.clearTimeout.bind(window);
+      const timers = new Map();
+      window.__alisonBoundaryTimers = timers;
+      window.setTimeout = (callback, delay, ...args) => {
+        const id = schedule(callback, delay, ...args);
+        if (delay === 8000) timers.set(id, Date.now() + 8000);
+        return id;
+      };
+      window.clearTimeout = id => { timers.delete(id); return cancel(id); };
+    });
     await page.clock.pauseAt(new Date(Date.now() + 100));
     await page.goto(productsURL.href);
     // React Query notifications also use timers: allow short ticks while real
@@ -67,11 +82,17 @@ async function main() {
     const bubble = page.getByTestId('products-alison-nudge');
     const search = page.getByPlaceholder('Search filters, systems…');
     const all = page.getByText('All', { exact: true });
-    const category = page.getByText('Bottles & On-the-Go', { exact: true });
+    const category = page.getByText('Bottles & On-the-Go', { exact: true }).first();
     const productCount = await page.getByText(/^\d+ products?$/).innerText();
 
     await expect(bubble).toHaveCount(0);
-    await page.clock.runFor(7999 - elapsed);
+    const remaining = await page.evaluate(() => {
+      const deadlines = [...window.__alisonBoundaryTimers.values()];
+      if (deadlines.length !== 1) throw new Error(`Expected one mounted nudge timer, found ${deadlines.length}`);
+      return deadlines[0] - Date.now();
+    });
+    assert.ok(remaining > 0 && remaining <= 8000, 'Nudge deadline remains ahead of the controlled clock');
+    await page.clock.runFor(remaining - 1);
     await expect(bubble).toHaveCount(0);
     await page.clock.runFor(1);
     await expect(bubble).toBeVisible();
@@ -119,7 +140,13 @@ async function main() {
     }
     await expect(page.getByText(/^\d+ products?$/)).toBeVisible({ timeout: 5000 });
     await expect(bubble).toHaveCount(0);
-    await page.clock.runFor(8000 - elapsed);
+    const reloadRemaining = await page.evaluate(() => {
+      const deadlines = [...window.__alisonBoundaryTimers.values()];
+      if (deadlines.length !== 1) throw new Error(`Expected one remounted nudge timer, found ${deadlines.length}`);
+      return deadlines[0] - Date.now();
+    });
+    assert.ok(reloadRemaining > 0 && reloadRemaining <= 8000);
+    await page.clock.runFor(reloadRemaining);
     await expect(bubble).toBeVisible();
     assert.deepEqual(errors, [], 'No browser runtime errors');
     console.log('PASS: fresh mount resets session-only dismissal; no browser runtime errors.');
