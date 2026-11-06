@@ -111,58 +111,89 @@ item against the exact proposal before implementation or evidence collection.
 | --- | --- | --- |
 | Reviewer and approver | Assigned authorized staff submit; a different active administrator independently approves or rejects. Both roles are checked by the server at each action. | Not confirmed |
 | Acceptable evidence | Only the exact historical unit-specific evidence chains in the proposal; unsupported or conflicting evidence remains unresolved with no override. | Not confirmed |
-| Relation effects | Additive, revocable physical-unit relation only. Preserve both original rows, ownership, registration, source identity, replacement cycles, maintenance, reminders, payments, and impact. | Not confirmed |
+| Relation effects and grouping | Only a currently active, independently approved relation may group records. Preserve both original rows, ownership, registration, source identity, replacement cycles, maintenance, reminders, payments, and impact. When a relation ends or is revoked, its restricted tombstone is historical provenance only; it never grants grouping, matching, redirection, or ownership effects. A later relation requires a new case and approval. | Not confirmed |
 | Private evidence service | Replit App Storage is the existing GCS-backed object service. The water-assessment private route is not a filter-review channel; a case-bound path and separate reviewer/approver checks must be built and verified. | Existing service identified; use for this purpose not approved |
-| Evidence deletion | Proposed: delete evidence bytes from active storage 90 days after final case closure. Unresolved cases receive a review at day 90 and are not silently deleted. Add a scheduled, auditable purge and report whether provider backup copies can expire. | Draft only; current app has no matching purge or verified backup expiry |
-| Audit retention and deletion | Draft recommendation: retain minimal decision/audit metadata for 24 months after the later of final case closure and relation end/revocation, once there is no active relation or open dispute/appeal. Keep the operational relation ledger while it is needed to represent an active relation and preserve essential history for the source records' lifetime. | Draft only; owner/privacy review required |
-| Customer wording | Draft below names the verified storage service and proposed periods while making clear the dedicated channel is not yet available. Replace the support placeholder and do not display until service, access, deletion, backup and policy gates are approved and implemented. | Draft only |
+| Evidence deletion | Proposed: delete evidence bytes, object locators, and evidence-specific metadata from active storage 90 days after final case closure, unless a dispute, appeal, or legal hold is open. Unresolved cases receive a review at day 90 and are not silently closed or deleted. Evidence purge is separate from relation status and never deletes a relation or source record. | Draft only; current app has no matching purge or verified backup expiry |
+| Detailed audit retention | Proposed: purge remaining detailed case metadata 24 months after the later of final case closure and relation end/revocation, if a relation was created, once no dispute, appeal, or legal hold remains. This may include free-text reasons and reviewer/approver account identities; evidence pointers and evidence-specific metadata are removed under the separate 90-day rule. | Draft only; owner/privacy review required |
+| Post-expiry audit stub and tombstone | Proposed immutable stub allow-list: random event ID, event type, UTC timestamp, policy revision, actor role category, outcome/result code, sequence number, and a predecessor digest calculated only from retained stub fields. The stub has no customer, account, source-record, or evidence IDs. A restricted decision tombstone separately preserves exact source-record references and the final outcome while any referenced source record exists; an ended relation also records its start/end events. It may point to stub IDs but cannot grant grouping. Remove the tombstone and related stubs when no referenced source record remains, absent a legal hold. | Draft only; owner/privacy review required |
+| Customer wording | Draft below explains the proposed periods, retained historical record, and that history does not group records. It also says no evidence is being collected while backup expiry is unknown. Replace the support placeholder and do not display until service, access, deletion, backup, and policy gates are approved and implemented. | Draft only |
 | Dispute and revocation | Dispute disables relation use; revocation appends an audited event without erasing the original decision or records. Reapplication requires a new case and independent approval. | Not confirmed |
 
 ### Customer wording draft — not for display
 
-> We may ask for specific unit or installation evidence to review whether two
-> filter records refer to the same physical unit. When a dedicated review
-> channel is available, please submit requested evidence only through that
-> channel; it will be held in a private, access-controlled area of Replit App
-> Storage, which uses Google Cloud Storage.
-> We propose to delete evidence files 90 days after a case is closed. If a case
-> is still unresolved after 90 days, we will review it rather than delete the
-> evidence automatically. We will keep only essential relation history while
-> that relation remains active. Once both the case is finally closed and the
-> relation has ended, we propose to retain detailed decision records for 24
-> months, subject to documented legal holds. This review will not change
-> ownership, registrations, installation or maintenance history, replacement
-> cycles, payments, reminders, or impact totals; your original records remain
-> available. Contact [existing support channel] with questions.
+> We are not collecting identity-review evidence yet. If a dedicated, private
+> submission channel is approved and available, we will explain its storage and
+> backup-retention period before asking you to submit anything. Our proposed
+> policy is to remove evidence files and their active-storage references 90 days
+> after a case is finally closed, unless a dispute, appeal, or legal hold pauses
+> deletion. A case still unresolved at day 90 will be reviewed, not automatically
+> closed or deleted.
+>
+> We propose to keep detailed decision notes for 24 months after final case
+> closure and the end or revocation of any approved relation, once disputes,
+> appeals, and legal holds are resolved. After those notes expire, a limited
+> audit record of the event type, date, policy version, staff-role category, and
+> outcome would remain while the original records exist. We may also retain a
+> restricted historical record of the final decision, including whether an
+> approved relation later ended or was revoked. This history does not group
+> records; only a currently active, separately approved relation may do that.
+> This process does not change ownership or remove your original records.
+> Contact [existing support channel] with questions.
 
 This copy is not ready to show customers: the dedicated review channel is not
-implemented, backup expiry is not known, and all listed periods remain proposals.
+implemented, backup expiry is unknown, and all listed periods remain proposals.
 Do not direct customers to ordinary chat, public media upload, or water-test
-upload for this evidence.
+upload for this evidence. Collection remains prohibited until backup persistence
+is documented or a service with a documented schedule is selected and approved.
 
 ## Audit clock and essential relation history
 
 Proposed semantics for owner review:
 
-- **Evidence files:** set the 90-day deletion clock from the timestamp when a
-  case becomes finally closed. A case is not finally closed while disputed,
-  appealed, under legal hold, or otherwise awaiting review. An unresolved case
-  reaching day 90 gets a review task; it is not automatically treated as closed
-  or deleted. A final resolution then establishes the applicable closure time.
-- **Detailed decision/audit metadata:** the 24-month clock begins only after
-  both the case is finally closed and its relation is no longer active (including
-  revocation), with no open dispute or appeal. Use the later of those event
-  times; opening a dispute or applying a legal hold suspends purge until resolved.
-- **Essential relation history:** do not apply that 24-month purge to a relation
-  that is still active. Keep a separate minimal relation ledger for as long as
-  the relation affects customer-visible grouping, with exact references to the
-  original records, relation status, event timestamps, and policy revision.
-  Preserve the originals unchanged. After the relation ends, retain a minimal
-  relation tombstone with those references while the source records remain;
-  remove evidence pointers, detailed reasons, and reviewer/approver attribution
-  after the 24-month audit period, subject to approved legal holds. This
-  distinction is a recommendation; the privacy owner must approve the retention
-  of record references and tombstones before implementation.
+- **Evidence files:** start the 90-day clock at final case closure. A case is
+  not finally closed while disputed, appealed, under legal hold, or otherwise
+  awaiting review. An unresolved case reaching day 90 gets a review task; it is
+  not automatically treated as closed or deleted. Purging evidence and its
+  object locator never changes an active relation or source record. A hold or
+  active dispute blocks deletion until resolved.
+- **Detailed decision metadata:** start the 24-month clock after the later of
+  final case closure and relation end/revocation, if a relation was created.
+  Do not purge while a dispute, appeal, or legal hold is open. At 90 days,
+  remove evidence bytes, object locators, and evidence-specific metadata after
+  successful or confirmed-absent deletion, regardless of whether the relation
+  is active. At 24 months, purge the remaining free-text reasons,
+  reviewer/approver account identities, and other detailed case metadata.
+  Evidence pointers must not remain in detailed audit records after the 90-day
+  evidence purge.
+- **Immutable audit stub after detail expiry:** retain only an append-only stub
+  while any referenced source record exists, absent a legal hold. Its proposed
+  fields are: random audit-event ID, event type, UTC timestamp, policy revision,
+  actor role category (reviewer, independent approver, or worker), outcome or
+  action-result code, sequence number, and predecessor digest computed solely
+  from retained stub fields. The stub must not contain names, account IDs,
+  customer or source-record IDs, free text, evidence pointers, object names,
+  evidence hashes, IP addresses, or device data. Tombstones may reference stub
+  IDs; the stub itself has no record or evidence references. The digest must
+  not be computed from expiring detailed metadata.
+- **Active ledger and historical decision tombstone:** while an approved
+  relation is active, keep its exact source-record references in the restricted
+  operational ledger. On ending or revoking it, replace its active state with a
+  restricted tombstone containing the source references, prior relation status,
+  start/end event times, final outcome, policy revision, and relevant audit-stub
+  references. For a finalized case that did not create a relation, create a
+  non-relation decision tombstone when detailed metadata is purged. Retain either
+  tombstone only while at least one referenced source record exists, absent a
+  legal hold. Preserve source records unchanged.
+- **Historical does not mean active:** only a separately approved relation
+  whose current state is active may group or display records together. A
+  tombstone is read-only provenance, whether it records an ended relation or a
+  decision that never created one. It must not be consulted by grouping,
+  matching, redirection, ownership, or record-selection logic. Restoring a
+  tombstone cannot reactivate a relation; any later relation needs a new case,
+  current evidence review, independent approval, and a new active relation.
+
+These periods, fields, and access rules are proposals. The owner/privacy reviewer
+must approve the exact allow-list and retention boundaries before implementation.
 
 ## Dedicated-channel implementation plan — no collection or relation writes
 
@@ -176,12 +207,15 @@ Proposed semantics for owner review:
    not a ranked match. The reviewer attaches only evidence references through
    this dedicated case. A distinct active administrator approves or rejects an
    immutable preview; self-approval is denied server-side.
-3. **Add additive case, evidence-metadata, relation, and audit records.** Bind
-   the preview to current record versions, evidence revisions, policy revision,
-   and intended display-only effect. Approval and application recheck roles,
-   ownership, evidence and versions under deterministic locks in one transaction.
-   Keep all source rows/history and existing purchase/registration identities.
-   Relation writes remain behind an explicit default-off server gate.
+3. **Add additive case, evidence-metadata, active-relation, tombstone, and
+   append-only audit-stub records.** Bind the preview to current record versions,
+   evidence revisions, policy revision, and intended display-only effect.
+   Approval and application recheck roles, ownership, evidence, and versions
+   under deterministic locks in one transaction. Only an active approved
+   relation can drive grouping; tombstones are excluded from all grouping and
+   matching paths. Keep all source rows/history and existing
+   purchase/registration identities. Relation writes remain behind an explicit
+   default-off server gate.
 4. **Use a separate private storage namespace and route.** Plan for
    `filter-identity-reviews/<case-id>/<opaque-object-id>` in the private App
    Storage directory; do not use public `uploads/` or the water-test route.
@@ -189,14 +223,17 @@ Proposed semantics for owner review:
    object to a case and uploader, and independently verify bytes, detected MIME,
    size, and object generation before accepting it. Reads are non-cacheable and
    recheck the assigned reviewer or independent approver on every request.
-5. **Add visible lifecycle state and a scheduled deletion worker.** Keep
-   evidence object status separate from the relation ledger. The worker queries
-   only finally closed, due cases with no dispute, hold, active relation, or
-   pending decision; it records claims, attempts, next retry, and deletion
-   outcome without putting evidence content or signed URLs in logs. App Storage
-   has no native expiry, so this requires an explicitly configured Scheduled
-   Deployment or equivalent managed worker. Never report backup erasure unless
-   the provider confirms it.
+5. **Add separate, visible retention jobs.** The evidence job deletes due
+   evidence objects, object locators, and evidence-specific metadata 90 days
+   after final case closure, unless a dispute, appeal, or legal hold blocks it;
+   relation state does not grant or revoke deletion authority. A separate
+   metadata job purges remaining detailed case metadata only after the 24-month
+   clock and relation-end/hold checks pass. It preserves the allow-listed
+   immutable audit stubs and restricted tombstones while source records remain,
+   without restoring grouping permission. Record claims, attempts, next retry,
+   and outcomes without evidence content or signed URLs in logs. App Storage
+   has no native expiry, so configure a Scheduled Deployment or equivalent
+   managed worker. Never report backup erasure unless the provider confirms it.
 6. **Stage with collection and relation writes disabled.** Exercise the
    complete staff review, authorization, transaction and deletion paths on
    isolated fixtures. Enable neither evidence collection nor Companion grouping
@@ -205,8 +242,12 @@ Proposed semantics for owner review:
 
 ### Deletion-job failure and retry tests
 
-- Due final case is claimed once; not-yet-due evidence, open cases, unresolved
-  cases, active relations, disputes, appeals, and legal holds are not deleted.
+- Evidence due 90 days after final closure is claimed once; open or unresolved
+  cases, disputes, appeals, and legal holds block deletion. An active relation
+  does not block evidence-file purge and is never changed by it.
+- Detailed metadata is not purged until 24 months after the later of final case
+  closure and relation end/revocation, if applicable, and no dispute, appeal, or
+  legal hold remains.
 - Day-90 unresolved review is generated once and remains pending until a human
   resolution; resolution sets the real closure timestamp rather than backdating
   an inferred one.
@@ -216,10 +257,14 @@ Proposed semantics for owner review:
   evidence metadata in a retryable failure state with bounded backoff and a
   visible operator alert. It never marks deletion successful on an exception.
 - Crash after object deletion but before database acknowledgement retries safely:
-  absent-object confirmation completes metadata cleanup without duplicating
-  audit events or removing the relation ledger.
+  absent-object confirmation completes object-locator cleanup without
+  duplicating audit events or changing the active relation/tombstone.
+- Successful 90-day purge removes evidence-specific metadata and every object
+  pointer before the 24-month detailed-case purge. Neither deleted evidence
+  locators nor content hashes appear in retained audit stubs.
 - Database failure before deletion prevents the object request; failure after
-  deletion retains a recoverable tombstone/claim and is repaired by a later run.
+  deletion retains a recoverable deletion receipt/claim and is repaired by a
+  later run. It does not create or change a relation tombstone.
 - Concurrent workers use an atomic claim/lease; expired leases recover after a
   worker crash. A stale worker cannot mark a newer claim complete.
 - A case reopened, disputed, or placed on hold between selection and deletion
@@ -228,9 +273,25 @@ Proposed semantics for owner review:
 - A batch with one failing object continues safely for unrelated due cases;
   per-object errors are private, contain no evidence content or signed URL, and
   remain actionable.
-- Deleting evidence never removes the essential relation ledger, original
-  registration, purchase, maintenance, or replacement-cycle records. Tests
-  assert exact protected-state equality before and after purge.
+- Evidence purge removes bytes, object locators, and evidence-specific metadata
+  at 90 days. Detailed-metadata purge later removes free-text reasons,
+  reviewer/approver account identities, and other non-allow-listed fields while
+  keeping exactly the immutable audit-stub allow-list. Attempts to update or
+  delete a retained stub are rejected; new events append without rewriting old
+  events.
+- Stub sequence and predecessor digest remain verifiable using only retained
+  stub fields; no digest is derived from content that the retention policy later
+  deletes.
+- An ended/revoked relation leaves a restricted tombstone; a finalized decision
+  that never created a relation gets a non-relation tombstone when detailed
+  metadata expires. Each remains only while any source record exists. Automated
+  grouping, matching, redirection, and selection queries ignore all tombstones
+  and use only currently active approved relations. Re-approval requires a new
+  case; restoring a tombstone cannot enable grouping.
+- When no referenced source record remains, the tombstone and linked stubs become
+  eligible for deletion unless a legal hold applies. Evidence or metadata purge
+  never removes original registrations, purchases, maintenance, or
+  replacement-cycle records. Assert exact protected-state equality.
 - Retry exhaustion stays visible and recoverable; it cannot be silently
   discarded or converted to a claim that provider backups have expired.
 
@@ -249,8 +310,9 @@ approval and customer disclosure; it is not authorized by this preparation.
 
 The owner must confirm the exact proposal revision and explicitly decide the
 items above, including the private evidence service, access controls, deletion
-job, audit-retention clock and relation-history exception, and provider
-backup-expiry behavior. Until then, do not collect evidence, inspect/link
-particular records, implement the workflow, change schema, enable writes, or
-publish. This note is a review plan, not approval to perform a retrospective
-reconciliation.
+job, 24-month detailed-metadata clock, immutable audit-stub allow-list and
+retention, tombstone fields/lifetime, prohibition on grouping from tombstones,
+customer wording, and provider backup-expiry behavior. Until then, do not
+collect evidence, inspect/link particular records, implement the workflow,
+change schema, enable writes, or publish. This note is a review plan, not
+approval to perform a retrospective reconciliation.

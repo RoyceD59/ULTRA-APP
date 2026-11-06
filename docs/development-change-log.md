@@ -2044,6 +2044,24 @@ initialization, then client delivery and exact live snapshot comparisons.
 - **Status:** Main source only; frozen candidate and publication not changed.
   Physical native verification and unrelated suite failures remain open.
 
+### 2026-11-06 — Task 1118 retention-policy clarification
+
+- **Scope/approval:** Owner requested a preparation-note revision only. All
+  retention and audit rules remain proposals; no implementation or collection
+  authorization was given.
+- **Changes:** Separated 90-day evidence-file deletion from the 24-month
+  detailed-metadata clock. Defined an immutable post-expiry audit-stub
+  allow-list, restricted historical decision tombstones, and the rule that
+  tombstones never authorize grouping. Aligned the policy table, deletion jobs,
+  retry tests, and customer wording.
+- **Verification:** Original proposal remains unchanged; SHA-256
+  `9d85c258dbc1f8caac13f9c03cc303b084a079a6a232ce54bd2c8c216a216ca7`
+  verified. Documentation consistency and whitespace checks pass.
+- **Ignore changes:** None.
+- **Status:** Review branch / preparation only; no application code, schema,
+  customer evidence, collection, linking writes, or release activation changed.
+- **Remaining:** Owner/privacy approval and verified storage backup expiry.
+
 ### YYYY-MM-DD — Change title
 
 - **Scope/approval:** What was requested and any explicit operational approval.
