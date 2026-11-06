@@ -4,23 +4,31 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { PRODUCT_PAGE_CANDIDATE, verifyProductPageSelection, verifyProductPageStage } from './product-page-selection.mjs';
-import { APPROVED_CANDIDATE, SOURCE_IDENTITY, archive, stage, verifyHandoff } from './consistency-handoff.mjs';
+import { PRODUCT_PAGE_CANDIDATE, productPageArchive, verifyProductPageSelection, verifyProductPageStage } from './product-page-selection.mjs';
+import { APPROVED_CANDIDATE, SOURCE_IDENTITY, archive, verifyHandoff } from './consistency-handoff.mjs';
 
 test('coordinated builder selects exact approved product source and preserves security ancestry', async () => {
   assert.equal(APPROVED_CANDIDATE, PRODUCT_PAGE_CANDIDATE);
   assert.equal(SOURCE_IDENTITY, 'consistency-' + PRODUCT_PAGE_CANDIDATE);
-  assert.ok(archive.endsWith('product-page-review/release-sources.tar.gz'));
+  assert.equal(archive, productPageArchive);
   const source = await verifyHandoff();
   assert.equal(source.selectionApproved, true);
   assert.equal(source.candidateSha256, PRODUCT_PAGE_CANDIDATE);
-  assert.equal(source.sourceFiles, 1310);
+  const selected = JSON.parse(await readFile(new URL('./product-browser-restock-review/candidate.json', import.meta.url)));
+  assert.equal(source.sourceFiles, selected.sourceFiles);
+  assert.equal(source.unchangedParentFiles, selected.unchangedParentFiles);
 });
 
-test('prepared review stage must match every archived source byte and mode', () => {
-  const result = verifyProductPageStage(stage);
-  assert.equal(result.stageVerified, true);
-  assert.equal(result.changedFiles, 68);
+test('prepared review stage must match every archived source byte and mode', async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), 'product-stage-exact-'));
+  try {
+    execFileSync('tar', ['-xzf', archive, '-C', directory]);
+    const result = verifyProductPageStage(directory);
+    const source = await verifyProductPageSelection();
+    assert.equal(result.stageVerified, true);
+    assert.equal(result.sourceFiles, source.sourceFiles);
+    assert.equal(result.changedFiles, source.sourceFiles - source.unchangedParentFiles);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('unmarked partial or modified stages cannot be adopted', async () => {

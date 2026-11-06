@@ -164,7 +164,9 @@ test('dependency security refresh changes only approved packaging sources', asyn
     for (const path of dependencySecurityPaths) {
       assert.ok(newPaths.has(path), `Missing release security source: ${path}`);
     }
-    for (const path of dependencySecurityPaths.filter(path => path.startsWith('patches/') || path.startsWith('scripts/'))) {
+    // The complete archive digest pins its historical README. Operational
+    // documentation may advance; executable patch/fixture bytes must still match.
+    for (const path of dependencySecurityPaths.filter(path => path.endsWith('.patch') || path.startsWith('scripts/'))) {
       assert.ok((await readFile(resolve(newDir, path))).equals(await readFile(path)), `Release patch/test differs: ${path}`);
     }
     const packed = JSON.parse(await readFile(resolve(newDir, 'package.json'), 'utf8'));

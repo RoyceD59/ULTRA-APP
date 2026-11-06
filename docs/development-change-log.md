@@ -1,3 +1,56 @@
+# 6 November 2026 — Resolve release validation holds
+
+- The completed catalogue fixture exposed a second browser-harness issue: the
+  navigation clock preceded Products mounting. Track the single active
+  eight-second timer after cart hydration, then assert the exact mount-relative
+  7,999/8,000 ms boundary. Scope the category action to its navigation chip,
+  since the fixture also displays that category on its product card. Local
+  exported-web Chromium now passes all four UI phases without page errors.
+  No production timer, component or assertion was weakened. Final CI pending.
+- Linux release-gate follow-up now passes 28/28 with zero skips/failures and
+  explicit pipefail enabled. Local dependency-security regression passes 7/7.
+  These results do not certify the separate Docker welcome-fixture correction
+  or a production frozen build; those results remain pending their rerun.
+- The initial Docker welcome check reached the app's error boundary: its new
+  synthetic product omitted required UCProduct fields (including tags consumed
+  by ProductCard). Completed the fixture schema, retained all UI assertions and
+  added bounded console/page diagnostics plus a CI failure screenshot. This was
+  a test-fixture error; no production product renderer was relaxed.
+- Follow-up log review: the initial Linux release run had 26/28 passing, with a
+  missing capture-helper fixture input and a historical README compared to newer
+  working documentation. Added the helper; retained exact executable patch/test
+  comparison and pinned archive digest for historical docs. Set explicit Bash
+  pipefail so tee cannot hide a nonzero test result. The initial job badge was
+  green despite those two failures; it is not accepted passing evidence.
+- Local complete Companion suite passed 1001/1001 with no skips; library and
+  Companion typechecks and frozen-lockfile installation passed. The preflight
+  regression returns a specific 502/start-services failure before UI assertions.
+- Reproduced Expo Doctor 19/20 with nine SDK-57 patch mismatches. Updated only
+  those nine direct ranges and the pnpm lockfile using pinned pnpm 10.28.2, with
+  lifecycle scripts disabled. Dependency check now passes and Doctor reports
+  20/20. No exclusions, SDK-major upgrade or production release change.
+- Added real dependency/Doctor checks to Companion CI and changed the existing
+  Replit validation command to installed pnpm tools. An initial local Expo fix
+  selected an incompatible pnpm from PATH; corrected the tooling, preserving
+  the existing store, security overrides and patch files.
+- Added preview readiness diagnostics and a current catalogue label to the
+  Alison browser check. CI runs it after service health/browser checks, with a
+  synthetic localhost-only product fixture. No live AI, account creation or
+  contact message is involved. Kept the timing/filter/navigation/dismissal checks.
+- Corrected stale release tests to select the reviewed product-browser archive,
+  use metadata/actual path-derived counts, create isolated stage fixtures and
+  include current source verification inputs in startup fixtures. Existing
+  pre-compilation frozen security fixtures and active artifact configs remain.
+- Added read-only frozen-release CI verification with full provenance history.
+  No deployment builder, source archive, approval hash or database was changed.
+  Initial Windows release tests failed on environment and stale fixtures; Linux
+  CI must provide final release-gate results. The supplied Alison-support 503
+  rerun result is not independently reproduced from a matching support test here.
+- See docs/release-validation-holds-2026-11-06.md for each hold and release steps.
+  Final API, browser, release-gate and Companion CI results remain pending until
+  observed. Keep the selected frozen dependency update and live/device acceptance
+  distinct from this source repair; do not initialize/import or run production DDL.
+
 # 20 October 2026 — Retain tested web builds and locate pending delivery
 
 - Added a successful-preview-only artifact step to the existing isolated Docker

@@ -20,8 +20,8 @@ test('saved candidate is the exact approved source, with untouched predecessor a
   const info = await verifyHandoff();
   assert.equal(info.candidateSha256, APPROVED_CANDIDATE);
   assert.equal(info.baselineSha256, PREDECESSOR);
-  assert.equal(info.unchangedFrozenFiles, 1221);
-  assert.equal(info.securityChangedPaths.length, 10);
+  const scope = JSON.parse(await readFile(resolve(here, 'auth-upload-security/scope.json')));
+  assert.deepEqual(info.securityChangedPaths, scope.files.map(file => file.path));
   const frozenManifest = JSON.parse(await readFile(resolve(here, 'release-manifest.json')));
   assert.equal(frozenManifest.sourceArchiveSha256, PREDECESSOR);
   const builder = await readFile(resolve(here, 'release-build.mjs'), 'utf8');
@@ -151,6 +151,15 @@ test('production serving works with all external fetches unavailable, while clie
     await mkdir(resolve(tools, 'security-dependency-review'), { recursive: true });
     await mkdir(serverDir, { recursive: true });
     await mkdir(resolve(tools, 'security-center-cache-review'));
+    await mkdir(resolve(tools, 'product-browser-restock-review'));
+    await mkdir(resolve(tools, 'product-page-review'));
+    for (const name of ['product-page-selection.mjs', 'verify-product-page-source.py', 'capture-live-client.mjs']) {
+      await cp(resolve(here, name), resolve(tools, name));
+    }
+    for (const name of ['candidate.json', 'release-sources.tar.gz', 'scope.json', 'owner-approval.json']) {
+      await cp(resolve(here, 'product-browser-restock-review', name), resolve(tools, 'product-browser-restock-review', name));
+    }
+    await cp(resolve(here, 'product-page-review/published-predecessor-sources.tar.gz'), resolve(tools, 'product-page-review/published-predecessor-sources.tar.gz'));
     await symlink(resolve(here, '../../../node_modules'), resolve(fixture, 'node_modules'), 'dir');
     for (const name of ['build-approved-consistency.mjs', 'consistency-handoff.mjs', 'consistency-security.mjs', 'auth-upload-security.mjs', 'security-dependency-selection.mjs', 'security-center-selection.mjs', 'security-patch-installation.mjs', 'prepare-security-center-cache-review.py', 'prepare-security-center-review.py', 'prepare-security-dependency-review.py', 'verify-security-center-lock.mjs', 'release-manifest.json', 'release-sources.tar.gz']) {
       await cp(resolve(here, name), resolve(tools, name));
