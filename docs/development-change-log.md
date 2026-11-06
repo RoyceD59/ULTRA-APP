@@ -1,5 +1,14 @@
 # 6 November 2026 — Resolve release validation holds
 
+- Linux release-gate follow-up now passes 28/28 with zero skips/failures and
+  explicit pipefail enabled. Local dependency-security regression passes 7/7.
+  These results do not certify the separate Docker welcome-fixture correction
+  or a production frozen build; those results remain pending their rerun.
+- The initial Docker welcome check reached the app's error boundary: its new
+  synthetic product omitted required UCProduct fields (including tags consumed
+  by ProductCard). Completed the fixture schema, retained all UI assertions and
+  added bounded console/page diagnostics plus a CI failure screenshot. This was
+  a test-fixture error; no production product renderer was relaxed.
 - Follow-up log review: the initial Linux release run had 26/28 passing, with a
   missing capture-helper fixture input and a historical README compared to newer
   working documentation. Added the helper; retained exact executable patch/test

@@ -38,6 +38,7 @@ jobs:
         env:
           ALISON_TEST_BASE_URL: http://localhost:3000/
           ALISON_TEST_FIXTURE_MODE: '1'
+          ALISON_TEST_EVIDENCE_DIR: test-results/alison-welcome
         run: node artifacts/uc-companion/scripts/check-alison-nudge.cjs
       - name: Retain the tested public web builds
         run: |

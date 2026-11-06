@@ -20,8 +20,15 @@ async function main() {
   const executablePath = process.env.CHROMIUM_PATH
     || (fs.existsSync('/repl/tools/bin/chromium') ? '/repl/tools/bin/chromium' : undefined);
   const browser = await chromium.launch({ executablePath, headless: true });
+  let page;
+  const errors = [];
+  const consoleErrors = [];
   try {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => {
+      if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 2000));
+    });
     if (process.env.ALISON_TEST_FIXTURE_MODE === '1') {
       assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(productsURL.hostname), 'Catalogue fixture mode is local-preview-only');
       await page.route(url => url.pathname === '/api/uc/products', route => {
@@ -37,15 +44,14 @@ async function main() {
           body: JSON.stringify([{
             id: 990001, name: 'Isolated filter fixture', slug: 'isolated-filter-fixture',
             price: '100', regularPrice: '100', salePrice: '', description: 'UI fixture only',
-            shortDescription: 'UI fixture only', images: [], stockStatus: 'instock',
+            shortDescription: 'UI fixture only', tagline: 'Isolated UI fixture',
+            sku: 'UI-FIXTURE-990001', images: [], tags: [], stockStatus: 'instock', stockQuantity: 1,
             categories: [{ id: 990001, name: 'Bottles & On-the-Go', slug: 'bottles' }],
             type: 'simple', purchasable: true, inStock: true,
           }]),
         });
       });
     }
-    const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
     await page.clock.install();
     await page.clock.pauseAt(new Date(Date.now() + 100));
     await page.goto(productsURL.href);
@@ -117,6 +123,13 @@ async function main() {
     await expect(bubble).toBeVisible();
     assert.deepEqual(errors, [], 'No browser runtime errors');
     console.log('PASS: fresh mount resets session-only dismissal; no browser runtime errors.');
+  } catch (error) {
+    console.error('Alison browser diagnostics:', { pageErrors: errors, consoleErrors });
+    if (page && process.env.ALISON_TEST_EVIDENCE_DIR) {
+      fs.mkdirSync(process.env.ALISON_TEST_EVIDENCE_DIR, { recursive: true });
+      await page.screenshot({ path: require('node:path').join(process.env.ALISON_TEST_EVIDENCE_DIR, 'failure.png'), fullPage: true }).catch(() => {});
+    }
+    throw error;
   } finally {
     await browser.close();
   }
