@@ -8,16 +8,47 @@ async function main() {
   const baseURL = process.env.ALISON_TEST_BASE_URL
     || (process.env.REPLIT_EXPO_DEV_DOMAIN && `https://${process.env.REPLIT_EXPO_DEV_DOMAIN}`);
   if (!baseURL) throw new Error('Set ALISON_TEST_BASE_URL to the running Companion web origin.');
+  const productsURL = new URL('products', `${baseURL.replace(/\/$/, '')}/`);
+  let readiness;
+  try { readiness = await fetch(productsURL, { signal: AbortSignal.timeout(15000) }); }
+  catch (error) { throw new Error(`Companion preview is not reachable. Start its API and Companion workflows before this browser check. ${error.message}`); }
+  if (!readiness.ok) {
+    await readiness.body?.cancel();
+    throw new Error(`Companion preview returned HTTP ${readiness.status}. Start/check the API and Companion workflows before testing the welcome bubble.`);
+  }
+  await readiness.body?.cancel();
   const executablePath = process.env.CHROMIUM_PATH
     || (fs.existsSync('/repl/tools/bin/chromium') ? '/repl/tools/bin/chromium' : undefined);
   const browser = await chromium.launch({ executablePath, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    if (process.env.ALISON_TEST_FIXTURE_MODE === '1') {
+      assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(productsURL.hostname), 'Catalogue fixture mode is local-preview-only');
+      await page.route(url => url.pathname === '/api/uc/products', route => {
+        const headers = {
+          'Access-Control-Allow-Origin': productsURL.origin,
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        };
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+        assert.equal(route.request().method(), 'GET', 'Catalogue fixture only handles reads');
+        return route.fulfill({
+          status: 200, contentType: 'application/json', headers,
+          body: JSON.stringify([{
+            id: 990001, name: 'Isolated filter fixture', slug: 'isolated-filter-fixture',
+            price: '100', regularPrice: '100', salePrice: '', description: 'UI fixture only',
+            shortDescription: 'UI fixture only', images: [], stockStatus: 'instock',
+            categories: [{ id: 990001, name: 'Bottles & On-the-Go', slug: 'bottles' }],
+            type: 'simple', purchasable: true, inStock: true,
+          }]),
+        });
+      });
+    }
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.clock.install();
     await page.clock.pauseAt(new Date(Date.now() + 100));
-    await page.goto(new URL('products', `${baseURL.replace(/\/$/, '')}/`).href);
+    await page.goto(productsURL.href);
     // React Query notifications also use timers: allow short ticks while real
     // catalogue reads finish, but never advance the eight-second deadline.
     let elapsed = 0;
@@ -30,7 +61,7 @@ async function main() {
     const bubble = page.getByTestId('products-alison-nudge');
     const search = page.getByPlaceholder('Search filters, systems…');
     const all = page.getByText('All', { exact: true });
-    const category = page.getByText('Bottles & Portable', { exact: true });
+    const category = page.getByText('Bottles & On-the-Go', { exact: true });
     const productCount = await page.getByText(/^\d+ products?$/).innerText();
 
     await expect(bubble).toHaveCount(0);

@@ -1,3 +1,31 @@
+# 6 November 2026 — Resolve release validation holds
+
+- Reproduced Expo Doctor 19/20 with nine SDK-57 patch mismatches. Updated only
+  those nine direct ranges and the pnpm lockfile using pinned pnpm 10.28.2, with
+  lifecycle scripts disabled. Dependency check now passes and Doctor reports
+  20/20. No exclusions, SDK-major upgrade or production release change.
+- Added real dependency/Doctor checks to Companion CI and changed the existing
+  Replit validation command to installed pnpm tools. An initial local Expo fix
+  selected an incompatible pnpm from PATH; corrected the tooling, preserving
+  the existing store, security overrides and patch files.
+- Added preview readiness diagnostics and a current catalogue label to the
+  Alison browser check. CI runs it after service health/browser checks, with a
+  synthetic localhost-only product fixture. No live AI, account creation or
+  contact message is involved. Kept the timing/filter/navigation/dismissal checks.
+- Corrected stale release tests to select the reviewed product-browser archive,
+  use metadata/actual path-derived counts, create isolated stage fixtures and
+  include current source verification inputs in startup fixtures. Existing
+  pre-compilation frozen security fixtures and active artifact configs remain.
+- Added read-only frozen-release CI verification with full provenance history.
+  No deployment builder, source archive, approval hash or database was changed.
+  Initial Windows release tests failed on environment and stale fixtures; Linux
+  CI must provide final release-gate results. The supplied Alison-support 503
+  rerun result is not independently reproduced from a matching support test here.
+- See docs/release-validation-holds-2026-11-06.md for each hold and release steps.
+  Final API, browser, release-gate and Companion CI results remain pending until
+  observed. Keep the selected frozen dependency update and live/device acceptance
+  distinct from this source repair; do not initialize/import or run production DDL.
+
 # 20 October 2026 — Retain tested web builds and locate pending delivery
 
 - Added a successful-preview-only artifact step to the existing isolated Docker

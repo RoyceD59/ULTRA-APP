@@ -19,6 +19,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm --filter @workspace/uc-companion... install --frozen-lockfile --ignore-scripts
+      - name: Validate Expo SDK package alignment and project health
+        working-directory: artifacts/uc-companion
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+        run: |
+          pnpm exec expo install --check
+          pnpm exec expo-doctor --verbose
       - run: pnpm exec tsc -b lib/api-client-react lib/api-zod
       - run: pnpm --filter @workspace/uc-companion typecheck
       - name: Install pinned test browser

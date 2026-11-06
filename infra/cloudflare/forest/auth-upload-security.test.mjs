@@ -4,15 +4,17 @@ import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
-import { authUploadArchive, dependencyArchive, verifyAuthUploadRevision } from './auth-upload-security.mjs';
+import { authUploadArchive, dependencyArchive, verifyAuthUploadRevision, paths } from './auth-upload-security.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../../..');
 const contents = (archive, path) => execFileSync('tar', ['-xOf', archive, path], { encoding: 'utf8' });
-test('only six frozen files change and four merged security fixtures are added', async () => {
+test('only reviewed security paths change and every other frozen parent file is preserved', async () => {
   const info = await verifyAuthUploadRevision();
-  assert.equal(info.securityChangedPaths.length, 10);
-  assert.equal(info.unchangedFrozenFiles, 1221);
+  const scope = JSON.parse(await readFile(resolve(here, 'auth-upload-security/scope.json')));
+  assert.deepEqual(info.securityChangedPaths, scope.files.map(file => file.path));
+  const changed = new Set(info.securityChangedPaths);
+  assert.equal(scope.unchangedParentFiles, paths(await readFile(dependencyArchive)).filter(path => !changed.has(path)).length);
   for (const path of ['pnpm-lock.yaml', 'lib/api-spec/openapi.yaml', 'artifacts/uc-companion/app.json']) {
     assert.equal(contents(authUploadArchive, path), contents(dependencyArchive, path));
   }
@@ -59,7 +61,7 @@ test('deployment builds execute non-database frozen security fixtures before com
   assert.match(apiConfig, /"build-approved-consistency\.mjs"|forest\/build-approved-consistency\.mjs/);
   for (const artifact of ['projecthub', 'uc-companion']) {
     const config = await readFile(resolve(root, `artifacts/${artifact}/.replit-artifact/artifact.toml`), 'utf8');
-    assert.match(config, /forest\/release-build\.mjs/);
-    assert.doesNotMatch(config, /build-approved-consistency/);
+    assert.match(config, /forest\/build-approved-consistency\.mjs/);
+    assert.doesNotMatch(config, /forest\/release-build\.mjs/);
   }
 });

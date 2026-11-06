@@ -94,7 +94,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/uc-companion && npx expo-doctor"
+args = "cd artifacts/uc-companion && pnpm exec expo install --check && pnpm exec expo-doctor"
 
 [workflows.workflow.metadata]
 isValidation = true
